@@ -3,7 +3,14 @@ import random
 import subprocess
 from typing import List
 
-from moviepy import AudioFileClip, CompositeVideoClip, VideoClip, VideoFileClip, vfx
+from moviepy import (
+    AudioFileClip,
+    CompositeAudioClip,
+    CompositeVideoClip,
+    VideoClip,
+    VideoFileClip,
+    vfx,
+)
 
 from schemas.config import VideoConfig
 from schemas.video import MaterialInfo, VideoTranscript
@@ -39,7 +46,7 @@ async def merge_videos(
         "-i",
         background_audio,
         "-filter_complex",
-        "[1:a]volume=0.2[v1];[0:a][v1]amerge=inputs=2[a]",
+        "[1:a]volume=0.1[v1];[0:a][v1]amerge=inputs=2[a]",
         "-map",
         "0:v",
         "-map",
@@ -118,8 +125,8 @@ async def create_video(
             continue
         video = VideoFileClip(videos[i - 1].video_path).without_audio()
         video = resize_video(video, video_config.width, video_config.height)
-        final_videos = []
-        txt_clips = []
+        text_clips = []
+        audio_clips = []
         duration_start = 0
 
         dialogues = paragraph.dialogues
@@ -132,9 +139,11 @@ async def create_video(
                 if i == 1 and j == 1 and k == 1:
                     duration_delta = video_config.title.duration
                     title = formatter_text(title)
-                    txt_clip = await create_subtitle(title, video_config.width, video_config.height, video_config.title)
-                    txt_clip = txt_clip.with_duration(duration_delta).with_start(duration_start)
-                    txt_clips.append(txt_clip)
+                    text_clip = await create_subtitle(
+                        title, video_config.width, video_config.height, video_config.title
+                    )
+                    text_clip = text_clip.with_duration(duration_delta).with_start(duration_start)
+                    text_clips.append(text_clip)
                 else:
                     duration_delta = video_config.subtitle.interval
 
@@ -142,19 +151,21 @@ async def create_video(
                 audio = AudioFileClip(audio_file)
 
                 text = formatter_text(text)
-                txt_clip = await create_subtitle(text, video_config.width, video_config.height, video_config.subtitle)
-                txt_clip = txt_clip.with_duration(audio.duration).with_start(duration_start + duration_delta)
-                txt_clips.append(txt_clip)
+                text_clip = await create_subtitle(text, video_config.width, video_config.height, video_config.subtitle)
+                text_clip = text_clip.with_duration(audio.duration).with_start(duration_start + duration_delta)
+                text_clips.append(text_clip)
 
-                video_sub = video.subclipped(duration_start, duration_start + duration_delta + audio.duration)
-                video_sub = video_sub.with_audio(audio.with_start(duration_delta)).with_start(duration_start)
-                if i > 1 and j == 1 and k == 1:
-                    video_sub = transition_video(video_sub)
-                final_videos.append(video_sub)
+                audio_clip = audio.with_start(duration_start + duration_delta)
+                audio_clips.append(audio_clip)
 
-                duration_start += video_sub.duration
+                duration_start += duration_delta + audio.duration
 
-        final_video = CompositeVideoClip(final_videos + txt_clips)
+        if i > 1:
+            video = transition_video(video)
+
+        final_video = CompositeVideoClip([video] + text_clips)
+        final_audio = CompositeAudioClip(audio_clips)
+        final_video = final_video.with_audio(final_audio).with_duration(final_audio.duration)
 
         try:
             final_video.write_videofile(
