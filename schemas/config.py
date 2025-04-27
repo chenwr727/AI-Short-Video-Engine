@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
 
 class PromptSource(str, Enum):
@@ -23,7 +23,6 @@ class MaterialSource(str, Enum):
 
 
 class LLMConfig(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
     api_key: str
     base_url: str
     model: str
@@ -36,35 +35,32 @@ class PromptConfig(BaseModel):
     prompt_rewriter: str = ""
 
 
-class TTSDashscopeConfig(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+class TTSBaseConfig(BaseModel):
+    voices: List[str] = []
+    speed: float = 1.1
+
+
+class TTSDashscopeConfig(TTSBaseConfig):
     api_key: str = ""
     model: str = ""
-    voices: List[str] = []
 
 
-class TTSEdgeConfig(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    voices: List[str] = []
+class TTSEdgeConfig(TTSBaseConfig):
+    pass
 
 
-class TTSKokoroConfig(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+class TTSKokoroConfig(TTSBaseConfig):
     model: str = ""
-    voices: List[str]
     config: str = ""
     lang_code: str = ""
 
 
-class TTSHaiLuoConfig(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+class TTSHaiLuoConfig(TTSBaseConfig):
     api_key: str = ""
     base_url: str = ""
-    voices: List[str] = []
 
 
 class TTSConfig(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
     source: TTSSource
     dashscope: Optional[TTSDashscopeConfig] = None
     edge: Optional[TTSEdgeConfig] = None
@@ -73,7 +69,6 @@ class TTSConfig(BaseModel):
 
 
 class SubtitleConfig(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
     font: str
     width_ratio: float = 0.8
     font_size_ratio: int = 17
@@ -86,12 +81,10 @@ class SubtitleConfig(BaseModel):
 
 
 class TitleConfig(SubtitleConfig):
-    model_config = ConfigDict(from_attributes=True)
     duration: float = 0.5
 
 
 class VideoConfig(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
     fps: int
     background_audio: str
     width: int
@@ -101,7 +94,6 @@ class VideoConfig(BaseModel):
 
 
 class ApiConfig(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
     database_url: str
     app_port: int
     max_concurrent_tasks: int
@@ -109,20 +101,17 @@ class ApiConfig(BaseModel):
 
 
 class MaterialPexelsConfig(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
     api_key: str = ""
     locale: str = ""
 
 
 class MaterialPixabayConfig(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
     api_key: str = ""
     lang: str = "zh"
     video_type: str = "all"
 
 
 class MaterialConfig(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
     source: MaterialSource
     minimum_duration: int
     prompt: str
@@ -131,7 +120,6 @@ class MaterialConfig(BaseModel):
 
 
 class Config(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
     llm: LLMConfig
     prompt: Optional[PromptConfig] = None
     tts: TTSConfig

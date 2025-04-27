@@ -11,9 +11,10 @@ from utils.log import logger
 
 class TextToSpeechConverter(ABC):
 
-    def __init__(self, voices: List[str], folder: str):
+    def __init__(self, voices: List[str], folder: str, speed: float = 1.1):
         self.voices = voices
         self.folder = folder
+        self.speed = speed
 
     async def text_to_speech(self, paragraphs: List[Paragraph]) -> List[float]:
         durations = []
@@ -62,5 +63,5 @@ class TextToSpeechConverter(ABC):
         return duration
 
     @abstractmethod
-    async def generate_audio(self, content: str, voice: str, file_name: str):
+    async def generate_audio(self, content: str, voice: str, file_name: str, speech_rate: float = 1.1):
         pass
