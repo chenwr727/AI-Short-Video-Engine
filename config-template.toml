@@ -11,23 +11,27 @@ source = "dashscope"
 api_key = "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 model = "cosyvoice-v1"
 voices = ["longwan", "longcheng"]
+speed = 1.1
 
 [tts.edge]
 voices = ["zh-CN-XiaoyiNeural", "zh-CN-YunyangNeural"]
+speed = 1.1
 
 [tts.hailuo]
 api_key = "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 base_url = "http://127.0.0.1:8000/v1"
 voices = ["Podcast_girl", "male-botong"]
+speed = 1.1
 
 [tts.kokoro]
 model = "./models/kokoro/kokoro-v1_1-zh.pth"
 voices = [
-  "./models/kokoro/voices/zf_xiaoyi.pt",
-  "./models/kokoro/voices/zm_yunxi.pt",
+    "./models/kokoro/voices/zf_xiaoyi.pt",
+    "./models/kokoro/voices/zm_yunxi.pt",
 ]
 config = "./models/kokoro/config.json"
 lang_code = "z"
+speed = 1.1
 
 [video]
 fps = 24
