@@ -217,6 +217,7 @@ class VideoGenerator:
             results = json.loads(json_match.group(1))
             if len(results) != len(content_list):
                 logger.warning("Number of search terms does not match number of dialogues")
+                continue
             try:
                 search_terms = [result["search_terms"] for result in results]
                 break
