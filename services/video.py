@@ -8,6 +8,7 @@ from api.schemas import TaskCreate
 from schemas.config import MaterialSource, TTSSource
 from schemas.video import MaterialInfo, VideoTranscript
 from services.llm import LLmWriter
+from services.yuanbao import YuanBaoClient
 from utils.config import config, get_prompt_config
 from utils.log import logger
 from utils.text import split_content_with_punctuation
@@ -44,12 +45,17 @@ class VideoGenerator:
             logger.info("Content file already exists, reading from file")
             return self._read_file(files.html)
 
+        yuanbao_start = "yuanbao"
         if url.startswith("http"):
             logger.info("Starting to fetch content from URL")
             content = await get_content(url)
             if not content:
                 logger.error("Failed to fetch content from URL")
                 return None
+        elif url.startswith(yuanbao_start):
+            prompt = url[len(yuanbao_start) :]
+            yuanbao = YuanBaoClient(self.config.yuanbao)
+            content = await yuanbao.get_response([{"role": "user", "content": prompt}])
         else:
             content = url
 

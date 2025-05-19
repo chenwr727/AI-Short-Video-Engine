@@ -29,6 +29,16 @@ class LLMConfig(BaseModel):
     prompt: PromptSource = PromptSource.crosstalk
 
 
+class YuanBaoConfig(BaseModel):
+    base_url: str
+    api_key: str
+    model: str
+    hy_user: str
+    agent_id: str
+    chat_id: str = ""
+    should_remove_conversation: bool = False
+
+
 class PromptConfig(BaseModel):
     prompt_writer: str = ""
     prompt_reflector: str = ""
@@ -121,6 +131,7 @@ class MaterialConfig(BaseModel):
 
 class Config(BaseModel):
     llm: LLMConfig
+    yuanbao: YuanBaoConfig
     prompt: Optional[PromptConfig] = None
     tts: TTSConfig
     video: VideoConfig

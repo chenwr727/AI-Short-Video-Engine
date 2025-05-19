@@ -12,9 +12,11 @@ English | [简体中文](README.md)
 
 ## 📖 Project Introduction
 
-CodexReel is an AI-powered video generation platform that automatically transforms everyday articles into high-quality, expressive interactive videos. Leveraging cutting-edge multimodal large language model (LLM) technology, we make content creation simpler, more efficient, and highly shareable.
+CodexReel is an AI-powered intelligent video generation platform that can transform various input content (such as article links, copywriting themes, or role-based prompts with integrated search capabilities) into high-quality, expressive, and interactive video content. Leveraging advanced multimodal large language model (LLM) technology, we make content creation simpler, more efficient, and highly shareable.
 
-Whether it's news, tech articles, or WeChat public posts, simply provide a URL and CodexReel will automatically understand the content, generate scripts, match materials, synthesize voices, and edit videos — delivering professional-grade short videos ready for social platforms.
+Whether it’s news articles, tech blogs, official account posts, or user-defined topics, by simply providing a **URL**, **text theme**, or a **role-based prompt** with search functionality, CodexReel automatically completes content understanding, script generation, material matching, voice synthesis, and video editing — delivering professional-grade short videos ready for social platforms.
+
+- The search functionality is powered by [yuanbao-free-api](https://github.com/chenwr727/yuanbao-free-api.git)
 
 ### ✨ Core Features
 
@@ -114,6 +116,8 @@ python app.py
 # Launch frontend interface
 streamlit run web.py --server.port 8000
 ```
+
+![demo](./demo.png)
 
 #### Command Line Usage
 
