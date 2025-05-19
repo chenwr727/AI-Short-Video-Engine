@@ -4,6 +4,16 @@ base_url = "https://api.deepseek.com"
 model = "deepseek-chat"
 source = "crosstalk"
 
+[yuanbao]
+base_url = "http://localhost:8082/v1/"
+api_key = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+model = "deepseek-r1-search"
+
+hy_user = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+agent_id = "naQivTmsDa"
+chat_id = ""
+should_remove_conversation = false
+
 [tts]
 source = "dashscope"
 
