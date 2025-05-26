@@ -23,6 +23,12 @@ model = "cosyvoice-v1"
 voices = ["longwan", "longcheng"]
 speed = 1.1
 
+[tts.qwen]
+api_key = "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+model = "qwen-tts-latest"
+voices = ["Cherry", "Ethan"]
+speed = 1.1
+
 [tts.edge]
 voices = ["zh-CN-XiaoyiNeural", "zh-CN-YunyangNeural"]
 speed = 1.1

@@ -1,20 +1,20 @@
 简体中文 | [English](README_EN.md)
 
 <div align="center">
-    <h1 style="color: #FF5733;">⚡ CodexReel: 让AI替你拍短视频</h1>
+    <h1 style="color: #FF5733;">⚡ AI Short Video Engine: 让AI替你拍短视频</h1>
     <p style="color: #3498DB;">🚀 用AI精准打造爆款短视频，文章秒变流量密码</p>
     <p>
         <img src="https://img.shields.io/badge/license-MIT-green" alt="license">
-        <img src="https://img.shields.io/github/stars/chenwr727/CodexReel" alt="stars">
-        <img src="https://img.shields.io/github/forks/chenwr727/CodexReel" alt="forks">
+        <img src="https://img.shields.io/github/stars/chenwr727/AI-Short-Video-Engine" alt="stars">
+        <img src="https://img.shields.io/github/forks/chenwr727/AI-Short-Video-Engine" alt="forks">
     </p>
 </div>
 
 ## 📖 项目介绍
 
-CodexReel 是一个基于 AI 的智能视频生成平台，能够将多种输入内容（如文章链接、文案主题文本（支持联网搜索））一键转化为高质量、富有表现力的互动式视频内容。借助先进的多模态大语言模型（LLM）技术，我们让内容创作变得更简单、更高效、更具传播力。
+**AI Short Video Engine** 是一个基于 AI 的智能视频生成平台，能够将多种输入内容（如文章链接、文案主题文本（支持联网搜索））一键转化为高质量、富有表现力的互动式短视频内容。借助先进的多模态大语言模型（LLM）技术，我们让内容创作变得更简单、更高效、更具传播力。
 
-无论是新闻资讯、科技文章、公众号推文，还是用户自定义的主题内容，只需提供 URL、文本主题，CodexReel 即可自动完成内容理解、脚本生成、素材匹配、语音合成与视频剪辑，输出可用于社交平台发布的专业级短视频。
+无论是新闻资讯、科技文章、公众号推文，还是用户自定义的主题内容，只需提供 URL、文本主题，AI Short Video Engine 即可自动完成内容理解、脚本生成、素材匹配、语音合成与视频剪辑，输出可用于社交平台发布的专业级短视频。
 
 - 搜索功能来源于 [yuanbao-free-api](https://github.com/chenwr727/yuanbao-free-api.git) 
 
@@ -80,8 +80,8 @@ CodexReel 是一个基于 AI 的智能视频生成平台，能够将多种输入
 
 ```bash
 # 克隆项目仓库
-git clone https://github.com/chenwr727/CodexReel.git
-cd CodexReel
+git clone https://github.com/chenwr727/AI-Short-Video-Engine.git
+cd AI-Short-Video-Engine
 
 # 创建并激活虚拟环境
 conda create -n url2video python=3.10
@@ -129,7 +129,7 @@ python main.py https://example.com/article
 ### 📂 项目结构概览
 
 ```
-CodexReel/
+AI-Short-Video-Engine/
 ├── api/                    # API接口模块
 │   ├── crud.py             # 数据库操作
 │   ├── database.py         # 数据库配置
@@ -149,7 +149,8 @@ CodexReel/
 │   │   ├── base.py         # TTS基础接口
 │   │   ├── dashscope.py    # DashScope服务
 │   │   ├── edge.py         # Edge服务
-│   │   └── kokoro.py       # Kokoro服务
+│   │   ├── kokoro.py       # Kokoro服务
+│   │   └── qwen.py         # QWen服务
 │   ├── llm.py              # LLM服务
 │   └── video.py            # 视频处理服务
 ├── utils/                  # 工具模块

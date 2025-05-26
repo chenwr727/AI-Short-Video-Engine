@@ -12,6 +12,7 @@ class PromptSource(str, Enum):
 
 class TTSSource(str, Enum):
     dashscope = "dashscope"
+    qwen = "qwen"
     edge = "edge"
     hailuo = "hailuo"
     kokoro = "kokoro"
@@ -55,6 +56,11 @@ class TTSDashscopeConfig(TTSBaseConfig):
     model: str = ""
 
 
+class TTSQwenConfig(TTSBaseConfig):
+    api_key: str = ""
+    model: str = ""
+
+
 class TTSEdgeConfig(TTSBaseConfig):
     pass
 
@@ -73,6 +79,7 @@ class TTSHaiLuoConfig(TTSBaseConfig):
 class TTSConfig(BaseModel):
     source: TTSSource
     dashscope: Optional[TTSDashscopeConfig] = None
+    qwen: Optional[TTSQwenConfig] = None
     edge: Optional[TTSEdgeConfig] = None
     hailuo: Optional[TTSHaiLuoConfig] = None
     kokoro: Optional[TTSKokoroConfig] = None

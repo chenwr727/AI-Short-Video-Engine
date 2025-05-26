@@ -122,6 +122,15 @@ class VideoGenerator:
                 self.config.tts.dashscope.voices,
                 files.folder,
             )
+        elif tts_source == TTSSource.qwen:
+            from services.tts import QwenTextToSpeechConverter
+
+            converter = QwenTextToSpeechConverter(
+                self.config.tts.qwen.api_key,
+                self.config.tts.qwen.model,
+                self.config.tts.qwen.voices,
+                files.folder,
+            )
         elif tts_source == TTSSource.edge:
             from services.tts import EdgeTextToSpeechConverter
 

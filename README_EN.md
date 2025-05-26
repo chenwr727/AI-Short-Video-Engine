@@ -1,20 +1,20 @@
 English | [简体中文](README.md)
 
 <div align="center">
-    <h1 style="color: #FF5733;">⚡ CodexReel: Let AI Create Short Videos for You</h1>
+    <h1 style="color: #FF5733;">⚡ AI Short Video Engine: Let AI Create Short Videos for You</h1>
     <p style="color: #3498DB;">🚀 Build Viral-Ready Short Videos with AI – Turn Articles into Traffic Gold</p>
     <p>
         <img src="https://img.shields.io/badge/license-MIT-green" alt="license">
-        <img src="https://img.shields.io/github/stars/chenwr727/CodexReel" alt="stars">
-        <img src="https://img.shields.io/github/forks/chenwr727/CodexReel" alt="forks">
+        <img src="https://img.shields.io/github/stars/chenwr727/AI-Short-Video-Engine" alt="stars">
+        <img src="https://img.shields.io/github/forks/chenwr727/AI-Short-Video-Engine" alt="forks">
     </p>
 </div>
 
 ## 📖 Project Introduction
 
-CodexReel is an AI-powered intelligent video generation platform that can transform various input content (such as article links, copywriting themes, or role-based prompts with integrated search capabilities) into high-quality, expressive, and interactive video content. Leveraging advanced multimodal large language model (LLM) technology, we make content creation simpler, more efficient, and highly shareable.
+**AI Short Video Engine** is an AI-powered intelligent video generation platform that can transform various input content (such as article links, copywriting themes, or role-based prompts with integrated search capabilities) into high-quality, expressive, and interactive video content. Leveraging advanced multimodal large language model (LLM) technology, we make content creation simpler, more efficient, and highly shareable.
 
-Whether it’s news articles, tech blogs, official account posts, or user-defined topics, by simply providing a **URL**, **text theme**, or a **role-based prompt** with search functionality, CodexReel automatically completes content understanding, script generation, material matching, voice synthesis, and video editing — delivering professional-grade short videos ready for social platforms.
+Whether it’s news articles, tech blogs, official account posts, or user-defined topics, by simply providing a **URL**, **text theme**, or a **role-based prompt** with search functionality, AI Short Video Engine automatically completes content understanding, script generation, material matching, voice synthesis, and video editing — delivering professional-grade short videos ready for social platforms.
 
 - The search functionality is powered by [yuanbao-free-api](https://github.com/chenwr727/yuanbao-free-api.git)
 
@@ -80,8 +80,8 @@ Whether it’s news articles, tech blogs, official account posts, or user-define
 
 ```bash
 # Clone the repository
-git clone https://github.com/chenwr727/CodexReel.git
-cd CodexReel
+git clone https://github.com/chenwr727/AI-Short-Video-Engine.git
+cd AI-Short-Video-Engine
 
 # Create and activate conda environment
 conda create -n url2video python=3.10
@@ -129,7 +129,7 @@ python main.py https://example.com/article
 ### 📂 Project Structure Overview
 
 ```
-CodexReel/
+AI-Short-Video-Engine/
 ├── api/                    # API module
 │   ├── crud.py             # Database operations
 │   ├── database.py         # Database configuration
@@ -149,7 +149,8 @@ CodexReel/
 │   │   ├── base.py         # Base interface for TTS services
 │   │   ├── dashscope.py    # DashScope TTS service
 │   │   ├── edge.py         # Edge TTS service
-│   │   └── kokoro.py       # Kokoro TTS service
+│   │   ├── kokoro.py       # Kokoro TTS service
+│   │   └── qwen.py         # Qwen TTS service
 │   ├── llm.py              # LLM service
 │   └── video.py            # Video processing service
 ├── utils/                  # Utility modules
