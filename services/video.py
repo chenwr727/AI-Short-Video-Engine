@@ -113,13 +113,13 @@ class VideoGenerator:
             return json.loads(self._read_file(files.durations))
 
         tts_source = tts_source or self.config.tts.source
-        if tts_source == TTSSource.dashscope:
-            from services.tts import DashscopeTextToSpeechConverter
+        if tts_source == TTSSource.cosyvoice:
+            from services.tts import CosyvoiceTextToSpeechConverter
 
-            converter = DashscopeTextToSpeechConverter(
-                self.config.tts.dashscope.api_key,
-                self.config.tts.dashscope.model,
-                self.config.tts.dashscope.voices,
+            converter = CosyvoiceTextToSpeechConverter(
+                self.config.tts.cosyvoice.api_key,
+                self.config.tts.cosyvoice.model,
+                self.config.tts.cosyvoice.voices,
                 files.folder,
             )
         elif tts_source == TTSSource.qwen:
@@ -129,29 +129,6 @@ class VideoGenerator:
                 self.config.tts.qwen.api_key,
                 self.config.tts.qwen.model,
                 self.config.tts.qwen.voices,
-                files.folder,
-            )
-        elif tts_source == TTSSource.edge:
-            from services.tts import EdgeTextToSpeechConverter
-
-            converter = EdgeTextToSpeechConverter(self.config.tts.edge.voices, files.folder)
-        elif tts_source == TTSSource.hailuo:
-            from services.tts import HaiLuoTextToSpeechConverter
-
-            converter = HaiLuoTextToSpeechConverter(
-                self.config.tts.hailuo.api_key,
-                self.config.tts.hailuo.base_url,
-                self.config.tts.hailuo.voices,
-                files.folder,
-            )
-        elif tts_source == TTSSource.kokoro:
-            from services.tts import KokoroTextToSpeechConverter
-
-            converter = KokoroTextToSpeechConverter(
-                self.config.tts.kokoro.config,
-                self.config.tts.kokoro.model,
-                self.config.tts.kokoro.lang_code,
-                self.config.tts.kokoro.voices,
                 files.folder,
             )
         else:

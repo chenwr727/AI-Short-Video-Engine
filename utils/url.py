@@ -71,7 +71,7 @@ async def get_content(url: str, max_retries: int = 3, retry_delay: int = 2) -> s
 
     content = await parse_response(response)
 
-    if url.startswith("https://36kr.com/p/"):
+    if url.startswith("https://36kr.com/p/") or url.startswith("https://www.36kr.com/p/"):
         content += "\n" + await decode_36kr_text(response.text)
 
     return content

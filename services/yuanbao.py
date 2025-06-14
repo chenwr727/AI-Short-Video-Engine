@@ -1,5 +1,5 @@
-import re
-from typing import Dict, List, Optional, Tuple
+import json
+from typing import Dict, List
 
 from openai import OpenAI
 
@@ -20,10 +20,6 @@ class YuanBaoClient:
         }
         self.should_sleep = False
 
-    def _extract_type(self, text: str) -> Tuple[Optional[str], Optional[str]]:
-        match = re.search(r"^\[(.+?)\](.*)", text, re.DOTALL)
-        return (match.group(1), match.group(2)) if match else (None, None)
-
     async def get_response(self, messages: List[Dict[str, str]]) -> str:
         response = self.client.chat.completions.create(
             model=self.model,
@@ -35,7 +31,10 @@ class YuanBaoClient:
         text = ""
         for chunk in response:
             content = chunk.choices[0].delta.content
-            key, value = self._extract_type(content)
-            if key == "text":
-                text += value
+            try:
+                data = json.loads(content)
+                if data.get("type") == "text":
+                    text += data.get("msg", "")
+            except json.JSONDecodeError:
+                pass
         return text

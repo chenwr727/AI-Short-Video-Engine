@@ -81,6 +81,7 @@ async def create_subtitle(
         stroke_color=subtitle_config.stroke_color,
         stroke_width=subtitle_config.stroke_width,
         text_align=subtitle_config.text_align,
+        margin=(10, 10),
     )
     txt_clip = txt_clip.with_position(("center", subtitle_position - txt_clip.size[1] // 2))
     return txt_clip

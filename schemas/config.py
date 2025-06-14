@@ -11,11 +11,8 @@ class PromptSource(str, Enum):
 
 
 class TTSSource(str, Enum):
-    dashscope = "dashscope"
+    cosyvoice = "cosyvoice"
     qwen = "qwen"
-    edge = "edge"
-    hailuo = "hailuo"
-    kokoro = "kokoro"
 
 
 class MaterialSource(str, Enum):
@@ -47,42 +44,24 @@ class PromptConfig(BaseModel):
 
 
 class TTSBaseConfig(BaseModel):
+    api_key: str = ""
+    model: str = ""
     voices: List[str] = []
     speed: float = 1.1
 
 
-class TTSDashscopeConfig(TTSBaseConfig):
-    api_key: str = ""
-    model: str = ""
-
-
-class TTSQwenConfig(TTSBaseConfig):
-    api_key: str = ""
-    model: str = ""
-
-
-class TTSEdgeConfig(TTSBaseConfig):
+class TTSCosyvoiceConfig(TTSBaseConfig):
     pass
 
 
-class TTSKokoroConfig(TTSBaseConfig):
-    model: str = ""
-    config: str = ""
-    lang_code: str = ""
-
-
-class TTSHaiLuoConfig(TTSBaseConfig):
-    api_key: str = ""
-    base_url: str = ""
+class TTSQwenConfig(TTSBaseConfig):
+    pass
 
 
 class TTSConfig(BaseModel):
     source: TTSSource
-    dashscope: Optional[TTSDashscopeConfig] = None
+    cosyvoice: Optional[TTSCosyvoiceConfig] = None
     qwen: Optional[TTSQwenConfig] = None
-    edge: Optional[TTSEdgeConfig] = None
-    hailuo: Optional[TTSHaiLuoConfig] = None
-    kokoro: Optional[TTSKokoroConfig] = None
 
 
 class SubtitleConfig(BaseModel):

@@ -147,9 +147,7 @@ AI-Short-Video-Engine/
 │   │   └── pixabay.py      # Pixabay integration
 │   ├── tts/                # Text-to-speech services
 │   │   ├── base.py         # Base interface for TTS services
-│   │   ├── dashscope.py    # DashScope TTS service
-│   │   ├── edge.py         # Edge TTS service
-│   │   ├── kokoro.py       # Kokoro TTS service
+│   │   ├── cosyvoice.py    # Cosyvoice TTS service
 │   │   └── qwen.py         # Qwen TTS service
 │   ├── llm.py              # LLM service
 │   └── video.py            # Video processing service

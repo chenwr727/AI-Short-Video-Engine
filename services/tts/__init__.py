@@ -1,13 +1,7 @@
-from .dashscope import DashscopeTextToSpeechConverter
-from .edge import EdgeTextToSpeechConverter
-from .hailuo import HaiLuoTextToSpeechConverter
-from .kokoro import KokoroTextToSpeechConverter
+from .cosyvoice import CosyvoiceTextToSpeechConverter
 from .qwen import QwenTextToSpeechConverter
 
 __all__ = [
-    "DashscopeTextToSpeechConverter",
-    "EdgeTextToSpeechConverter",
-    "HaiLuoTextToSpeechConverter",
-    "KokoroTextToSpeechConverter",
+    "CosyvoiceTextToSpeechConverter",
     "QwenTextToSpeechConverter",
 ]
