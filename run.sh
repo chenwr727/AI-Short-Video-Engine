@@ -2,7 +2,7 @@
 
 # Load conda environment
 source /root/miniconda3/etc/profile.d/conda.sh
-conda activate notebook
+conda activate py12
 
 # Define service commands
 STREAMLIT_SERVICE="streamlit run web.py"

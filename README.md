@@ -147,9 +147,7 @@ AI-Short-Video-Engine/
 │   │   └── pixabay.py      # Pixabay服务
 │   ├── tts/                # TTS服务
 │   │   ├── base.py         # TTS基础接口
-│   │   ├── dashscope.py    # DashScope服务
-│   │   ├── edge.py         # Edge服务
-│   │   ├── kokoro.py       # Kokoro服务
+│   │   ├── cosyvoice.py    # Cosyvoice服务
 │   │   └── qwen.py         # QWen服务
 │   ├── llm.py              # LLM服务
 │   └── video.py            # 视频处理服务

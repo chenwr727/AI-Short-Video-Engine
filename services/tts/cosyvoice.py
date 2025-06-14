@@ -6,7 +6,7 @@ from dashscope.audio.tts_v2 import SpeechSynthesizer
 from .base import TextToSpeechConverter
 
 
-class DashscopeTextToSpeechConverter(TextToSpeechConverter):
+class CosyvoiceTextToSpeechConverter(TextToSpeechConverter):
     def __init__(self, api_key: str, model: str, voices: List[str], folder: str, speed: float = 1.1):
         self.api_key = api_key
         self.model = model
