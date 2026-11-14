@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import toml
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
@@ -8,7 +9,6 @@ from api.schemas import TaskCreate
 from schemas.config import MaterialSource, TTSSource
 from schemas.video import MaterialInfo, VideoTranscript
 from services.llm import LLmWriter
-from services.yuanbao import YuanBaoClient
 from utils.config import config, get_prompt_config
 from utils.log import logger
 from utils.text import split_content_with_punctuation
@@ -45,17 +45,12 @@ class VideoGenerator:
             logger.info("Content file already exists, reading from file")
             return self._read_file(files.html)
 
-        yuanbao_start = "yuanbao"
         if url.startswith("http"):
             logger.info("Starting to fetch content from URL")
             content = await get_content(url)
             if not content:
                 logger.error("Failed to fetch content from URL")
                 return None
-        elif url.startswith(yuanbao_start):
-            prompt = url[len(yuanbao_start) :]
-            yuanbao = YuanBaoClient(self.config.yuanbao)
-            content = await yuanbao.get_response([{"role": "user", "content": prompt}])
         else:
             content = url
 
@@ -101,18 +96,107 @@ class VideoGenerator:
             for dialogue in paragraph["dialogues"]:
                 content = dialogue.pop("content")
                 dialogue["contents"] = split_content_with_punctuation(content)
+                # default: tts text = display text (will be regenerated with tags for qwen_audio)
+                dialogue["contents_tts"] = list(dialogue["contents"])
         video_transcript = VideoTranscript.model_validate(transcript_data)
         return video_transcript
+
+    async def _generate_tts_tags(self, video_transcript: VideoTranscript, files: ProcessingFiles) -> None:
+        """Ask the LLM to produce tagged TTS text (content_tts) for every dialogue.
+
+        Only meaningful for models that support emotion / rich-language tags
+        (qwen-audio-3.0-tts). Display text (`contents`) stays clean for subtitles
+        and search terms; TTS synthesis uses `contents_tts`.
+
+        The generated content_tts is written back to the transcript JSON so it is
+        persisted and can be inspected / reused on re-runs.
+        """
+        logger.info("Starting to generate TTS tags via LLM")
+        try:
+            with open("./prompts/tts_tags.toml", "r", encoding="utf-8") as f:
+                tag_prompt = toml.load(f)["prompt_tts_tags"]
+        except Exception as e:
+            logger.error(f"Failed to load tts_tags prompt: {e}")
+            return
+
+        for paragraph in video_transcript.paragraphs:
+            # collect contents of every dialogue in this paragraph
+            items = []
+            flat = []
+            for dialogue in paragraph.dialogues:
+                for i, content in enumerate(dialogue.contents):
+                    items.append({"id": len(items) + 1, "content": content})
+                    flat.append((dialogue, i))
+
+            if not items:
+                continue
+
+            tagged = await self.assistant.writer(
+                json.dumps(items, ensure_ascii=False),
+                tag_prompt,
+                response_format={"type": "json_object"},
+            )
+            if not tagged:
+                logger.warning("TTS tags generation returned nothing, keep original text")
+                continue
+
+            json_match = re.search(r"(\[.*\s?\])", tagged, re.DOTALL)
+            if not json_match:
+                logger.warning("No valid JSON array found in TTS tags response, keep original text")
+                continue
+            try:
+                results = json.loads(json_match.group(1))
+            except Exception as e:
+                logger.warning(f"Failed to parse TTS tags JSON: {e}")
+                continue
+
+            for entry in results:
+                cid = entry.get("id")
+                content_tts = entry.get("content_tts")
+                if cid is None or content_tts is None:
+                    continue
+                idx = cid - 1
+                if 0 <= idx < len(flat):
+                    dialogue, i = flat[idx]
+                    dialogue.contents_tts[i] = content_tts
+
+        # persist content_tts back into the transcript JSON file
+        try:
+            self._persist_content_tts(video_transcript, files)
+        except Exception as e:
+            logger.warning(f"Failed to persist content_tts to transcript: {e}")
+
+    def _persist_content_tts(self, video_transcript: VideoTranscript, files: ProcessingFiles) -> None:
+        """Merge in-memory contents_tts (split + tagged) back into the transcript JSON."""
+        if not os.path.exists(files.script):
+            logger.warning("Transcript file not found; cannot persist content_tts")
+            return
+        with open(files.script, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        # index dialogues by (paragraph_idx, dialogue_idx) to match with in-memory order
+        for pi, paragraph in enumerate(video_transcript.paragraphs):
+            for di, dialogue in enumerate(paragraph.dialogues):
+                if pi < len(data.get("paragraphs", [])) and di < len(data["paragraphs"][pi].get("dialogues", [])):
+                    if dialogue.contents_tts:
+                        data["paragraphs"][pi]["dialogues"][di]["content_tts"] = "".join(dialogue.contents_tts)
+
+        self._write_json(files.script, data)
+        logger.info("content_tts persisted to transcript JSON")
 
     async def _process_audio(
         self, video_transcript: VideoTranscript, files: ProcessingFiles, tts_source: Optional[str] = None
     ) -> List[float]:
         """Process audio for the video."""
         logger.info("Starting to process audio")
+        tts_source = tts_source or self.config.tts.source
+        # Always (re)generate content_tts for qwen_audio before any cache short-circuit,
+        # so tags are produced even on re-runs / when durations already exist.
+        if tts_source == TTSSource.qwen_audio:
+            await self._generate_tts_tags(video_transcript, files)
+
         if os.path.exists(files.durations):
             return json.loads(self._read_file(files.durations))
-
-        tts_source = tts_source or self.config.tts.source
         if tts_source == TTSSource.cosyvoice:
             from services.tts import CosyvoiceTextToSpeechConverter
 
@@ -121,15 +205,30 @@ class VideoGenerator:
                 self.config.tts.cosyvoice.model,
                 self.config.tts.cosyvoice.voices,
                 files.folder,
+                self.config.tts.cosyvoice.speed,
+                self.config.tts.cosyvoice.base_url,
             )
-        elif tts_source == TTSSource.qwen:
-            from services.tts import QwenTextToSpeechConverter
+        elif tts_source == TTSSource.qwen_tts:
+            from services.tts import QwenTTSTextToSpeechConverter
 
-            converter = QwenTextToSpeechConverter(
-                self.config.tts.qwen.api_key,
-                self.config.tts.qwen.model,
-                self.config.tts.qwen.voices,
+            converter = QwenTTSTextToSpeechConverter(
+                self.config.tts.qwen_tts.api_key,
+                self.config.tts.qwen_tts.model,
+                self.config.tts.qwen_tts.voices,
                 files.folder,
+                self.config.tts.qwen_tts.speed,
+                self.config.tts.qwen_tts.base_url,
+            )
+        elif tts_source == TTSSource.qwen_audio:
+            from services.tts import QwenAudioTextToSpeechConverter
+
+            converter = QwenAudioTextToSpeechConverter(
+                self.config.tts.qwen_audio.api_key,
+                self.config.tts.qwen_audio.model,
+                self.config.tts.qwen_audio.voices,
+                files.folder,
+                self.config.tts.qwen_audio.speed,
+                self.config.tts.qwen_audio.base_url,
             )
         else:
             raise ValueError("Invalid TTS source")
@@ -152,6 +251,23 @@ class VideoGenerator:
 
         search_terms = await self._get_search_terms(video_transcript, files)
 
+        # collect per-paragraph dialogue text so the AI can match video semantics
+        contents_list: List[str] = []
+        for paragraph in video_transcript.paragraphs:
+            paragraph_text = "\n".join(line for d in paragraph.dialogues for line in d.contents)
+            contents_list.append(paragraph_text)
+
+        # optional vision model for visual video re-ranking (uses its own client)
+        vision_writer = None
+        vision_model = ""
+        if self.config.vision and self.config.vision.enable and self.config.vision.model:
+            vision_writer = LLmWriter(
+                self.config.vision.api_key,
+                self.config.vision.base_url,
+                self.config.vision.model,
+            )
+            vision_model = self.config.vision.model
+
         material_source = material_source or self.config.material.source
         if material_source == MaterialSource.pexels:
             from services.material import PexelsHelper
@@ -162,6 +278,9 @@ class VideoGenerator:
                 self.config.material.minimum_duration,
                 self.config.video.width,
                 self.config.video.height,
+                llm_writer=self.assistant,
+                vision_writer=vision_writer,
+                vision_model=vision_model,
             )
         elif material_source == MaterialSource.pixabay:
             from services.material import PixabayHelper
@@ -173,10 +292,13 @@ class VideoGenerator:
                 self.config.material.minimum_duration,
                 self.config.video.width,
                 self.config.video.height,
+                llm_writer=self.assistant,
+                vision_writer=vision_writer,
+                vision_model=vision_model,
             )
         else:
             raise ValueError("Invalid material source")
-        videos = await material_helper.get_videos(durations, search_terms)
+        videos = await material_helper.get_videos(durations, search_terms, contents_list)
         self._write_json(files.videos, [video.model_dump() for video in videos])
         return videos
 
@@ -252,7 +374,7 @@ class VideoGenerator:
                 logger.info("Output video already exists")
                 return files.output
 
-            # Process content and generate transcript
+            # Process content and generate transcript if not cached
             if not os.path.exists(files.script):
                 self.config.prompt = get_prompt_config(task_create.prompt_source)
 
@@ -270,7 +392,6 @@ class VideoGenerator:
 
                 self._write_json(files.script, final_transcript)
                 logger.info("Video script generation completed")
-                return "Script"
 
             # Load transcript and process
             transcript_data = json.loads(self._read_file(files.script))

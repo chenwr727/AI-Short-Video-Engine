@@ -14,6 +14,7 @@ class TaskStatus(str, Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     TIMEOUT = "timeout"
+    CANCELLED = "cancelled"
 
     def __str__(self):
         return self.value
@@ -25,6 +26,9 @@ class Task(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String, nullable=False)
     status = Column(SQLAlchemyEnum(TaskStatus), default=TaskStatus.PENDING)
+    prompt_source = Column(String, nullable=True)
+    tts_source = Column(String, nullable=True)
+    material_source = Column(String, nullable=True)
     create_time = Column(DateTime, default=datetime.now)
     update_time = Column(DateTime, default=datetime.now, onupdate=datetime.now)
     start_time = Column(DateTime, nullable=True)

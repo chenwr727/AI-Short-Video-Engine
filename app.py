@@ -11,8 +11,9 @@ from utils.config import api_config as settings
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    await TaskService.start_worker()
     yield
-    TaskService.cancel_all_background_tasks()
+    await TaskService.stop_worker()
     await engine.dispose()
 
 

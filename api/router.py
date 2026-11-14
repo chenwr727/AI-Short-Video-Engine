@@ -1,4 +1,3 @@
-import asyncio
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -16,11 +15,7 @@ tasks_router = APIRouter()
 
 @tasks_router.post("/", response_model=TaskResponse)
 async def create_task(task: TaskCreate, session: AsyncSession = Depends(get_session)):
-    db_task = await crud.create_task(session, task)
-
-    background_task = asyncio.create_task(TaskService.process_task(db_task.id, task))
-    TaskService._background_tasks[db_task.id] = background_task
-
+    db_task, _ = await crud.create_task(session, task)
     return db_task
 
 
@@ -30,18 +25,26 @@ async def cancel_task(task_id: int, session: AsyncSession = Depends(get_session)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    if task.status != TaskStatus.RUNNING:
-        raise HTTPException(status_code=400, detail="Only running tasks can be cancelled")
+    if task.status not in (TaskStatus.PENDING, TaskStatus.RUNNING):
+        raise HTTPException(status_code=400, detail="Only pending or running tasks can be cancelled")
 
-    background_task = TaskService._background_tasks.get(task_id)
-    if background_task and not background_task.done():
-        background_task.cancel()
-        try:
-            await background_task
-        except asyncio.CancelledError:
-            pass
-
+    await TaskService.cancel_task(session, task)
     return {"message": "Task was cancelled"}
+
+
+@tasks_router.get("/queue/status")
+async def get_queue_status(session: AsyncSession = Depends(get_session)):
+    running = await crud.get_running_count(session)
+    return {
+        "max_concurrent_tasks": settings.max_concurrent_tasks,
+        "running_tasks": running,
+        "available_slots": max(0, settings.max_concurrent_tasks - running),
+    }
+
+
+@tasks_router.get("/list/{task_date}", response_model=List[TaskResponse])
+async def get_task_list(task_date: str, session: AsyncSession = Depends(get_session)):
+    return await crud.get_task_list(session, task_date)
 
 
 @tasks_router.get("/{task_id}", response_model=TaskResponse)
@@ -50,22 +53,3 @@ async def get_task_status(task_id: int, session: AsyncSession = Depends(get_sess
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     return task
-
-
-@tasks_router.get("/queue/status/{task_date}")
-async def get_queue_status(task_date: str, session: AsyncSession = Depends(get_session)):
-    status_counts = await crud.get_status(session, task_date)
-    return {
-        "max_concurrent_tasks": settings.max_concurrent_tasks,
-        "running_tasks": status_counts.get(TaskStatus.RUNNING, 0),
-        "pending_tasks": status_counts.get(TaskStatus.PENDING, 0),
-        "completed_tasks": status_counts.get(TaskStatus.COMPLETED, 0),
-        "failed_tasks": status_counts.get(TaskStatus.FAILED, 0),
-        "timeout_tasks": status_counts.get(TaskStatus.TIMEOUT, 0),
-        "available_slots": settings.max_concurrent_tasks - TaskService._running_tasks,
-    }
-
-
-@tasks_router.get("/list/{task_date}", response_model=List[TaskResponse])
-async def get_task_list(task_date: str, session: AsyncSession = Depends(get_session)):
-    return await crud.get_task_list(session, task_date)
