@@ -19,8 +19,13 @@ class PixabayHelper(MaterialHelper):
         video_width: int,
         video_height: int,
         max_page: int = 3,
+        llm_writer=None,
+        vision_writer=None,
+        vision_model: str = "",
     ):
-        super().__init__(api_key, minimum_duration, video_width, video_height, max_page)
+        super().__init__(
+            api_key, minimum_duration, video_width, video_height, max_page, llm_writer, vision_writer, vision_model
+        )
 
         self.lang = lang
         self.video_type = video_type
@@ -38,13 +43,19 @@ class PixabayHelper(MaterialHelper):
             for _, video in video_files.items():
                 w = video["width"]
                 h = video["height"]
-                # if not math.isclose(w / h, self.video_width / self.video_height, rel_tol=1e-5):
-                #     break
                 if w < self.video_width or h < self.video_height:
                     continue
                 if h - self.video_height < h_diff:
                     h_diff = h - self.video_height
-                    item = MaterialInfo(url=video["url"], duration=duration)
+                    item = MaterialInfo(
+                        url=video["url"],
+                        duration=duration,
+                        tags=v.get("tags", ""),
+                        views=int(v.get("views", 0)),
+                        is_ai_generated=bool(v.get("isAiGenerated", False)),
+                        id=int(v.get("id", 0)),
+                        image_url=video.get("thumbnail", ""),
+                    )
                     if h_diff == 0:
                         break
             if item:

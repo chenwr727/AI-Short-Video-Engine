@@ -35,7 +35,8 @@ class TextToSpeechConverter(ABC):
             for j, dialogue in enumerate(dialogues, start=1):
                 logger.info(f"Processing dialogue {j}/{len(dialogues)}")
                 file_prefix = f"{i}_{j}"
-                duration += await self.process_dialogue(speaker_voice[dialogue.speaker], dialogue.contents, file_prefix)
+                tts_contents = dialogue.contents_tts if dialogue.contents_tts else dialogue.contents
+                duration += await self.process_dialogue(speaker_voice[dialogue.speaker], tts_contents, file_prefix)
             durations.append(duration)
         return durations
 

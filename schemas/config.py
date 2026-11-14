@@ -12,7 +12,8 @@ class PromptSource(str, Enum):
 
 class TTSSource(str, Enum):
     cosyvoice = "cosyvoice"
-    qwen = "qwen"
+    qwen_tts = "qwen_tts"
+    qwen_audio = "qwen_audio"
 
 
 class MaterialSource(str, Enum):
@@ -27,14 +28,12 @@ class LLMConfig(BaseModel):
     prompt: PromptSource = PromptSource.crosstalk
 
 
-class YuanBaoConfig(BaseModel):
-    base_url: str
-    api_key: str
-    model: str
-    hy_user: str
-    agent_id: str
-    chat_id: str = ""
-    should_remove_conversation: bool = False
+class VisionConfig(BaseModel):
+    """Optional vision model used to pick video materials by looking at thumbnails."""
+    enable: bool = False
+    api_key: str = ""
+    base_url: str = ""
+    model: str = ""
 
 
 class PromptConfig(BaseModel):
@@ -45,6 +44,7 @@ class PromptConfig(BaseModel):
 
 class TTSBaseConfig(BaseModel):
     api_key: str = ""
+    base_url: str = ""
     model: str = ""
     voices: List[str] = []
     speed: float = 1.1
@@ -54,14 +54,19 @@ class TTSCosyvoiceConfig(TTSBaseConfig):
     pass
 
 
-class TTSQwenConfig(TTSBaseConfig):
+class TTSQwenTTSConfig(TTSBaseConfig):
+    pass
+
+
+class TTSQwenAudioConfig(TTSBaseConfig):
     pass
 
 
 class TTSConfig(BaseModel):
     source: TTSSource
     cosyvoice: Optional[TTSCosyvoiceConfig] = None
-    qwen: Optional[TTSQwenConfig] = None
+    qwen_tts: Optional[TTSQwenTTSConfig] = None
+    qwen_audio: Optional[TTSQwenAudioConfig] = None
 
 
 class SubtitleConfig(BaseModel):
@@ -117,9 +122,9 @@ class MaterialConfig(BaseModel):
 
 class Config(BaseModel):
     llm: LLMConfig
-    yuanbao: YuanBaoConfig
     prompt: Optional[PromptConfig] = None
     tts: TTSConfig
     video: VideoConfig
     api: ApiConfig
     material: MaterialConfig
+    vision: Optional[VisionConfig] = None

@@ -154,6 +154,7 @@ cython_debug/
 
 log/
 config.toml
+auth.yaml
 output/
 cache_videos/
 models/

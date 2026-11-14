@@ -12,11 +12,9 @@ English | [简体中文](README.md)
 
 ## 📖 Project Introduction
 
-**AI Short Video Engine** is an AI-powered intelligent video generation platform that can transform various input content (such as article links, copywriting themes, or role-based prompts with integrated search capabilities) into high-quality, expressive, and interactive video content. Leveraging advanced multimodal large language model (LLM) technology, we make content creation simpler, more efficient, and highly shareable.
+**AI Short Video Engine** is an AI-powered intelligent video generation platform that can transform various input content (such as article links or copywriting themes) into high-quality, expressive, and interactive video content. Leveraging advanced multimodal large language model (LLM) technology, we make content creation simpler, more efficient, and highly shareable.
 
-Whether it’s news articles, tech blogs, official account posts, or user-defined topics, by simply providing a **URL**, **text theme**, or a **role-based prompt** with search functionality, AI Short Video Engine automatically completes content understanding, script generation, material matching, voice synthesis, and video editing — delivering professional-grade short videos ready for social platforms.
-
-- The search functionality is powered by [yuanbao-free-api](https://github.com/chenwr727/yuanbao-free-api.git)
+Whether it’s news articles, tech blogs, official account posts, or user-defined topics, by simply providing a **URL** or a **text theme**, AI Short Video Engine automatically completes content understanding, script generation, material matching, voice synthesis, and video editing — delivering professional-grade short videos ready for social platforms.
 
 ### ✨ Core Features
 
@@ -105,6 +103,34 @@ Edit `config.toml` and configure the following required parameters:
 - Pexels or Pixabay API Key  
 - Optional: Other advanced configurations  
 
+#### Login Account Setup
+
+The web interface (`web.py`) requires authentication, with account details read from `auth.yaml` in the project root. This file holds a password hash and a cookie secret, and is **listed in `.gitignore` so it is never committed**. Create it from the template:
+
+```bash
+# Copy the account template
+cp auth-template.yaml auth.yaml
+```
+
+Then generate a password hash and a cookie secret, and fill them into `auth.yaml`:
+
+```bash
+# Generate a bcrypt password hash (replace your-password)
+python -c "import bcrypt; print(bcrypt.hashpw(b'your-password', bcrypt.gensalt()).decode())"
+
+# Generate a cookie signing secret
+python -c "import secrets; print(secrets.token_hex(24))"
+```
+
+Fill in the two corresponding fields in `auth.yaml`:
+
+| Field | Description |
+| --- | --- |
+| `credentials.usernames.<user>.password` | The bcrypt hash generated above — **never a plaintext password** |
+| `cookie.key` | The random secret above, used to sign login cookies; leaking it allows session forgery |
+
+> Changing `cookie.key` immediately invalidates all existing sessions, requiring a fresh login. To add more users, append entries under `credentials.usernames` using the same structure.
+
 ### 🖥️ Usage
 
 #### Launch Web Interface
@@ -114,7 +140,7 @@ Edit `config.toml` and configure the following required parameters:
 python app.py
 
 # Launch frontend interface
-streamlit run web.py --server.port 8000
+streamlit run web.py
 ```
 
 ![demo](./demo.png)

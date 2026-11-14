@@ -163,9 +163,16 @@ async def create_video(
         if i > 1:
             video = transition_video(video)
 
-        final_video = CompositeVideoClip([video] + text_clips)
         final_audio = CompositeAudioClip(audio_clips)
-        final_video = final_video.with_audio(final_audio).with_duration(final_audio.duration)
+        audio_duration = final_audio.duration
+        # If the footage is shorter than the audio, loop it so the picture does not
+        # freeze / go black before the dialogue finishes.
+        if video.duration < audio_duration:
+            video = video.with_effects([vfx.Loop(duration=audio_duration)])
+            logger.info(f"Looping video to {audio_duration:.1f}s (was {video.duration:.1f}s)")
+
+        final_video = CompositeVideoClip([video] + text_clips)
+        final_video = final_video.with_audio(final_audio).with_duration(audio_duration)
 
         try:
             final_video.write_videofile(

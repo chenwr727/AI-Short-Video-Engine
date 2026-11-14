@@ -1,0 +1,14 @@
+credentials:
+  usernames:
+    admin:
+      email: admin@example.com
+      name: admin
+      # bcrypt 哈希，请勿填写明文密码。生成方式：
+      # python -c "import bcrypt; print(bcrypt.hashpw(b'你的密码', bcrypt.gensalt()).decode())"
+      password: $2b$12$REPLACE_WITH_YOUR_OWN_BCRYPT_HASH_xxxxxxxxxxxxxxxxxxxxxxx
+cookie:
+  expiry_days: 30
+  # cookie 签名密钥，必须替换为随机值。生成方式：
+  # python -c "import secrets; print(secrets.token_hex(24))"
+  key: REPLACE_WITH_A_RANDOM_SECRET
+  name: task_management_cookie

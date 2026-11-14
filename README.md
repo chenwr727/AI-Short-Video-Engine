@@ -16,8 +16,6 @@
 
 无论是新闻资讯、科技文章、公众号推文，还是用户自定义的主题内容，只需提供 URL、文本主题，AI Short Video Engine 即可自动完成内容理解、脚本生成、素材匹配、语音合成与视频剪辑，输出可用于社交平台发布的专业级短视频。
 
-- 搜索功能来源于 [yuanbao-free-api](https://github.com/chenwr727/yuanbao-free-api.git) 
-
 ### ✨ 核心功能
 
 | 功能模块              | 描述说明 |
@@ -105,6 +103,34 @@ cp config-template.toml config.toml
 - Pexels 或 Pixabay API Key  
 - 可选：其他高级配置项  
 
+#### 登录账号设置
+
+Web 界面（`web.py`）带有登录鉴权，账号信息读取自项目根目录的 `auth.yaml`。该文件包含密码哈希与 cookie 密钥，**已加入 `.gitignore`，不会提交到仓库**，需要从模板自行创建：
+
+```bash
+# 复制账号模板
+cp auth-template.yaml auth.yaml
+```
+
+然后生成密码哈希与 cookie 密钥，填入 `auth.yaml`：
+
+```bash
+# 生成 bcrypt 密码哈希（把 your-password 换成你的密码）
+python -c "import bcrypt; print(bcrypt.hashpw(b'your-password', bcrypt.gensalt()).decode())"
+
+# 生成 cookie 签名密钥
+python -c "import secrets; print(secrets.token_hex(24))"
+```
+
+对应填写 `auth.yaml` 中的两个字段：
+
+| 字段 | 说明 |
+| --- | --- |
+| `credentials.usernames.<用户名>.password` | 上面生成的 bcrypt 哈希，**不要填明文密码** |
+| `cookie.key` | 上面生成的随机密钥，用于签发登录 cookie，泄露会导致登录态被伪造 |
+
+> 修改 `cookie.key` 后所有已登录会话会立即失效，需要重新登录。如需新增用户，在 `credentials.usernames` 下按相同结构添加即可。
+
 ### 🖥️ 使用方式
 
 #### 启动 Web 界面
@@ -114,7 +140,7 @@ cp config-template.toml config.toml
 python app.py
 
 # 启动前端界面
-streamlit run web.py --server.port 8000
+streamlit run web.py
 ```
 
 ![demo](./demo.png)

@@ -12,9 +12,20 @@ from .base import MaterialHelper
 
 class PexelsHelper(MaterialHelper):
     def __init__(
-        self, api_key: str, locale: str, minimum_duration: int, video_width: int, video_height: int, max_page: int = 3
+        self,
+        api_key: str,
+        locale: str,
+        minimum_duration: int,
+        video_width: int,
+        video_height: int,
+        max_page: int = 3,
+        llm_writer=None,
+        vision_writer=None,
+        vision_model: str = "",
     ):
-        super().__init__(api_key, minimum_duration, video_width, video_height, max_page)
+        super().__init__(
+            api_key, minimum_duration, video_width, video_height, max_page, llm_writer, vision_writer, vision_model
+        )
 
         self.locale = locale
         if video_width < video_height:
@@ -36,7 +47,9 @@ class PexelsHelper(MaterialHelper):
             h = v["height"]
             if w < self.video_width or h < self.video_height:
                 continue
-            if not math.isclose(w / h, self.video_width / self.video_height, rel_tol=1e-5):
+            # allow a small aspect-ratio tolerance so near-matching clips are not
+            # filtered out too aggressively (compositor can crop slightly)
+            if not math.isclose(w / h, self.video_width / self.video_height, rel_tol=0.05):
                 continue
             video_files = v["video_files"]
             w_diff = float("inf")
@@ -48,7 +61,13 @@ class PexelsHelper(MaterialHelper):
                     continue
                 if w - self.video_width < w_diff:
                     w_diff = w - self.video_width
-                    item = MaterialInfo(url=video["link"], duration=duration)
+                    item = MaterialInfo(
+                        url=video["link"],
+                        duration=duration,
+                        id=v.get("id", 0),
+                        is_ai_generated=bool(v.get("is_ai_generated", False)),
+                        image_url=v.get("image", ""),
+                    )
                     if w_diff == 0:
                         break
             if item:
