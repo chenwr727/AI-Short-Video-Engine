@@ -1,0 +1,91 @@
+import { autoSubtitleFontSize, bool, loadConfig, num, numberOrZero, speakerNames, type AppConfig } from "./config.js";
+import { COSY_VOICES, EDGE_VOICES, SEED_VOICES } from "./voices.js";
+
+export interface Option {
+  id: string;
+  label: string;
+  description?: string;
+  /** 剧本里有几个角色，单人风格只需主讲名 */
+  speakers?: number;
+}
+
+export interface VoiceOption {
+  id: string;
+  label: string;
+}
+
+export interface TtsEngineOption extends Option {
+  voices: VoiceOption[];
+}
+
+export const PROMPT_SOURCES: Option[] = [
+  { id: "podcast", label: "播客", description: "两人对谈，信息密度高", speakers: 2 },
+  { id: "crosstalk", label: "相声", description: "捧逗互动，包袱节奏快", speakers: 2 },
+  { id: "talkshow", label: "脱口秀", description: "单人吐槽，口语化强", speakers: 1 },
+];
+
+export const MATERIAL_SOURCES: Option[] = [
+  { id: "pixabay", label: "Pixabay", description: "横竖版素材多，免费额度宽" },
+  { id: "pexels", label: "Pexels", description: "画质高，中文检索体验好" },
+];
+
+export const RESOLUTIONS: Option[] = [
+  { id: "1080x1920", label: "1080 × 1920（竖屏高清）" },
+  { id: "720x1280", label: "720 × 1280（竖屏快速）" },
+];
+
+/**
+ * 音色固定在代码里（见 voices.ts），界面不再让人配。
+ * 引擎顺序即默认值：Edge 排第一，配了对应 Key 才出现 CosyVoice / 豆包。
+ */
+export function ttsEngines(cfg: AppConfig): TtsEngineOption[] {
+  const engines: TtsEngineOption[] = [
+    {
+      id: "edge",
+      label: "Edge 在线语音",
+      description: "免费、无需 Key，默认引擎",
+      voices: EDGE_VOICES,
+    },
+  ];
+
+  if (cfg.DASHSCOPE_API_KEY) {
+    engines.push({
+      id: "cosyvoice",
+      label: "CosyVoice（流式）",
+      description: "WebSocket 流式合成，长句韵律更自然",
+      voices: COSY_VOICES,
+    });
+  }
+
+  if (cfg.SEED_TTS_API_KEY) {
+    engines.push({
+      id: "seedtts",
+      label: "豆包 Seed-TTS（火山引擎）",
+      description: "需要 SEED_TTS_API_KEY，情绪与韵律表现更好",
+      voices: SEED_VOICES,
+    });
+  }
+
+  return engines;
+}
+
+export function metaPayload(cfg: AppConfig = loadConfig()) {
+  return {
+    promptSources: PROMPT_SOURCES,
+    // 角色名的默认值（来自配置项），前端「文案脚本」页用来回填输入框
+    speakers: speakerNames(cfg),
+    ttsEngines: ttsEngines(cfg),
+    // 配音页语速的默认值（配置项 TTS_SPEED）
+    ttsSpeed: num(cfg.TTS_SPEED, 1.1),
+    // 成片预览页渲染参数的默认值
+    render: {
+      // 0（自动）也解析成具体 px，成片页永远显示真实字号
+      subtitleFontSize:
+        numberOrZero(cfg.SUBTITLE_FONT_SIZE, 0) || autoSubtitleFontSize(num(cfg.VIDEO_WIDTH, 1080)),
+      bgmEnabled: bool(cfg.BGM_ENABLED, true),
+      bgmVolume: numberOrZero(cfg.BGM_VOLUME, 0.1),
+    },
+    materialSources: MATERIAL_SOURCES,
+    resolutions: RESOLUTIONS,
+  };
+}

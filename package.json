@@ -1,0 +1,16 @@
+{
+  "name": "ai-short-video-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI Short Video Engine 桌面版（Electron + Fastify + React）",
+  "scripts": {
+    "dev:server": "pnpm -C server dev",
+    "dev:web": "pnpm -C web dev",
+    "build:web": "pnpm -C web build",
+    "dev": "npm --prefix desktop run dev",
+    "dist:win": "npm --prefix desktop run dist:win",
+    "dist:mac": "npm --prefix desktop run dist:mac",
+    "dist:linux": "npm --prefix desktop run dist:linux",
+    "typecheck": "pnpm -C server run typecheck && pnpm -C web run typecheck"
+  }
+}

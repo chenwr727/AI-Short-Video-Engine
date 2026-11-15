@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>设置</title>
+    <style>
+      :root {
+        --bg: #f4f7fb;
+        --card: #ffffff;
+        --border: #e3e9f2;
+        --text: #1c2431;
+        --muted: #6b7787;
+        --brand: #2f6fed;
+        font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+        color: var(--text);
+        background: var(--bg);
+      }
+      body {
+        margin: 0;
+        padding: 0;
+        background: var(--bg);
+      }
+      .page {
+        padding: 22px 24px 96px;
+        max-width: 760px;
+        margin: 0 auto;
+      }
+      h1 {
+        font-size: 18px;
+        margin: 0 0 4px;
+      }
+      .sub {
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 18px;
+        word-break: break-all;
+      }
+      fieldset {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--card);
+        padding: 14px 16px 6px;
+        margin: 0 0 14px;
+      }
+      legend {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--brand);
+        padding: 0 6px;
+      }
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        margin-bottom: 12px;
+      }
+      label {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      input {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 8px 10px;
+        font-size: 13px;
+        font-family: inherit;
+        background: #fbfcfe;
+        outline: none;
+      }
+      input:focus {
+        border-color: var(--brand);
+        background: #fff;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+      .check {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+        font-size: 12px;
+        color: var(--text);
+      }
+      .check input {
+        width: 15px;
+        height: 15px;
+      }
+      .tools {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin: 4px 0 14px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .bar {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        padding: 12px 24px;
+        background: rgba(255, 255, 255, 0.96);
+        border-top: 1px solid var(--border);
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+      }
+      button {
+        border-radius: 9px;
+        padding: 9px 18px;
+        font-size: 13px;
+        font-family: inherit;
+        cursor: pointer;
+        border: 1px solid var(--border);
+        background: #fff;
+        color: var(--text);
+      }
+      button.primary {
+        background: var(--brand);
+        border-color: var(--brand);
+        color: #fff;
+        font-weight: 600;
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      .status {
+        margin-right: auto;
+        font-size: 12px;
+        color: var(--muted);
+        align-self: center;
+      }
+      .status.ok {
+        color: #12a15c;
+      }
+      .status.err {
+        color: #d9453d;
+      }
+      .note {
+        margin: 0 0 14px;
+        padding: 10px 12px;
+        border: 1px solid #d8e3f8;
+        border-radius: 9px;
+        background: #f4f8ff;
+        font-size: 12px;
+        line-height: 1.6;
+        color: #5d6f8c;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <h1>设置</h1>
+      <div class="sub" id="config-path">加载中…</div>
+
+      <div class="tools">
+        <label><input type="checkbox" id="reveal" /> 显示密钥</label>
+        <span>修改后需重启后端才能生效（保存时自动重启）</span>
+      </div>
+
+      <form id="form">
+        <fieldset>
+          <legend>大模型（写稿）</legend>
+          <div class="field">
+            <label>API Key</label>
+            <input type="password" data-key="LLM_API_KEY" />
+          </div>
+          <div class="row">
+            <div class="field">
+              <label>接口地址</label>
+              <input data-key="LLM_API_URL" placeholder="https://api.deepseek.com" />
+            </div>
+            <div class="field">
+              <label>模型</label>
+              <input data-key="LLM_MODEL" placeholder="deepseek-flash" />
+            </div>
+          </div>
+        </fieldset>
+
+        <p class="note">Edge 在线语音免费、无需 Key，是默认配音；下面两个引擎填了 Key 才会出现在「配音设置」里。</p>
+
+        <fieldset>
+          <legend>配音（DashScope）</legend>
+          <div class="field">
+            <label>API Key</label>
+            <input type="password" data-key="DASHSCOPE_API_KEY" />
+          </div>
+          <div class="row">
+            <div class="field">
+              <label>HTTP 地址</label>
+              <input data-key="DASHSCOPE_BASE_URL" placeholder="https://dashscope.aliyuncs.com/api/v1" />
+            </div>
+            <div class="field">
+              <label>WebSocket 地址（留空自动推导）</label>
+              <input data-key="DASHSCOPE_WS_URL" placeholder="wss://…/api-ws/v1/inference" />
+            </div>
+          </div>
+          <div class="row">
+            <div class="field">
+              <label>CosyVoice 模型</label>
+              <input data-key="TTS_COSYVOICE_MODEL" />
+            </div>
+            <div class="field">
+              <label>语速（1 为原速）</label>
+              <input data-key="TTS_SPEED" placeholder="1.1" />
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>配音（豆包 · 火山引擎）</legend>
+          <p class="note">不填 Key 时不会出现豆包引擎。音色已内置（小何、Vivi、云舟、大壹、猴哥等），在「配音设置」里按角色选。</p>
+          <div class="field">
+            <label>API Key</label>
+            <input type="password" data-key="SEED_TTS_API_KEY" />
+          </div>
+          <div class="row">
+            <div class="field">
+              <label>资源 ID</label>
+              <input data-key="TTS_SEED_RESOURCE_ID" placeholder="seed-tts-2.0" />
+            </div>
+            <div class="field">
+              <label>模型</label>
+              <input data-key="TTS_SEED_MODEL" placeholder="seed-tts-2.0-expressive" />
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>剧本角色名</legend>
+          <p class="note">这两个名字会写进 AI 的写稿要求里（双人风格用两个，脱口秀只用主讲）。在「文案脚本」页可以按任务临时改。</p>
+          <div class="row">
+            <div class="field">
+              <label>主讲角色名</label>
+              <input data-key="SPEAKER_MAIN" placeholder="小简" />
+            </div>
+            <div class="field">
+              <label>追问角色名</label>
+              <input data-key="SPEAKER_GUEST" placeholder="老陈" />
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>素材</legend>
+          <div class="row">
+            <div class="field">
+              <label>Pixabay Key</label>
+              <input type="password" data-key="PIXABAY_API_KEY" />
+            </div>
+            <div class="field">
+              <label>Pexels Key</label>
+              <input type="password" data-key="PEXELS_API_KEY" />
+            </div>
+          </div>
+          <div class="row">
+            <div class="field">
+              <label>素材最短时长（秒）</label>
+              <input data-key="MATERIAL_MIN_DURATION" placeholder="10" />
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>画面与字幕</legend>
+          <div class="row">
+            <div class="field">
+              <label>宽</label>
+              <input data-key="VIDEO_WIDTH" placeholder="1080" />
+            </div>
+            <div class="field">
+              <label>高</label>
+              <input data-key="VIDEO_HEIGHT" placeholder="1920" />
+            </div>
+          </div>
+          <div class="row">
+            <div class="field">
+              <label>帧率</label>
+              <input data-key="FPS" placeholder="24" />
+            </div>
+            <div class="field">
+              <label>字幕字号（0 = 自动，1080 宽约 72px）</label>
+              <input data-key="SUBTITLE_FONT_SIZE" placeholder="0" />
+            </div>
+          </div>
+          <div class="row">
+            <div class="field">
+              <label>段落转场（秒，0 = 关闭）</label>
+              <input data-key="TRANSITION_DURATION" placeholder="0.5" />
+            </div>
+            <div class="field">
+              <label>画面淡入（秒，0 = 关闭）</label>
+              <input data-key="VIDEO_FADE_IN" placeholder="0.5" />
+            </div>
+          </div>
+          <div class="row">
+            <div class="field">
+              <label>画面淡出（秒，0 = 关闭）</label>
+              <input data-key="VIDEO_FADE_OUT" placeholder="0.5" />
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>背景音乐</legend>
+          <label class="check"><input type="checkbox" data-key="BGM_ENABLED" /> 混入 BGM（关掉后只保留配音）</label>
+          <div class="row">
+            <div class="field">
+              <label>BGM 音量（1 = 原音量）</label>
+              <input data-key="BGM_VOLUME" placeholder="0.1" />
+            </div>
+            <div class="field">
+              <label>BGM 淡入（秒，0 = 关闭）</label>
+              <input data-key="AUDIO_FADE_IN" placeholder="0.8" />
+            </div>
+          </div>
+          <div class="row">
+            <div class="field">
+              <label>BGM 淡出（秒，0 = 关闭）</label>
+              <input data-key="AUDIO_FADE_OUT" placeholder="1.2" />
+            </div>
+          </div>
+        </fieldset>
+      </form>
+    </div>
+
+    <div class="bar">
+      <span class="status" id="status"></span>
+      <button type="button" id="cancel">取消</button>
+      <button type="button" class="primary" id="save">保存并重启后端</button>
+    </div>
+
+    <script>
+      const form = document.getElementById("form");
+      const status = document.getElementById("status");
+      const inputs = Array.from(form.querySelectorAll("input[data-key]"));
+
+      function say(text, kind) {
+        status.textContent = text;
+        status.className = `status ${kind ?? ""}`;
+      }
+
+      /** 开关类配置在文件里是字符串 "1" / "0" */
+      function isToggle(input) {
+        return input.type === "checkbox";
+      }
+
+      function isOn(value, fallback) {
+        const text = String(value ?? "").trim().toLowerCase();
+        if (!text) return fallback;
+        return !["0", "false", "off", "no"].includes(text);
+      }
+
+      document.getElementById("reveal").addEventListener("change", (event) => {
+        for (const input of inputs) {
+          if (input.dataset.secret === "1") input.type = event.target.checked ? "text" : "password";
+        }
+      });
+
+      async function load() {
+        const config = await window.aisv.getConfig();
+        for (const input of inputs) {
+          const key = input.dataset.key;
+          if (isToggle(input)) {
+            input.checked = isOn(config[key], true);
+            continue;
+          }
+          input.value = config[key] ?? "";
+          if (input.type === "password") input.dataset.secret = "1";
+        }
+        document.getElementById("config-path").textContent = `配置文件：${config.__file ?? ""}`;
+        say("");
+      }
+
+      document.getElementById("save").addEventListener("click", async () => {
+        const button = document.getElementById("save");
+        button.disabled = true;
+        const values = {};
+        for (const input of inputs) {
+          values[input.dataset.key] = isToggle(input) ? (input.checked ? "1" : "0") : input.value.trim();
+        }
+        try {
+          const saved = await window.aisv.saveConfig(values);
+          say("已保存，正在重启后端…", "ok");
+          const restarted = await window.aisv.restartBackend();
+          if (!restarted.ok) throw new Error(restarted.error ?? "重启失败");
+          say("已生效", "ok");
+          setTimeout(() => window.aisv.close(), 600);
+        } catch (error) {
+          say(String(error.message ?? error), "err");
+          button.disabled = false;
+        }
+      });
+
+      document.getElementById("cancel").addEventListener("click", () => window.aisv.close());
+
+      load().catch((error) => say(`读取配置失败：${error.message ?? error}`, "err"));
+    </script>
+  </body>
+</html>
