@@ -1,0 +1,51 @@
+appId: com.aisv.app
+productName: AI Short Video
+copyright: Copyright © AI Short Video Engine contributors
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - dist/**/*
+  - assets/**/*
+  - package.json
+
+asar: true
+
+extraResources:
+  # 随包携带的 ffmpeg / ffprobe
+  - from: build/bin
+    to: bin
+  # 后端（含生产依赖），多套一层 payload 以避开 electron-builder 对顶层 node_modules 的排除规则
+  - from: build/resources/payload
+    to: .
+  # 前端产物，由后端托管
+  - from: ../web/dist
+    to: web
+
+extraFiles:
+  - from: portable.txt
+    to: portable.txt
+
+win:
+  icon: build/icon.png
+  target:
+    - target: zip
+      arch: [x64]
+  artifactName: ${productName}-${version}-win-portable.${ext}
+
+mac:
+  icon: build/icon.png
+  target:
+    - dmg
+  category: public.app-category.video
+  minimumSystemVersion: "11.0"
+
+linux:
+  icon: build/icon.png
+  target:
+    - AppImage
+  category: AudioVideo
+
+compression: maximum
