@@ -1,0 +1,9 @@
+packages:
+  - server
+  - web
+
+# pnpm 12 用 allowBuilds 白名单放行依赖的构建脚本（esbuild 由 vite / tsx 引入）
+allowBuilds:
+  esbuild: true
+  # msedge-tts 的 preinstall 只做「必须用 pnpm」检查，跳过不影响使用
+  msedge-tts: false

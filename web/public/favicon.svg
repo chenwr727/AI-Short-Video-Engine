@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2f6fed" />
+      <stop offset="55%" stop-color="#2d8bf0" />
+      <stop offset="100%" stop-color="#19b6a4" />
+    </linearGradient>
+    <linearGradient id="play" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.98" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.82" />
+    </linearGradient>
+  </defs>
+
+  <!-- 圆角底：与应用主色一致 -->
+  <rect width="512" height="512" rx="116" fill="url(#bg)" />
+
+  <!-- 高光 -->
+  <circle cx="150" cy="120" r="190" fill="#ffffff" opacity="0.10" />
+
+  <!-- 播放键 -->
+  <path d="M196 164l124 92-124 92z" fill="url(#play)" />
+
+  <!-- 字幕条 -->
+  <rect x="118" y="368" width="276" height="28" rx="14" fill="#ffffff" opacity="0.92" />
+  <rect x="176" y="416" width="160" height="24" rx="12" fill="#ffffff" opacity="0.5" />
+</svg>
