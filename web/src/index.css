@@ -11,6 +11,8 @@
   --ok: #0f9d58;
   --bad: #d9453d;
   --radius: 16px;
+  /* 滚动槽宽度，不滚动的区块需同量预留 */
+  --scrollbar: 10px;
   --shadow-sm: 0 1px 2px rgba(16, 32, 64, 0.05);
   --shadow-md: 0 18px 40px -28px rgba(16, 32, 64, 0.45);
   font-family: "Segoe UI", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
@@ -25,7 +27,7 @@
 body {
   margin: 0;
   height: 100%;
-  /* 整个窗口固定：只有中间的 .app-body 滚动，页头与步骤条永远不动 */
+  /* 整个窗口固定，只有 .app-body 滚动 */
   overflow: hidden;
   background:
     radial-gradient(1100px 520px at 10% -10%, #dbe8ff 0%, rgba(219, 232, 255, 0) 62%),
@@ -43,39 +45,53 @@ html,
 .app {
   display: flex;
   flex-direction: column;
-  max-width: 1200px;
+  /* 浏览器里限宽避免超长行，桌面端另放开 */
+  max-width: 1600px;
   height: 100%;
   margin: 0 auto;
   padding: 0 24px;
 }
 
-/* 页头 + 步骤条：常驻顶部、不滚也不加底色，直接透出页面背景 */
+/* 桌面端铺满窗口 */
+body.electron .app,
+body.electron .tb-inner {
+  max-width: none;
+}
 
+/* 页头 + 步骤条：常驻顶部，随页面背景 */
 .app-top {
   flex: none;
-  padding: 36px 0 18px;
+  padding: 20px 0 18px;
+  /* 补上滚动槽，右边缘才与卡片对齐 */
+  padding-right: var(--scrollbar);
+}
+
+/* 让开 36px 标题栏，再留一段间距 */
+body.electron .app-top {
+  padding-top: 48px;
 }
 
 .app-top .header {
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
 .app-top .stepper-wrap {
   margin-bottom: 0;
 }
 
-/* 任务面板的滚动容器：内容在步骤条下面自己滚 */
+/* 任务面板的滚动容器 */
 .app-body {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding-bottom: 52px;
+  /* 给底部常驻状态栏留位 */
+  padding-bottom: 18px;
   scrollbar-gutter: stable;
 }
 
 .app-body::-webkit-scrollbar {
-  width: 10px;
+  width: var(--scrollbar);
 }
 
 .app-body::-webkit-scrollbar-thumb {
@@ -89,7 +105,7 @@ html,
   background-color: rgba(120, 137, 160, 0.7);
 }
 
-/* 顶栏：桌面端当作标题栏，只有图标与菜单 */
+/* 顶栏：桌面端当作标题栏，只承载菜单与拖拽区 */
 
 .titlebar {
   position: fixed;
@@ -99,34 +115,31 @@ html,
   z-index: 20;
   display: flex;
   align-items: center;
-  gap: 8px;
   height: 36px;
-  padding: 0 12px 0 10px;
+  padding: 0;
   background: rgba(244, 247, 251, 0.88);
   backdrop-filter: blur(10px);
   -webkit-app-region: drag;
 }
 
-/* 右上角留给系统窗口按钮，macOS 的红黄绿灯在左边 */
-body.electron .titlebar {
+/* 与 .app 同宽同内边距 */
+.tb-inner {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* 给系统窗口按钮留位，macOS 按钮在左侧 */
+body.electron .tb-inner {
   padding-right: 148px;
 }
 
-body.electron.mac .titlebar {
+body.electron.mac .tb-inner {
   padding-left: 82px;
-  padding-right: 12px;
-}
-
-.tb-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  flex: none;
-  border-radius: 5px;
-  background: linear-gradient(135deg, #3b7bf0, #19b6a4);
-  color: #fff;
+  padding-right: 24px;
 }
 
 /* 页头：品牌区与任务状态 */
@@ -136,7 +149,6 @@ body.electron.mac .titlebar {
   align-items: center;
   gap: 14px;
   margin-bottom: 20px;
-  padding-top: 20px;
 }
 
 .brand {
@@ -188,6 +200,135 @@ body.electron.mac .titlebar {
   margin-left: auto;
 }
 
+/* 环境状态：全局信息常驻页头 */
+
+.env {
+  position: relative;
+}
+
+.env-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.env-pill:hover {
+  background: #fff;
+  border-color: var(--border-strong);
+}
+
+/* 徽标只在缺项时出现，固定告警色 */
+.env-pill.bad {
+  color: #91312b;
+  background: #fff2f1;
+  border-color: #f6d5d2;
+}
+
+.env-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  width: 292px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: var(--shadow-sm), var(--shadow-md);
+}
+
+.env-pop-head {
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 0.4px;
+}
+
+.env-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.env-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  font-size: 12.5px;
+}
+
+.env-item.missing {
+  background: #fff6f5;
+}
+
+.env-item.ok {
+  background: #f6fbf8;
+}
+
+.env-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.env-state {
+  flex: none;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ok);
+}
+
+.env-item.missing .env-state {
+  color: var(--bad);
+}
+
+/* 说明文字换到下一行 */
+.env-note {
+  flex: 0 0 100%;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.env-settings {
+  width: 100%;
+  margin-top: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  background: #fff;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.env-settings:hover {
+  background: #f5f9ff;
+  border-color: #b9cdea;
+}
+
 /* 菜单栏 */
 
 .menubar {
@@ -227,21 +368,20 @@ body.electron.mac .titlebar {
   z-index: 30;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  min-width: 190px;
-  padding: 6px;
+  min-width: 236px;
+  padding: 5px;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: #fff;
   box-shadow: var(--shadow-sm), var(--shadow-md);
 }
 
+/* 项之间靠 hover 分隔，留 gap 会让分组线悬空 */
 .menu-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 8px 10px;
+  gap: 9px;
+  padding: 7px 9px;
   border: none;
   border-radius: 7px;
   background: transparent;
@@ -253,14 +393,55 @@ body.electron.mac .titlebar {
   white-space: nowrap;
 }
 
-.menu-item:hover {
+.menu-item:hover,
+.menu-item.active {
   background: var(--brand-soft);
   color: var(--brand);
 }
 
-.menu-hint {
-  font-size: 11.5px;
+.menu-icon {
+  display: inline-flex;
+  flex: none;
   color: var(--muted);
+}
+
+.menu-item:hover .menu-icon,
+.menu-item.active .menu-icon {
+  color: var(--brand);
+}
+
+/* 撑满剩余宽度，把快捷键提示推到最右 */
+.menu-text {
+  flex: 1 1 auto;
+}
+
+.menu-hint {
+  flex: none;
+  padding-left: 14px;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+/* 不可撤销的项用红字红图标 */
+.menu-item.menu-danger {
+  color: var(--bad);
+}
+
+.menu-item.menu-danger .menu-icon {
+  color: var(--bad);
+}
+
+.menu-item.menu-danger:hover,
+.menu-item.menu-danger.active {
+  background: rgba(217, 69, 61, 0.09);
+  color: var(--bad);
+}
+
+.menu-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border);
 }
 
 .pill {
@@ -286,7 +467,8 @@ body.electron.mac .titlebar {
   border-color: #c9ecd9;
 }
 
-.pill.bad {
+.pill.bad,
+.pill.error {
   color: var(--bad);
   background: #fff2f1;
   border-color: #f6d5d2;
@@ -388,7 +570,7 @@ body.electron.mac .titlebar {
   height: 15px;
 }
 
-/* 输入框 + 「选择…」按钮并排，别让按钮撑满半行 */
+/* 输入框与「选择…」按钮并排 */
 .music-picker {
   display: flex;
   gap: 10px;
@@ -458,12 +640,6 @@ body.electron.mac .titlebar {
   cursor: not-allowed;
 }
 
-.actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 4px;
-}
-
 /* 辅助文本与信息 */
 
 .hint {
@@ -471,6 +647,18 @@ body.electron.mac .titlebar {
   font-size: 12.5px;
   color: var(--muted);
   line-height: 1.7;
+}
+
+/* 字段下方的补充说明，比 label 淡一档 */
+.field-hint {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+/* 拦截性提示用警示色 */
+.hint-warn {
+  color: #a76a12;
 }
 
 .kv {
@@ -493,30 +681,22 @@ body.electron.mac .titlebar {
 
 .kv .v {
   text-align: right;
-  word-break: break-all;
+  /* 长路径需约束，否则会把整行撑开 */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
   font-size: 12px;
 }
 
-.badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 600;
-}
-
+/* 徽标红点，只有缺项时才出现 */
 .dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
   background: var(--bad);
   box-shadow: 0 0 0 3px rgba(217, 69, 61, 0.12);
-}
-
-.dot.ok {
-  background: var(--ok);
-  box-shadow: 0 0 0 3px rgba(15, 157, 88, 0.14);
 }
 
 .alert {
@@ -594,14 +774,30 @@ body.electron.mac .titlebar {
 
 .stage-label {
   min-width: 76px;
+  flex: none;
 }
 
+/* min-width: 0 让文字可压缩，右侧耗时不被挤走 */
 .stage-msg {
+  min-width: 0;
   color: #96a1b1;
   font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 耗时靠右，等宽数字避免跳动 */
+.stage-cost {
+  margin-left: auto;
+  flex: none;
+  color: #a9b4c3;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.stage.running .stage-cost {
+  color: #7f9bd6;
 }
 
 /* 日志 */
@@ -618,6 +814,37 @@ body.electron.mac .titlebar {
   line-height: 1.75;
   margin-bottom: 14px;
   box-shadow: inset 0 1px 2px rgba(16, 32, 64, 0.03);
+}
+
+/* 折叠后只占一行标题 */
+.log-details {
+  margin-bottom: 14px;
+}
+
+.log-details > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #f8fbff;
+  color: var(--muted);
+  font-size: 12px;
+  user-select: none;
+}
+
+.log-details > summary:hover {
+  color: var(--text);
+}
+
+.log-details[open] > summary {
+  margin-bottom: 8px;
+}
+
+.log-details > .log {
+  margin-bottom: 0;
 }
 
 .log-line {
@@ -643,25 +870,6 @@ body.electron.mac .titlebar {
 }
 
 /* 剧本编辑 */
-
-.script-card {
-  margin-top: 18px;
-}
-
-.script-head {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  margin-bottom: 14px;
-}
-
-.script-head h2 {
-  margin: 0;
-}
-
-.script-head .hint {
-  margin: 0;
-}
 
 .paragraph {
   border-top: 1px dashed var(--border);
@@ -696,7 +904,7 @@ body.electron.mac .titlebar {
   margin-bottom: 8px;
 }
 
-/* 剧本已确认后的只读版本（回到这一步时展示当时的内容） */
+/* 剧本已确认后的只读版本 */
 .script-title {
   margin: 0 0 12px;
   font-size: 15px;
@@ -724,7 +932,7 @@ body.electron.mac .titlebar {
   white-space: pre-wrap;
 }
 
-/* 单条台词的删除按钮：默认很淡，悬停才变红 */
+/* 删除按钮默认很淡，悬停变红 */
 .line-del {
   display: inline-flex;
   align-items: center;
@@ -782,16 +990,15 @@ body.electron.mac .titlebar {
 
 /* 成片 */
 
-.result-card {
-  margin-top: 18px;
-}
-
+/* 按自身比例显示，定宽会撑成横条 */
 .player {
-  width: 100%;
-  max-height: 560px;
+  display: block;
+  width: auto;
+  max-width: 100%;
+  max-height: min(560px, 70vh);
+  margin: 0 auto 14px;
   border-radius: 12px;
   background: #0b1220;
-  margin-bottom: 14px;
   box-shadow: 0 16px 32px -24px rgba(11, 18, 32, 0.9);
 }
 
@@ -799,7 +1006,7 @@ body.electron.mac .titlebar {
   margin-bottom: 14px;
 }
 
-/* 配音试听：整段 / 单句都能播放 */
+/* 配音试听 */
 
 .audio-board {
   margin-bottom: 14px;
@@ -958,9 +1165,10 @@ body.electron.mac .titlebar {
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  border: 1px solid #e4ebf6;
-  background: #f2f6fc;
-  color: #93a3c0;
+  border: 1px solid #dde5f1;
+  background: #fff;
+  /* 未到达的步骤也要能读清 */
+  color: #6b7c96;
   font-size: 14px;
   font-weight: 700;
   transition: background 0.18s, color 0.18s, box-shadow 0.18s, transform 0.18s;
@@ -974,7 +1182,8 @@ body.electron.mac .titlebar {
   box-shadow: 0 0 0 4px rgba(47, 111, 237, 0.13), 0 10px 20px -10px rgba(47, 111, 237, 0.9);
 }
 
-.step.done .step-dot {
+/* 排除当前页，蓝色高亮才不会被绿色盖掉 */
+.step.done:not(.active) .step-dot {
   background: linear-gradient(135deg, #2fc08f, #12a15c);
   border-color: transparent;
   color: #fff;
@@ -991,13 +1200,14 @@ body.electron.mac .titlebar {
   color: var(--brand);
 }
 
-.step.done .step-label {
+.step.done:not(.active) .step-label {
   color: var(--text);
 }
 
 .step-desc {
-  font-size: 11px;
-  color: #a7b4cc;
+  font-size: 11.5px;
+  /* 未到达的步骤对比度需够 */
+  color: #8494ac;
   white-space: nowrap;
 }
 
@@ -1010,21 +1220,65 @@ body.electron.mac .titlebar {
   box-shadow: 0 6px 14px -8px rgba(47, 111, 237, 0.7);
 }
 
-.follow-btn {
-  margin-top: 14px;
-  padding: 8px 14px;
+/* 恢复任务的提示条，挂在步骤条下面 */
+
+.resume-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 8px 10px 8px 14px;
   border: 1px solid #d7e4ff;
-  border-radius: 999px;
-  background: var(--brand-soft);
-  color: var(--brand);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s;
+  border-radius: 10px;
+  background: #f2f7ff;
+  font-size: 12.5px;
+  color: #3c5785;
 }
 
-.follow-btn:hover {
-  background: #e4eeff;
+.resume-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resume-btn {
+  flex: none;
+  margin-left: auto;
+  padding: 5px 12px;
+  border: 1px solid #b9cdea;
+  border-radius: 8px;
+  background: #fff;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--brand);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.resume-btn:hover {
+  background: #eaf2ff;
+  border-color: #9dbdea;
+}
+
+.resume-close {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 15px;
+  line-height: 1;
+  color: #8296b5;
+  cursor: pointer;
+}
+
+.resume-close:hover {
+  background: #e2ecff;
+  color: var(--brand);
 }
 
 /* 步骤面板 */
@@ -1078,28 +1332,31 @@ body.electron.mac .titlebar {
   min-width: 168px;
 }
 
-/* 「返回上一步」固定靠左，主操作留在右侧 */
+/* 返回靠左，主操作靠右 */
 .panel-actions .btn-back {
   order: -1;
   margin-right: auto;
 }
 
+/* 操作行固定在卡片底部 */
+.panel-fill > .panel-actions {
+  flex: none;
+  margin-top: auto;
+  align-items: center;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+/* 下载链接借用按钮样式 */
 .link-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 11px 18px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #3b7bf0, #2f6fed);
-  color: #fff;
-  font-size: 14px;
-  font-weight: 600;
   text-decoration: none;
-  box-shadow: 0 10px 22px -12px rgba(47, 111, 237, 0.85);
+  white-space: nowrap;
 }
 
 .link-btn:hover {
-  filter: brightness(1.04);
   text-decoration: none;
 }
 
@@ -1109,27 +1366,6 @@ body.electron.mac .titlebar {
 
 .log-empty {
   color: #a9b4c3;
-}
-
-.dep-badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.dep-badges .badge {
-  padding: 4px 10px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: #f7faff;
-  color: #4a5a72;
-  font-size: 11.5px;
-  font-weight: 600;
-}
-
-/* 放在面板标题右侧时再收紧一点，别抢标题的视觉权重 */
-.panel-aside .dep-badges {
-  justify-content: flex-end;
 }
 
 /* 配音设置 */
@@ -1308,6 +1544,148 @@ body.electron.mac .titlebar {
   text-align: center;
 }
 
+/* 首屏表单单列到底 */
+.field textarea.textarea-main {
+  /* 矮窗口下保证可用高度，剩余交给 flex */
+  min-height: 180px;
+}
+
+/* 卡片撑满可视高度，多余空间给正文框 */
+.panel-fill {
+  display: flex;
+  flex-direction: column;
+  /* 卡片不滚动，避免双滚动条 */
+  min-height: 100%;
+}
+
+.panel-fill .field-grow {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.panel-fill .field-grow textarea {
+  flex: 1 1 auto;
+  /* 下限保证矮窗口下仍写得进字 */
+  min-height: 140px;
+  max-height: none;
+  resize: none;
+}
+
+/* 锁在一屏内，矮窗口时给 520px 下限 */
+.panel-fill:has(> .panel-scroll) {
+  max-height: max(100%, 520px);
+}
+
+/* 长内容区在卡片内部滚动，底部按钮不用滚到底 */
+.panel-fill .panel-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  /* 不把滚动传给外层 */
+  overscroll-behavior: contain;
+  padding-right: 4px;
+}
+
+/* 参数区固定在滚动区之上 */
+.panel-fill > .panel-config {
+  flex: none;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 14px;
+}
+
+.panel-fill .panel-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.panel-fill .panel-scroll::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background-clip: content-box;
+  background-color: rgba(120, 137, 160, 0.4);
+}
+
+.panel-fill .panel-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(120, 137, 160, 0.68);
+}
+
+.field-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.field-count {
+  flex: none;
+  font-size: 11.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 三个字段一行，风格占宽一些 */
+.row-3 {
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr);
+}
+
+/* 说明文字与上面的行拉开距离 */
+.options-hint {
+  margin: 0 0 16px;
+}
+
+/* 操作行左侧说明文字占满整行 */
+.action-hint {
+  margin-right: auto;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* 底部状态栏，常驻路径类信息 */
+
+.statusbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  /* 两端与卡片边线对齐 */
+  padding: 0 var(--scrollbar) 0 0;
+  border-top: 1px solid var(--border);
+  font-size: 11.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.sb-item {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.sb-brand {
+  flex: none;
+  font-weight: 700;
+  color: #5b6a80;
+}
+
+.sb-muted {
+  flex: none;
+  color: #93a0b4;
+}
+
+.sb-sep {
+  flex: none;
+  width: 1px;
+  height: 12px;
+  background: var(--border-strong);
+}
+
+.sb-grow {
+  flex: 1 1 auto;
+}
+
 /* 动效 */
 
 @keyframes pulse {
@@ -1348,6 +1726,35 @@ body.electron.mac .titlebar {
   }
 }
 
+/* 1024 以上并排，820 以下单列 */
+@media (max-width: 820px) {
+  .row,
+  .row-3 {
+    grid-template-columns: 1fr;
+  }
+
+  .field textarea.textarea-main {
+    min-height: 168px;
+  }
+
+  .statusbar .sb-sep:first-of-type,
+  .statusbar .sb-item:nth-child(3) {
+    display: none;
+  }
+}
+
+@media (max-width: 620px) {
+  /* 窄屏只留品牌与版本号 */
+  .statusbar .sb-item {
+    display: none;
+  }
+
+  .statusbar .sb-brand,
+  .statusbar .sb-muted:last-child {
+    display: block;
+  }
+}
+
 @media (max-width: 620px) {
   .app {
     padding: 0 16px;
@@ -1358,7 +1765,7 @@ body.electron.mac .titlebar {
   }
 
   .app-body {
-    padding-bottom: 40px;
+    padding-bottom: 14px;
   }
 
   .header {

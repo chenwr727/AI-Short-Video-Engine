@@ -13,7 +13,6 @@ const exe = isWin ? ".exe" : "";
 const checks = [
   ["portable.txt", path.join(desktop, "portable.txt")],
   ["ffmpeg", path.join(desktop, "build", "bin", "ffmpeg" + exe)],
-  ["ffprobe", path.join(desktop, "build", "bin", "ffprobe" + exe)],
   ["前端产物", path.join(repoRoot, "web", "dist", "index.html")],
   ["后端入口", path.join(desktop, "build", "resources", "payload", "server", "src", "index.ts")],
   [
@@ -28,6 +27,14 @@ const softChecks = [
   ["打包内 ffmpeg", path.join(unpacked, "resources", "bin", "ffmpeg" + exe)],
   ["打包内后端", path.join(unpacked, "resources", "server", "src", "index.ts")],
   ["打包内前端", path.join(unpacked, "resources", "web", "index.html")],
+];
+
+/** 不该进包的文件，防止误分发本地凭据 */
+const forbidden = [
+  ["后端本地配置", path.join(unpacked, "resources", "server", "data", "config.json")],
+  ["打包暂存配置", path.join(desktop, "build", "resources", "payload", "server", "data", "config.json")],
+  ["免安装用户数据", path.join(unpacked, "UserData")],
+  ["用户数据 config", path.join(unpacked, "UserData", "config.json")],
 ];
 
 let failed = 0;
@@ -45,8 +52,17 @@ for (const [label, file] of softChecks) {
   else console.warn(`  - ${label} 不存在（仅在已执行 electron-builder 后检查）：${file}`);
 }
 
+for (const [label, file] of forbidden) {
+  if (fs.existsSync(file)) {
+    console.error(`  ✗ ${label} 不该出现在打包产物里 -> ${file}`);
+    failed++;
+  } else {
+    console.log(`  ✓ ${label} 未入包`);
+  }
+}
+
 if (failed) {
-  console.error(`\n自检失败：${failed} 项缺失`);
+  console.error(`\n自检失败：${failed} 项异常`);
   process.exit(1);
 }
 console.log("\n自检通过");

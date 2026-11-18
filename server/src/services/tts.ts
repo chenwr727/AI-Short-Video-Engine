@@ -16,7 +16,6 @@ export interface TtsEngineRuntime {
 }
 
 export function createTtsEngine(cfg: AppConfig, engine: TtsEngine): TtsEngineRuntime {
-  // Edge 与豆包不依赖 DashScope，Key 校验只对 CosyVoice 生效
   if (engine === "edge") {
     return { model: "Edge TTS", synthesize: (req) => synthesizeEdge(cfg, req) };
   }

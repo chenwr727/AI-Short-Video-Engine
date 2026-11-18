@@ -5,14 +5,7 @@ export interface VoiceDef {
   label: string;
 }
 
-/**
- * 三个引擎的内置音色表，不再走配置：
- * - Edge：微软 Edge 朗读的常用中文音色
- * - CosyVoice：阿里百炼 cosyvoice-v3-flash 的常用中文音色（v3-plus 只有 longanyang / longanhuan）
- * - 豆包：火山引擎 Seed-TTS 2.0 的 _uranus_bigtts 音色
- * 音色会随服务端版本增减，需要换表时改这里即可。
- */
-
+/** 内置音色表 */
 export const EDGE_VOICES: VoiceDef[] = [
   { id: "zh-CN-XiaoxiaoNeural", label: "晓晓（女声·温柔）" },
   { id: "zh-CN-YunxiNeural", label: "云希（男声·阳光）" },

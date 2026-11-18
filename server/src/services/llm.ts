@@ -6,6 +6,8 @@ export interface ChatOptions {
   signal?: AbortSignal;
   retries?: number;
   timeoutMs?: number;
+  /** 覆盖磁盘配置，供「测试连接」用未保存的值 */
+  config?: AppConfig;
 }
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
@@ -41,7 +43,7 @@ async function callOnce(cfg: AppConfig, system: string, user: string, opts: Chat
   if (opts.json) body.response_format = { type: "json_object" };
   if (typeof opts.temperature === "number") body.temperature = opts.temperature;
 
-  // 允许只配置域名（如 https://api.deepseek.com）或完整接口地址
+  // 允许只填域名或完整接口地址
   const trimmed = cfg.LLM_API_URL.replace(/\/+$/, "");
   const endpoint = /\/chat\/completions$/.test(trimmed) ? trimmed : joinApiPath(trimmed, "chat/completions");
 
@@ -74,9 +76,9 @@ async function callOnce(cfg: AppConfig, system: string, user: string, opts: Chat
   return content;
 }
 
-/** 调用 chat/completions；网络或 5xx 失败时按指数退避重试 */
+/** 调用 chat/completions，失败时按退避重试 */
 export async function chat(system: string, user: string, opts: ChatOptions = {}): Promise<string> {
-  const cfg = loadConfig();
+  const cfg = opts.config ?? loadConfig();
   if (!cfg.LLM_API_KEY) {
     throw new Error("未配置 LLM_API_KEY，请编辑 config.json 后重启应用");
   }
@@ -97,7 +99,7 @@ export async function chat(system: string, user: string, opts: ChatOptions = {})
   throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
-/** 抽出第一个完整的 JSON 数组（检索词生成要求输出数组） */
+/** 抽出第一个完整 JSON 数组 */
 export function extractJsonArray(text: string): string | null {
   const start = text.indexOf("[");
   if (start < 0) return null;
@@ -124,7 +126,7 @@ export function extractJsonArray(text: string): string | null {
   return null;
 }
 
-/** 从模型输出里抽出第一个完整的 JSON 对象（容忍 ```json 包裹与前后废话） */
+/** 抽出第一个完整 JSON 对象，容忍代码块包裹与多余文字 */
 export function extractJsonObject(text: string): string | null {
   const start = text.indexOf("{");
   if (start < 0) return null;

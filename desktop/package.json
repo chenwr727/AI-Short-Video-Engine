@@ -9,8 +9,8 @@
     "ffmpeg": "node scripts/copy-ffmpeg.mjs",
     "stage": "node scripts/stage-server.mjs",
     "web": "pnpm -C ../web run build",
-    "build": "npm run web && npm run icon && npm run ffmpeg && npm run stage && tsc -p tsconfig.json",
-    "dev": "npm run build && electron .",
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/build.mjs && electron .",
     "verify": "node scripts/verify-pack.mjs",
     "dist:win": "npm run build && electron-builder --win && npm run verify",
     "dist:mac": "npm run build && electron-builder --mac",
@@ -21,13 +21,11 @@
     "electron": "^44.0.0",
     "electron-builder": "^26.15.3",
     "ffmpeg-static": "^5.3.0",
-    "ffprobe-static": "^3.1.0",
     "sharp": "^0.35.4",
     "typescript": "^5.9.3"
   },
   "allowScripts": {
     "ffmpeg-static": true,
-    "ffprobe-static": true,
     "electron-winstaller": true
   }
 }

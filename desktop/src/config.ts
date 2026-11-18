@@ -7,24 +7,28 @@ export interface AppConfig {
   LLM_API_URL?: string;
   LLM_MODEL?: string;
   DASHSCOPE_API_KEY?: string;
+  DASHSCOPE_WORKSPACE_ID?: string;
   PIXABAY_API_KEY?: string;
   PEXELS_API_KEY?: string;
   VIDEO_WIDTH?: string;
   VIDEO_HEIGHT?: string;
   FPS?: string;
   TTS_SPEED?: string;
+  TITLE_DURATION?: string;
+  SUBTITLE_INTERVAL?: string;
   [key: string]: string | undefined;
 }
 
-/** 与 server/src/config.ts 的默认值保持一致；设置面板按这里的键做白名单保存 */
+/** 与 server/src/config.ts 保持一致，也作为保存白名单 */
 export const DEFAULTS: AppConfig = {
   LLM_API_KEY: "",
   LLM_API_URL: "https://api.deepseek.com",
   LLM_MODEL: "deepseek-flash",
   DASHSCOPE_API_KEY: "",
   DASHSCOPE_BASE_URL: "https://dashscope.aliyuncs.com/api/v1",
+  DASHSCOPE_WORKSPACE_ID: "",
   DASHSCOPE_WS_URL: "",
-  TTS_COSYVOICE_MODEL: "cosyvoice-v3.5-flash",
+  TTS_COSYVOICE_MODEL: "cosyvoice-v3-flash",
   SEED_TTS_API_KEY: "",
   TTS_SEED_RESOURCE_ID: "seed-tts-2.0",
   TTS_SEED_MODEL: "seed-tts-2.0-expressive",
@@ -36,6 +40,8 @@ export const DEFAULTS: AppConfig = {
   FPS: "24",
   TTS_SPEED: "1.1",
   TRANSITION_DURATION: "0.5",
+  TITLE_DURATION: "1.6",
+  SUBTITLE_INTERVAL: "0.2",
   SUBTITLE_FONT_SIZE: "0",
   BGM_ENABLED: "1",
   BGM_VOLUME: "0.1",
@@ -47,30 +53,80 @@ export const DEFAULTS: AppConfig = {
   SPEAKER_GUEST: "老陈",
 };
 
+/** 配置读写的唯一白名单 */
+const CONFIG_KEYS = Object.keys(DEFAULTS);
+
 export function configFile(): string {
   return path.join(userDataDir(), "config.json");
 }
 
-export function loadConfig(): AppConfig {
+/** 只保留白名单内且值为字符串的键 */
+function sanitize(input: unknown): AppConfig {
+  const out: AppConfig = {};
+  if (typeof input !== "object" || input === null || Array.isArray(input)) return out;
+  const source = input as Record<string, unknown>;
+  for (const key of CONFIG_KEYS) {
+    const value = source[key];
+    if (typeof value === "string") out[key] = value.trim();
+  }
+  return out;
+}
+
+/** 读文件并清洗，文件不存在或损坏返回空对象 */
+function readFileConfig(): AppConfig {
+  let raw: string;
   try {
-    const raw = fs.readFileSync(configFile(), "utf-8");
-    return { ...DEFAULTS, ...(JSON.parse(raw) as AppConfig) };
-  } catch {
-    return { ...DEFAULTS };
+    raw = fs.readFileSync(configFile(), "utf-8");
+  } catch (e) {
+    // 文件不存在属正常，其它错误需留日志
+    if ((e as NodeJS.ErrnoException)?.code !== "ENOENT") {
+      console.warn(`[config] 读取配置失败，本次回退默认值：${String(e)}`);
+    }
+    return {};
+  }
+  try {
+    return sanitize(JSON.parse(raw));
+  } catch (e) {
+    // 先备份再回退，避免覆盖用户填的 Key
+    const backup = `${configFile()}.corrupt-${Date.now()}`;
+    try {
+      fs.renameSync(configFile(), backup);
+      console.warn(`[config] 配置文件解析失败，已备份到 ${backup}：${String(e)}`);
+    } catch (renameErr) {
+      console.warn(`[config] 配置文件解析失败且备份失败：${String(renameErr)}`);
+    }
+    return {};
   }
 }
 
-/** 首次启动写入一份带默认值的配置，避免用户面对空文件猜字段名 */
+export function loadConfig(): AppConfig {
+  return { ...DEFAULTS, ...readFileConfig() };
+}
+
+/** 首次启动写入一份带默认值的配置 */
 export function ensureConfig(): AppConfig {
-  if (!fs.existsSync(configFile())) {
-    saveConfig(DEFAULTS);
-  }
-  return loadConfig();
+  // 损坏文件由 loadConfig 处理，这里只确认存在
+  const cfg = loadConfig();
+  if (!fs.existsSync(configFile())) saveConfig(cfg);
+  return cfg;
 }
 
 export function saveConfig(next: AppConfig): AppConfig {
-  const merged: AppConfig = { ...loadConfig(), ...next };
+  const merged: AppConfig = { ...loadConfig(), ...sanitize(next) };
+  const file = configFile();
+  const tmp = `${file}.${process.pid}.tmp`;
   fs.mkdirSync(userDataDir(), { recursive: true });
-  fs.writeFileSync(configFile(), JSON.stringify(merged, null, 2), "utf-8");
+  try {
+    // 先写临时文件再 rename 保证原子性；含 API Key，POSIX 下收窄到 0600
+    fs.writeFileSync(tmp, JSON.stringify(merged, null, 2), { encoding: "utf-8", mode: 0o600 });
+    fs.renameSync(tmp, file);
+  } catch (e) {
+    try {
+      fs.rmSync(tmp, { force: true });
+    } catch {
+      // 清理失败可忽略
+    }
+    throw e;
+  }
   return merged;
 }

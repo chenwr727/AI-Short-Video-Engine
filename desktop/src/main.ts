@@ -10,7 +10,7 @@ setupPortableMode();
 const DEV = !app.isPackaged;
 const FIXED_DEV_PORT = 4000;
 
-/** 窗口/任务栏图标；打包后在 asar 的 assets 下，开发态在 desktop/assets */
+/** 打包后在 asar 的 assets 下 */
 function appIcon(): string | undefined {
   const file = path.join(__dirname, "..", "assets", "icon.png");
   return fs.existsSync(file) ? file : undefined;
@@ -51,7 +51,7 @@ async function health(): Promise<HealthPayload | null> {
 async function ensureBackend(): Promise<Backend> {
   if (backend && (backend.proc === null || backend.proc.exitCode === null)) return backend;
 
-  // 开发态若已手动跑起后端（pnpm dev:server），直接复用，避免端口冲突
+  // 开发态已有后端则复用
   if (DEV && (await ping(`http://127.0.0.1:${FIXED_DEV_PORT}/api/health`))) {
     console.log(`[desktop] 复用已在运行的后端 :${FIXED_DEV_PORT}`);
     backend = {
@@ -68,7 +68,7 @@ async function ensureBackend(): Promise<Backend> {
   return backend;
 }
 
-/** 自绘菜单栏所在行的高度，窗口按钮与它平齐（与 index.css 的 .titlebar 高度一致） */
+/** 与 index.css 的 .titlebar 高度一致 */
 const HEADER_HEIGHT = 36;
 
 function createMainWindow(url: string): BrowserWindow {
@@ -81,7 +81,7 @@ function createMainWindow(url: string): BrowserWindow {
     backgroundColor: "#f4f7fb",
     title: "AI 短视频生成器",
     icon: appIcon(),
-    // 原生菜单栏让位给渲染层的「文件 / 帮助」，只保留右上角的窗口按钮
+    // 菜单由渲染层绘制
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
     ...(process.platform === "darwin"
       ? { trafficLightPosition: { x: 16, y: 22 } }
@@ -94,7 +94,7 @@ function createMainWindow(url: string): BrowserWindow {
     },
   });
 
-  // 菜单没了，快捷键在这里兜住
+  // 菜单在渲染层，快捷键在此兜住
   win.webContents.on("before-input-event", (event, input) => {
     if (input.type !== "keyDown") return;
     if (!(input.control || input.meta)) return;
@@ -104,6 +104,10 @@ function createMainWindow(url: string): BrowserWindow {
     } else if (input.key.toLowerCase() === "o") {
       event.preventDefault();
       void outDir().then(openDir);
+    } else if (input.key.toLowerCase() === "n") {
+      // 默认会开新窗口，改为通知渲染层
+      event.preventDefault();
+      win.webContents.send("app:new-task");
     }
   });
 
@@ -124,7 +128,7 @@ function createMainWindow(url: string): BrowserWindow {
   return win;
 }
 
-/** 主窗口真正显示出来再挂模态子窗口，否则设置页可能白屏 */
+/** 主窗口显示后再挂模态子窗口，否则设置页可能白屏 */
 function waitForMainShown(): Promise<void> {
   const win = mainWindow;
   if (!win || win.isVisible()) return Promise.resolve();
@@ -145,9 +149,23 @@ async function openDir(dir: string): Promise<void> {
   if (err) dialog.showErrorBox("打开失败", err);
 }
 
+const REPO_URL = "https://github.com/chenwr727/AI-Short-Video-Engine";
+const DOCS_URL = `${REPO_URL}#工作流`;
+const FEEDBACK_URL = `${REPO_URL}/issues`;
+
+/** 用系统浏览器打开 */
+async function openExternal(url: string): Promise<void> {
+  await shell.openExternal(url);
+}
+
 async function outDir(): Promise<string> {
   const h = await health();
   return h?.outDir ?? path.join(app.getPath("userData"), "data", "out");
+}
+
+async function dataDir(): Promise<string> {
+  const h = await health();
+  return h?.dataDir ?? path.join(app.getPath("userData"), "data");
 }
 
 function createSettingsWindow(): void {
@@ -184,7 +202,7 @@ function createSettingsWindow(): void {
   settingsWindow = win;
 }
 
-/** 开发态复用 4000 端口，重启前要等旧进程真正退出 */
+/** 重启前等旧进程真正退出 */
 async function waitBackendDown(timeoutMs = 6000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -194,7 +212,12 @@ async function waitBackendDown(timeoutMs = 6000): Promise<void> {
 }
 
 function registerSettingsIpc(): void {
-  ipcMain.handle("settings:get", () => ({ ...loadConfig(), __file: configFile() }));
+  // __defaults 供「恢复默认值」按钮使用
+  ipcMain.handle("settings:get", () => ({
+    ...loadConfig(),
+    __file: configFile(),
+    __defaults: DEFAULTS,
+  }));
 
   ipcMain.handle("settings:save", (_event, values: Record<string, string>) => {
     const allowed = new Set(Object.keys(DEFAULTS));
@@ -206,16 +229,39 @@ function registerSettingsIpc(): void {
     return { ok: true, file: configFile() };
   });
 
+  /** 带表单当前值，未保存也能试 */
+  ipcMain.handle("settings:test", async (_event, target: string, config: Record<string, string>) => {
+    const b = backend;
+    if (!b) return { ok: false, ms: 0, message: "后端未启动" };
+    try {
+      const res = await fetch(`${b.baseUrl}/api/config-test`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target, config }),
+        signal: AbortSignal.timeout(40_000),
+      });
+      const data = (await res.json()) as { ok?: boolean; ms?: number; message?: string; error?: string };
+      if (!res.ok) return { ok: false, ms: 0, message: data.error ?? `HTTP ${res.status}` };
+      return { ok: Boolean(data.ok), ms: data.ms ?? 0, message: data.message ?? "" };
+    } catch (error) {
+      return { ok: false, ms: 0, message: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
   ipcMain.handle("settings:restart", async () => {
+    // 外部启动的后端停不掉，回报 reused 让界面提示手动重启
+    if (backend !== null && backend.proc === null) {
+      return { ok: true, reused: true };
+    }
     try {
       backend?.stop();
       backend = null;
       if (DEV) await waitBackendDown();
       const next = await ensureBackend();
       await mainWindow?.loadURL(next.baseUrl);
-      return { ok: true };
+      return { ok: true, reused: false };
     } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+      return { ok: false, reused: false, error: error instanceof Error ? error.message : String(error) };
     }
   });
 
@@ -224,7 +270,7 @@ function registerSettingsIpc(): void {
   });
 }
 
-/** Windows/Linux 用渲染层菜单；macOS 仍需要应用菜单，否则 Cmd+Q 之类的系统快捷键会失效 */
+/** macOS 需要应用菜单，其余交给渲染层 */
 function buildMenu(): void {
   if (process.platform === "darwin") {
     Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: "appMenu" }, { role: "editMenu" }]));
@@ -252,7 +298,7 @@ async function showAbout(): Promise<void> {
   else await dialog.showMessageBox(options);
 }
 
-/** 渲染层菜单发过来的动作 */
+/** 渲染层菜单发来的动作 */
 function registerAppIpc(): void {
   ipcMain.handle("app:menu", async (_event, action: unknown) => {
     switch (action) {
@@ -261,6 +307,9 @@ function registerAppIpc(): void {
         return { ok: true };
       case "output-dir":
         await outDir().then(openDir);
+        return { ok: true };
+      case "data-dir":
+        await dataDir().then(openDir);
         return { ok: true };
       case "config-file":
         await openPath(configFile());
@@ -271,12 +320,18 @@ function registerAppIpc(): void {
       case "about":
         await showAbout();
         return { ok: true };
+      case "docs":
+        await openExternal(DOCS_URL);
+        return { ok: true };
+      case "feedback":
+        await openExternal(FEEDBACK_URL);
+        return { ok: true };
       default:
         return { ok: false, error: `未知菜单项：${String(action)}` };
     }
   });
 
-  /** 成片页换 BGM：挑一首本地音乐，取消返回空串 */
+  /** 取消返回空串 */
   ipcMain.handle("music:pick", async () => {
     const options: Electron.OpenDialogOptions = {
       title: "选择背景音乐",
@@ -292,7 +347,7 @@ function registerAppIpc(): void {
     return result.filePaths[0] ?? "";
   });
 
-  /** 成片已经在本地了，用资源管理器定位到文件（不是「下载」） */
+  /** 在资源管理器中定位文件 */
   ipcMain.handle("app:reveal-file", (_event, target: unknown) => {
     const file = typeof target === "string" ? target : "";
     if (!file || !fs.existsSync(file)) return { ok: false, error: "成片文件不存在" };
@@ -307,14 +362,14 @@ async function bootstrap(): Promise<void> {
   mainWindow = createMainWindow(b.baseUrl);
 
   const h = await health();
-  // 还没填过 LLM Key 就当作首次打开：直接把配置页弹出来，不用让用户去翻 JSON
+  // 未填 LLM Key 视为首次打开，直接弹配置页
   const needSetup = Boolean(h && !h.config.llm.configured);
   if (needSetup || process.env.AISV_OPEN_SETTINGS === "1") {
     await waitForMainShown();
     createSettingsWindow();
   }
 
-  // 配置页已弹出时不再叠加系统对话框，免得盖住表单
+  // 配置页已弹出时不再叠对话框
   if (h && !h.deps.ffmpeg && !needSetup) {
     await dialog.showMessageBox({
       type: "warning",

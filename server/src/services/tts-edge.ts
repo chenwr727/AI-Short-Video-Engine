@@ -2,10 +2,7 @@ import { MsEdgeTTS, OUTPUT_FORMAT } from "msedge-tts";
 import { num, type AppConfig } from "../config.js";
 import type { TtsRequest } from "./tts.js";
 
-/**
- * Edge 在线语音：走微软 Edge 朗读接口，无需 Key，返回 24kHz 单声道 mp3。
- * 语速沿用全局 TTS_SPEED（1 表示原速），与 DashScope 引擎保持一致。
- */
+/** Edge 朗读，无需 Key，返回 24kHz mp3 */
 export async function synthesizeEdge(cfg: AppConfig, req: TtsRequest): Promise<Buffer> {
   const speed = num(cfg.TTS_SPEED, 1);
   const tts = new MsEdgeTTS();

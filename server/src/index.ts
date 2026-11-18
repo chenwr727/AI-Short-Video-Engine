@@ -7,7 +7,9 @@ import { isLlmConfigured, loadConfig } from "./config.js";
 import { dataDir, ensureDir, outDir } from "./paths.js";
 import { probeDeps } from "./services/deps.js";
 import { metaPayload } from "./meta.js";
+import { registerConfigRoutes } from "./routes/config.js";
 import { registerTaskRoutes } from "./routes/task.js";
+import { taskManager } from "./task/manager.js";
 
 const PORT = Number(process.env.PORT ?? 4000);
 const HOST = process.env.HOST ?? "127.0.0.1";
@@ -50,8 +52,14 @@ async function build() {
 
   await app.register(cors, { origin: true });
 
+  // 未知 Content-Type 按字符串处理，避免 415
+  app.addContentTypeParser("*", { parseAs: "string" }, (_req, body, done) => {
+    done(null, body);
+  });
+
   app.get("/api/health", async () => healthPayload());
   app.get("/api/meta", async () => metaPayload());
+  await registerConfigRoutes(app);
   await registerTaskRoutes(app);
 
   ensureDir(dataDir());
@@ -82,6 +90,7 @@ const app = await build();
 async function shutdown(signal: string) {
   app.log.info(`收到 ${signal}，正在退出`);
   try {
+    taskManager.flush();
     await app.close();
   } finally {
     process.exit(0);
@@ -90,6 +99,7 @@ async function shutdown(signal: string) {
 
 process.on("SIGINT", () => void shutdown("SIGINT"));
 process.on("SIGTERM", () => void shutdown("SIGTERM"));
+process.on("exit", () => taskManager.flush());
 
 try {
   await app.listen({ port: PORT, host: HOST });

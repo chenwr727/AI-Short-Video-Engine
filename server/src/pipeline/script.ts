@@ -51,7 +51,6 @@ function normalizeRaw(input: unknown): RawTranscript {
   return { title, paragraphs };
 }
 
-/** 原始剧本 → 已分句剧本 */
 export function toTranscript(raw: RawTranscript): Transcript {
   return {
     title: raw.title,
@@ -76,10 +75,7 @@ function readJson<T>(file: string): T {
   return JSON.parse(fs.readFileSync(file, "utf-8")) as T;
 }
 
-/**
- * M1 流水线：抓取内容 → LLM 写草稿 → LLM 改写成结构化剧本 → 分句。
- * 每一步都落盘缓存，重复运行会直接复用。
- */
+/** 抓取 → 写草稿 → 改写 → 分句，每步落盘并可复用 */
 export async function runScriptStages(ctx: TaskContext): Promise<Transcript> {
   const scriptFile = path.join(ctx.workspace, FILES.script);
 
@@ -94,7 +90,6 @@ export async function runScriptStages(ctx: TaskContext): Promise<Transcript> {
 
   const prompts = loadPrompts(ctx.options.promptSource, ctx.options.speakers);
 
-  // 1) 内容
   ctx.markStage("fetch", "running");
   const htmlFile = path.join(ctx.workspace, FILES.html);
   let content: string;
@@ -107,7 +102,6 @@ export async function runScriptStages(ctx: TaskContext): Promise<Transcript> {
   }
   ctx.markStage("fetch", "done", `${content.length} 字`);
 
-  // 2) 草稿
   ctx.markStage("write", "running");
   const draftFile = path.join(ctx.workspace, FILES.draft);
   let draft: string;
@@ -121,7 +115,6 @@ export async function runScriptStages(ctx: TaskContext): Promise<Transcript> {
   }
   ctx.markStage("write", "done", `${draft.length} 字`);
 
-  // 3) 改写为结构化剧本
   ctx.markStage("rewrite", "running");
   const rewritten = await chat(prompts.rewriter, draft, {
     json: true,
@@ -141,7 +134,6 @@ export async function runScriptStages(ctx: TaskContext): Promise<Transcript> {
   fs.writeFileSync(scriptFile, JSON.stringify(raw, null, 2), "utf-8");
   ctx.markStage("rewrite", "done", `${raw.paragraphs.length} 段`);
 
-  // 4) 分句
   ctx.markStage("split", "running");
   const transcript = toTranscript(raw);
   ctx.markStage("split", "done", `${transcript.paragraphs.length} 段 / ${sentenceCount(transcript)} 句`);
@@ -150,7 +142,7 @@ export async function runScriptStages(ctx: TaskContext): Promise<Transcript> {
   return transcript;
 }
 
-/** 确认（或修改后）的剧本重新分句并落盘 */
+/** 确认后的剧本重新分句并落盘 */
 export function persistConfirmed(workspace: string, raw: RawTranscript): Transcript {
   const normalized = normalizeRaw(raw);
   fs.writeFileSync(path.join(workspace, FILES.script), JSON.stringify(normalized, null, 2), "utf-8");

@@ -9,7 +9,9 @@ import type { AudioManifest, MaterialInfo, MaterialItem, MaterialManifest, TaskC
 const TERMS_FILE = "_terms.json";
 const VIDEOS_FILE = "_videos.json";
 const MAX_PAGE = 3;
-const MAX_CANDIDATES = 12;
+/** 候选过多会干扰选片模型 */
+const MAX_CANDIDATES = 40;
+const MIN_CANDIDATES = 24;
 const REQUEST_INTERVAL = 400;
 
 function sleep(ms: number, signal: AbortSignal): Promise<void> {
@@ -26,18 +28,33 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
   });
 }
 
-function parseTermsAnswer(answer: string, expected: number): string[][] | null {
+/** 收集 id → 检索词，缺的段由调用方补问 */
+function parseTermsMap(answer: string): Map<number, string[]> {
+  const out = new Map<number, string[]>();
+
+  const collect = (rows: unknown[]): void => {
+    rows.forEach((row, index) => {
+      const item = row as Record<string, unknown> | null;
+      if (!item || typeof item !== "object") return;
+      const raw = item.search_terms ?? item.terms ?? item.keywords;
+      if (!Array.isArray(raw)) return;
+      const terms = raw.map((t) => String(t).trim()).filter(Boolean);
+      if (terms.length === 0) return;
+
+      const id = Number(item.id);
+      const key = Number.isFinite(id) && id > 0 ? id : index + 1;
+      if ((out.get(key)?.length ?? 0) >= 5) return;
+      out.set(key, terms);
+    });
+  };
+
   const arrayText = extractJsonArray(answer);
   if (arrayText) {
     try {
-      const list = JSON.parse(arrayText) as { id?: number; search_terms?: unknown }[];
-      const mapped = list
-        .filter((item) => Array.isArray(item.search_terms))
-        .sort((a, b) => (a.id ?? 0) - (b.id ?? 0))
-        .map((item) => (item.search_terms as unknown[]).map((t) => String(t).trim()).filter(Boolean));
-      if (mapped.length === expected && mapped.every((terms) => terms.length >= 5)) return mapped;
+      const list = JSON.parse(arrayText) as unknown;
+      if (Array.isArray(list)) collect(list);
     } catch {
-      // 继续尝试对象包裹的形式
+      // 再试对象包裹的形式
     }
   }
 
@@ -45,25 +62,32 @@ function parseTermsAnswer(answer: string, expected: number): string[][] | null {
   if (objectText) {
     try {
       const data = JSON.parse(objectText) as Record<string, unknown>;
-      for (const key of ["search_terms", "data", "results", "items"]) {
+      if (Array.isArray(data.search_terms ?? data.terms)) collect([data]);
+      for (const key of ["search_terms", "data", "results", "items", "paragraphs"]) {
         const value = data[key];
-        if (Array.isArray(value) && value.length === expected) {
-          const mapped = value.map((row) => {
-            const item = row as Record<string, unknown>;
-            const terms = item.search_terms ?? item.terms;
-            return Array.isArray(terms) ? terms.map((t) => String(t).trim()).filter(Boolean) : [];
-          });
-          if (mapped.every((terms) => terms.length >= 5)) return mapped;
-        }
+        if (Array.isArray(value) && value.some((row) => row && typeof row === "object")) collect(value);
       }
     } catch {
-      // 忽略
+      // 解析失败视为没拿到
     }
   }
-  return null;
+
+  return out;
 }
 
-/** 每段对话 → 5 个英文检索词，结果落盘 _terms.json */
+/** 兜底：从台词取几个短语 */
+function fallbackTerms(content: string): string[] {
+  const phrases = content
+    .replace(/[A-Za-z0-9]+/g, " ")
+    .split(/[，。！？；：、\s\n]+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length >= 2)
+    .sort((a, b) => b.length - a.length)
+    .slice(0, 5);
+  return phrases.length > 0 ? phrases : [content.slice(0, 12) || "video"];
+}
+
+/** 每段生成 5 个检索词，落盘 _terms.json */
 async function generateTerms(ctx: TaskContext, transcript: Transcript): Promise<string[][]> {
   const file = path.join(ctx.workspace, TERMS_FILE);
   if (fs.existsSync(file)) {
@@ -77,42 +101,67 @@ async function generateTerms(ctx: TaskContext, transcript: Transcript): Promise<
     content: paragraph.dialogues.map((d) => `${d.speaker}：${d.contents.join("")}`).join("\n"),
   }));
 
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  const collected = new Map<number, string[]>();
+
+  // 整批问一次，模型可能只回一部分
+  for (let attempt = 1; attempt <= 2 && collected.size === 0; attempt++) {
     const answer = await chat(prompt, JSON.stringify(payload), {
       json: true,
       signal: ctx.signal,
       temperature: 0.6,
     });
-    const terms = parseTermsAnswer(answer, payload.length);
-    if (terms) {
-      fs.writeFileSync(file, JSON.stringify(terms, null, 2), "utf-8");
-      ctx.log(`检索词已生成：${terms.length} 段 × ${terms[0]?.length ?? 0} 个`);
-      return terms;
-    }
-    ctx.log(`检索词格式不符，重试 ${attempt}/3`, "warn");
+    for (const [id, terms] of parseTermsMap(answer)) collected.set(id, terms);
+    if (collected.size === 0) ctx.log(`检索词格式不符，重试 ${attempt}/2`, "warn");
   }
 
-  throw new Error("检索词生成失败：模型没有返回符合要求的结果");
+  // 缺的段逐段补问
+  const missing = payload.filter((item) => (collected.get(item.id)?.length ?? 0) < 5);
+  for (const item of missing) {
+    if (ctx.signal.aborted) throw new DOMException("已取消", "AbortError");
+    const answer = await chat(prompt, JSON.stringify([item]), {
+      json: true,
+      signal: ctx.signal,
+      temperature: 0.6,
+    });
+    // 单段提问时 id 可能是 1，也可能是真实段号
+    const parsed = parseTermsMap(answer);
+    const found = parsed.get(1) ?? parsed.get(item.id);
+    if (found) collected.set(item.id, found);
+  }
+
+  const terms = payload.map((item) => {
+    const got = collected.get(item.id);
+    if (got && got.length > 0) return got.slice(0, 5);
+    ctx.log(`第 ${item.id} 段拿不到英文检索词，改用台词关键词`, "warn");
+    return fallbackTerms(item.content);
+  });
+
+  fs.writeFileSync(file, JSON.stringify(terms, null, 2), "utf-8");
+  ctx.log(`检索词已生成：${terms.length} 段 × ${terms[0]?.length ?? 0} 个`);
+  return terms;
 }
 
-/** 让模型从候选里挑语义最贴合的，失败时回落到时长规则 */
+/** 让模型挑选语义最贴合的候选 */
 async function aiSelect(
   ctx: TaskContext,
   content: string,
   candidates: MaterialInfo[],
   audioLength: number,
 ): Promise<MaterialInfo | null> {
+  if (candidates.length === 0) return null;
+
   try {
     const prompt = loadVideoSelectPrompt();
+    const targetRatio = ctx.options.width / ctx.options.height;
     const payload = {
       content,
-      // Pixabay 的 tags 是超长逗号串，截断后语义噪声更少
       candidates: candidates.map((c, index) => ({
         id: index + 1,
         tags: c.tags.slice(0, 120),
         duration: c.duration,
         views: c.views,
         is_ai_generated: c.isAiGenerated,
+        orientation: Math.abs(c.width / c.height - targetRatio) / targetRatio <= 0.35 ? "竖屏" : "横屏",
       })),
     };
     const answer = await chat(prompt, JSON.stringify(payload), { json: true, signal: ctx.signal, temperature: 0.3 });
@@ -121,10 +170,15 @@ async function aiSelect(
 
     const data = JSON.parse(json) as { selected_ids?: unknown };
     const ids = Array.isArray(data.selected_ids) ? data.selected_ids : [];
+    // 优先取够长的，否则取第一条循环铺满
+    let fallback: MaterialInfo | null = null;
     for (const raw of ids) {
       const item = candidates[Number(raw) - 1];
-      if (item && item.duration >= audioLength) return item;
+      if (!item) continue;
+      if (item.duration >= audioLength) return item;
+      fallback ??= item;
     }
+    if (fallback) return fallback;
   } catch (error) {
     if (ctx.signal.aborted) throw error;
     ctx.log(`AI 选片失败，改用时长匹配：${error instanceof Error ? error.message : String(error)}`, "warn");
@@ -134,15 +188,11 @@ async function aiSelect(
 
 interface PickedMaterial {
   item: MaterialInfo;
-  /** 素材本身短于配音，合成时会被循环铺满 */
+  /** 素材短于配音，合成时循环铺满 */
   loop: boolean;
 }
 
-/**
- * 规则兜底：优先「够长且最短」（避免素材拖长成片）；
- * 一条都不够长时取最长的那条，交给合成阶段 -stream_loop 循环铺满，
- * 总比整段匹配失败要强。
- */
+/** 优先够长且最短的，否则取最长的 */
 function pickForSegment(candidates: MaterialInfo[], audioLength: number, used: Set<string>): PickedMaterial | null {
   const fresh = candidates.filter((c) => !used.has(c.url));
   if (fresh.length === 0) return null;
@@ -156,29 +206,35 @@ function pickForSegment(candidates: MaterialInfo[], audioLength: number, used: S
   return { item: longest, loop: true };
 }
 
-/** 先在自己画幅的候选里挑，挑不到再放宽到全部候选 */
+/** 先按画幅接近挑，挑不到再放宽 */
 function chooseMaterial(
-  candidates: MaterialInfo[],
-  pool: MaterialInfo[],
+  preferred: MaterialInfo[],
+  fallback: MaterialInfo[],
   audioLength: number,
   used: Set<string>,
 ): PickedMaterial | null {
-  return pickForSegment(pool, audioLength, used) ?? pickForSegment(candidates, audioLength, used);
+  return pickForSegment(preferred, audioLength, used) ?? pickForSegment(fallback, audioLength, used);
 }
 
-/** 竖屏成片优先用竖屏素材，避免下载 4K 横屏再大幅裁切 */
+/** 排除已用过的素材 */
+function fromAiPick(item: MaterialInfo, audioLength: number, used: Set<string>): PickedMaterial | null {
+  if (used.has(item.url)) return null;
+  return { item, loop: item.duration < audioLength };
+}
+
+/** 画幅与成片接近，避免大幅裁切 */
 function isAspectClose(item: MaterialInfo, width: number, height: number): boolean {
   const target = width / height;
   const ratio = item.width / item.height;
   return Math.abs(ratio - target) / target <= 0.35;
 }
 
-/** 素材清单落盘：手动换素材后也写回这里，重跑与合成阶段都读它 */
+/** 素材清单落盘 */
 export function saveMaterialManifest(workspace: string, manifest: MaterialManifest): void {
   fs.writeFileSync(path.join(workspace, VIDEOS_FILE), JSON.stringify(manifest, null, 2), "utf-8");
 }
 
-/** 按检索词抓候选素材（跳过已用过的），首轮匹配与手动换素材共用 */
+/** 按检索词抓候选素材 */
 export async function searchCandidates(
   ctx: TaskContext,
   terms: string[],
@@ -196,45 +252,63 @@ export async function searchCandidates(
   const candidates: MaterialInfo[] = [];
   const seen = new Set<string>();
 
-  search: for (const term of terms) {
-    for (let page = 1; page <= MAX_PAGE; page++) {
+  const fetchPage = async (term: string, page: number): Promise<number> => {
+    const found = await searchMaterials(source, term, {
+      apiKey,
+      width: ctx.options.width,
+      height: ctx.options.height,
+      minDuration: num(cfg.MATERIAL_MIN_DURATION, 10),
+      page,
+    });
+
+    for (const item of found) {
+      if (seen.has(item.url) || used.has(item.url)) continue;
+      seen.add(item.url);
+      candidates.push(item);
+    }
+    return found.length;
+  };
+
+  // 第一轮每个词搜一遍，避免候选集中
+  for (const term of terms) {
+    if (ctx.signal.aborted) throw new DOMException("已取消", "AbortError");
+    if (candidates.length >= MAX_CANDIDATES) return candidates.slice(0, MAX_CANDIDATES);
+    await fetchPage(term, 1);
+    await sleep(REQUEST_INTERVAL, ctx.signal);
+  }
+
+  // 第二轮：数量不足时翻页补足
+  for (let page = 2; page <= MAX_PAGE && candidates.length < MIN_CANDIDATES; page++) {
+    for (const term of terms) {
       if (ctx.signal.aborted) throw new DOMException("已取消", "AbortError");
-      if (candidates.filter((c) => !used.has(c.url)).length >= MAX_CANDIDATES) break search;
-
-      const found = await searchMaterials(source, term, {
-        apiKey,
-        width: ctx.options.width,
-        height: ctx.options.height,
-        minDuration: num(cfg.MATERIAL_MIN_DURATION, 10),
-        page,
-      });
-
-      for (const item of found) {
-        if (seen.has(item.url) || used.has(item.url)) continue;
-        seen.add(item.url);
-        candidates.push(item);
-      }
-      if (found.length === 0) break;
+      if (candidates.length >= MAX_CANDIDATES) break;
+      const count = await fetchPage(term, page);
+      if (count === 0) continue;
       await sleep(REQUEST_INTERVAL, ctx.signal);
     }
   }
 
-  return candidates;
+  return candidates.slice(0, MAX_CANDIDATES);
 }
 
+/** 匹配素材，阶段收尾由调用方负责 */
 export async function runMaterialStage(
   ctx: TaskContext,
   transcript: Transcript,
   audio: AudioManifest,
 ): Promise<MaterialManifest> {
+  const source = ctx.options.materialSource;
   const manifestFile = path.join(ctx.workspace, VIDEOS_FILE);
   if (fs.existsSync(manifestFile)) {
-    ctx.log("复用已匹配的素材（_videos.json）");
-    ctx.markStage("material", "skipped", "命中缓存");
-    return JSON.parse(fs.readFileSync(manifestFile, "utf-8")) as MaterialManifest;
+    const cached = JSON.parse(fs.readFileSync(manifestFile, "utf-8")) as MaterialManifest;
+    if (cached.source === source && Array.isArray(cached.items) && cached.items.length > 0) {
+      ctx.log("复用已匹配的素材（_videos.json）");
+      return cached;
+    }
+    ctx.log(`素材来源已改为 ${source}，重新匹配素材`, "warn");
+    fs.rmSync(manifestFile, { force: true });
   }
 
-  const source = ctx.options.materialSource;
   ctx.markStage("material", "running");
   const terms = await generateTerms(ctx, transcript);
   const used = new Set<string>();
@@ -256,27 +330,26 @@ export async function runMaterialStage(
     }
 
     const content = paragraph.dialogues.map((d) => `${d.speaker}：${d.contents.join("")}`).join("\n");
-    const aspectFit = candidates.filter((c) => isAspectClose(c, ctx.options.width, ctx.options.height));
-    const pool = aspectFit.length > 0 ? aspectFit : candidates;
+    const preferred = candidates.filter((c) => isAspectClose(c, ctx.options.width, ctx.options.height));
 
-    const aiPick = await aiSelect(ctx, content, pool, audioLength);
-    let picked: PickedMaterial | null = aiPick
-      ? { item: aiPick, loop: false }
-      : chooseMaterial(candidates, pool, audioLength, used);
+    // AI 选片给全量候选，语义优先
+    const aiPick = await aiSelect(ctx, content, candidates, audioLength);
+    let picked: PickedMaterial | null = aiPick ? fromAiPick(aiPick, audioLength, used) : null;
+    picked ??= chooseMaterial(preferred, candidates, audioLength, used);
     if (!picked) {
       throw new Error(`第 ${pi + 1} 段没有可用素材`);
     }
-    if (picked.loop) {
-      ctx.log(
-        `第 ${pi + 1} 段没有 ${audioLength.toFixed(1)}s 以上的整条素材，用 ${picked.item.duration}s 的素材循环铺满`,
-        "warn",
-      );
-    }
 
-    // 下载失败（链接失效 / 连接挂起）时顺延到下一个候选
+    // 下载失败则顺延到下一个候选
     let videoPath: string | null = null;
     let failedCount = 0;
     while (picked) {
+      if (picked.loop) {
+        ctx.log(
+          `第 ${pi + 1} 段没有 ${audioLength.toFixed(1)}s 以上的整条素材，用 ${picked.item.duration}s 的素材循环铺满`,
+          "warn",
+        );
+      }
       try {
         videoPath = await downloadMaterial(picked.item.url, ctx.signal);
         break;
@@ -288,7 +361,7 @@ export async function runMaterialStage(
           `第 ${pi + 1} 段下载失败，换下一个候选：${error instanceof Error ? error.message : String(error)}`,
           "warn",
         );
-        picked = chooseMaterial(candidates, pool, audioLength, used);
+        picked = chooseMaterial(preferred, candidates, audioLength, used);
       }
     }
 
@@ -305,6 +378,5 @@ export async function runMaterialStage(
 
   const manifest: MaterialManifest = { source, items };
   saveMaterialManifest(ctx.workspace, manifest);
-  ctx.markStage("material", "done", `${items.length} 段`);
   return manifest;
 }

@@ -3,13 +3,9 @@ import { randomUUID } from "node:crypto";
 import { num, type AppConfig } from "../config.js";
 import type { TtsRequest } from "./tts.js";
 
-/**
- * 豆包语音（火山引擎 Seed-TTS）：POST /api/v3/tts/unidirectional，
- * 响应是 NDJSON 流，每行一个事件，音频以 base64 分片下发：
- *   code 0 / 3000 → 音频分片；code 20000000 → 结束；其它 → 失败。
- * 因为 Node 的 fetch 在某些代理环境下会 ECONNRESET，保留 curl 作为兜底。
- */
+/** NDJSON 流：code 0/3000 为 base64 音频分片，20000000 为结束 */
 const ENDPOINT = "https://openspeech.bytedance.com/api/v3/tts/unidirectional";
+
 const DONE_CODE = 20000000;
 const NETWORK_ERROR = /fetch failed|ECONNRESET|ENOTFOUND|ETIMEDOUT|EAI_AGAIN|socket hang up/i;
 
@@ -27,7 +23,7 @@ function readEvent(line: string, push: (chunk: Buffer) => void): "continue" | "d
   try {
     event = JSON.parse(text) as SeedEvent;
   } catch {
-    // 非 JSON 行（心跳/日志）直接忽略
+    // 心跳等非 JSON 行忽略
     return "continue";
   }
 
@@ -133,6 +129,7 @@ function curlSeed(body: string, headers: Record<string, string>, signal: AbortSi
   });
 }
 
+/** fetch 失败时回退到 curl，兼容部分环境下的流式响应 */
 export async function synthesizeSeed(cfg: AppConfig, req: TtsRequest): Promise<Buffer> {
   if (!cfg.SEED_TTS_API_KEY) {
     throw new Error("未配置 SEED_TTS_API_KEY，无法使用豆包 TTS。请编辑 config.json 后重启应用");
@@ -168,7 +165,7 @@ export async function synthesizeSeed(cfg: AppConfig, req: TtsRequest): Promise<B
     const message = error instanceof Error ? error.message : String(error);
     if (!NETWORK_ERROR.test(message)) throw error;
 
-    // 网络层失败才走 curl，业务错误（如鉴权失败）直接抛给上层重试逻辑
+    // 仅网络层失败才走 curl
     return curlSeed(body, headers, req.signal);
   }
 }

@@ -3,7 +3,7 @@ import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { app } from "electron";
-import { binDir, repoRoot, runtimeDataDir, serverDir, userDataDir, webDistDir } from "./paths";
+import { binDir, repoRoot, runtimeDataDir, serverDir, webDistDir } from "./paths";
 import { configFile, loadConfig, type AppConfig } from "./config";
 
 export interface Backend {
@@ -25,7 +25,7 @@ export function findFreePort(): Promise<number> {
   });
 }
 
-/** tsx 在工作区里可能被提到仓库根，两个位置都找一遍 */
+/** tsx 可能被提升到仓库根，两个位置都找 */
 function tsxCliPath(): string {
   const candidates = [
     path.join(serverDir(), "node_modules", "tsx", "dist", "cli.mjs"),
@@ -46,7 +46,7 @@ function buildEnv(port: number, cfg: AppConfig): NodeJS.ProcessEnv {
     HOST: "127.0.0.1",
     AISV_DATA_DIR: dataDir,
     AISV_OUT_DIR: path.join(dataDir, "out"),
-    // prompts 等静态资源跟随后端目录，随包一起分发
+    // 静态资源随服务器目录
     AISV_ASSETS_DIR: path.join(serverDir(), "assets"),
     AISV_CONFIG_FILE: configFile(),
     AISV_VERSION: app.getVersion(),
@@ -122,13 +122,4 @@ export async function startBackend(port: number, onLog: (line: string) => void):
 
   await waitForHealth(baseUrl, 60_000, proc);
   return backend;
-}
-
-/** 后端自身的数据目录（供菜单「打开数据目录」使用） */
-export function dataDirForUi(): string {
-  return runtimeDataDir();
-}
-
-export function userConfigForUi(): string {
-  return path.join(userDataDir(), "config.json");
 }

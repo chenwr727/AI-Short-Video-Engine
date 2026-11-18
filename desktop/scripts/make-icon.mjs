@@ -1,6 +1,6 @@
-// 从 web/public/favicon.svg 生成桌面端图标：
-//   build/icon.png  —— electron-builder 打包用（自行转 ico/icns）
-//   assets/icon.png —— 运行时窗口/任务栏图标
+// 从 web/public/favicon.svg 生成：
+//   build/icon.png  —— electron-builder 打包用
+//   assets/icon.png —— 运行时窗口图标
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

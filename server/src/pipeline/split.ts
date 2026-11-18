@@ -1,7 +1,4 @@
-/**
- * 按标点拆句并合并过短片段，逻辑与 Python 版 split_content_with_punctuation 一致。
- * 拆出来的每一句对应一条配音与一条字幕。
- */
+/** 按标点拆句并合并过短片段，一句对应一条配音与字幕 */
 export function splitContent(content: string, minLength = 10): string[] {
   const trimmed = content.trim();
   if (!trimmed) throw new Error("台词内容为空");

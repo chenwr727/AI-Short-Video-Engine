@@ -4,6 +4,7 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import { autoSubtitleFontSize, loadConfig, normalizeSpeaker, num, numberOrZero, speakerNames } from "../config.js";
 import { MATERIAL_SOURCES, PROMPT_SOURCES, RESOLUTIONS, ttsEngines } from "../meta.js";
 import { TaskError, taskManager, type MaterialReplacement } from "../task/manager.js";
+import { mimeOf, sendFileWithRange } from "./send.js";
 import type {
   GenerateOptions,
   MaterialSource,
@@ -68,7 +69,7 @@ function parseOptions(body: GenerateBody): GenerateOptions {
     height: h || num(cfg.VIDEO_HEIGHT, 1920),
     fps: num(cfg.FPS, 24),
     ttsSpeed: Number(cfg.TTS_SPEED) || 1.1,
-    // 存成具体 px：成片页直接显示算出来的字号，不再是「0 = 自动」
+    // 存成具体 px，便于界面直接显示
     subtitleFontSize: numberOrZero(cfg.SUBTITLE_FONT_SIZE, 0) || autoSubtitleFontSize(width),
   };
 }
@@ -78,7 +79,7 @@ interface ConfirmBody {
   options?: {
     ttsEngine?: string;
     voices?: Record<string, string>;
-    /** 配音语速，1 = 原速；只接受 0.5~2.0 */
+    /** 1 = 原速 */
     ttsSpeed?: number;
     materialSource?: string;
     resolution?: string;
@@ -92,7 +93,7 @@ interface RenderBody {
   bgmFile?: string;
 }
 
-/** 成片页的渲染参数：不合法的直接忽略，保留配置默认值 */
+/** 非法字段忽略 */
 function parseRenderPatch(body: RenderBody): RenderPatch {
   const patch: RenderPatch = {};
 
@@ -107,7 +108,7 @@ function parseRenderPatch(body: RenderBody): RenderPatch {
   return patch;
 }
 
-/** 素材页选定的素材来源与分辨率，只接受当前配置里真实存在的项 */
+/** 只接受存在的来源与分辨率 */
 function parseMaterialPatch(body: { materialSource?: string; resolution?: string }): Partial<GenerateOptions> {
   const patch: Partial<GenerateOptions> = {};
 
@@ -126,7 +127,7 @@ function parseMaterialPatch(body: { materialSource?: string; resolution?: string
   return patch;
 }
 
-/** 确认剧本时下发的配音/素材设置，只接受当前配置里真实存在的项 */
+/** 只接受存在的引擎与音色 */
 function parseConfirmPatch(body: ConfirmBody): Partial<GenerateOptions> {
   const options = body.options;
   if (!options) return {};
@@ -172,18 +173,25 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/api/task", async () => ({ state: taskManager.getState() }));
 
-  /** 用同一份输入重新生成剧本（会丢弃当前剧本，可带上改过的角色名） */
-  app.post<{ Body: { speakers?: { main?: string; guest?: string } } }>("/api/task/regenerate", async (req, reply) => {
-    try {
-      const speakers = {
-        main: normalizeSpeaker(req.body?.speakers?.main, ""),
-        guest: normalizeSpeaker(req.body?.speakers?.guest, ""),
-      };
-      return { state: taskManager.regenerate(speakers) };
-    } catch (error) {
-      return fail(reply, error);
-    }
-  });
+  /** 重新生成剧本 */
+  app.post<{ Body: { input?: string; promptSource?: string; speakers?: { main?: string; guest?: string } } }>(
+    "/api/task/regenerate",
+    async (req, reply) => {
+      try {
+        const speakers = {
+          main: normalizeSpeaker(req.body?.speakers?.main, ""),
+          guest: normalizeSpeaker(req.body?.speakers?.guest, ""),
+        };
+        const promptSource = PROMPT_SOURCES.find((o) => o.id === req.body?.promptSource)?.id as
+          | PromptSource
+          | undefined;
+        const input = typeof req.body?.input === "string" ? req.body.input : undefined;
+        return { state: taskManager.regenerate({ input, promptSource, speakers }) };
+      } catch (error) {
+        return fail(reply, error);
+      }
+    },
+  );
 
   app.post<{ Body: ConfirmBody }>("/api/task/confirm", async (req, reply) => {
     try {
@@ -194,16 +202,28 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  /** 素材确认页：按台词检索并匹配素材（素材还没匹配时），可同时指定素材来源 */
-  app.post<{ Body: { materialSource?: string } }>("/api/task/material/match", async (req, reply) => {
+  /** 按新引擎/音色/语速重做配音 */
+  app.post<{ Body: ConfirmBody }>("/api/task/tts/regenerate", async (req, reply) => {
     try {
-      return { state: taskManager.matchMaterial(parseMaterialPatch(req.body ?? {})) };
+      return { state: taskManager.regenerateTts(parseConfirmPatch(req.body ?? {})) };
     } catch (error) {
       return fail(reply, error);
     }
   });
 
-  /** 确认素材（可带手动替换的候选与分辨率），开始合成 */
+  /** 匹配素材，force 表示强制重来 */
+  app.post<{ Body: { materialSource?: string; resolution?: string; force?: boolean } }>(
+    "/api/task/material/match",
+    async (req, reply) => {
+      try {
+        return { state: taskManager.matchMaterial(parseMaterialPatch(req.body ?? {}), req.body?.force === true) };
+      } catch (error) {
+        return fail(reply, error);
+      }
+    },
+  );
+
+  /** 确认素材 */
   app.post<{ Body: { items?: MaterialReplacement[]; resolution?: string } }>("/api/task/material", async (req, reply) => {
     try {
       const state = await taskManager.confirmMaterial(req.body?.items, parseMaterialPatch(req.body ?? {}));
@@ -225,7 +245,7 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  /** 配音试听：工作目录里的 i_j_k.wav / .mp3，支持 Range 以便拖动/连续播放 */
+  /** 试听 i_j_k.wav/mp3，支持 Range */
   app.get<{ Params: { file: string } }>("/api/audio/:file", async (req, reply) => {
     const name = path.basename(req.params.file);
     if (!/^\d+_\d+_\d+\.(wav|mp3)$/i.test(name)) {
@@ -238,29 +258,10 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(404).send({ error: "音频不存在" });
     }
 
-    const stat = fs.statSync(file);
-    reply.header("Content-Type", name.toLowerCase().endsWith(".wav") ? "audio/wav" : "audio/mpeg");
-    reply.header("Accept-Ranges", "bytes");
-
-    const range = req.headers.range;
-    if (range) {
-      const match = /bytes=(\d*)-(\d*)/.exec(range);
-      const start = match?.[1] ? Number(match[1]) : 0;
-      const end = match?.[2] ? Number(match[2]) : stat.size - 1;
-      if (Number.isNaN(start) || Number.isNaN(end) || start > end || start >= stat.size) {
-        return reply.code(416).header("Content-Range", `bytes */${stat.size}`).send();
-      }
-      reply.code(206);
-      reply.header("Content-Range", `bytes ${start}-${end}/${stat.size}`);
-      reply.header("Content-Length", end - start + 1);
-      return reply.send(fs.createReadStream(file, { start, end }));
-    }
-
-    reply.header("Content-Length", stat.size);
-    return reply.send(fs.createReadStream(file));
+    return sendFileWithRange(reply, file, req.headers.range, { contentType: mimeOf(name) });
   });
 
-  /** 素材确认页：按段号播放当前选中的本地素材 */
+  /** 播放某段已选素材 */
   app.get<{ Params: { paragraph: string } }>("/api/material/:paragraph", async (req, reply) => {
     const state = taskManager.getState();
     const paragraph = Number(req.params.paragraph);
@@ -269,30 +270,10 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(404).send({ error: `第 ${req.params.paragraph} 段还没有素材` });
     }
 
-    const file = item.videoPath;
-    const stat = fs.statSync(file);
-    reply.header("Content-Type", "video/mp4");
-    reply.header("Accept-Ranges", "bytes");
-
-    const range = req.headers.range;
-    if (range) {
-      const match = /bytes=(\d*)-(\d*)/.exec(range);
-      const start = match?.[1] ? Number(match[1]) : 0;
-      const end = match?.[2] ? Number(match[2]) : stat.size - 1;
-      if (Number.isNaN(start) || Number.isNaN(end) || start > end || start >= stat.size) {
-        return reply.code(416).header("Content-Range", `bytes */${stat.size}`).send();
-      }
-      reply.code(206);
-      reply.header("Content-Range", `bytes ${start}-${end}/${stat.size}`);
-      reply.header("Content-Length", end - start + 1);
-      return reply.send(fs.createReadStream(file, { start, end }));
-    }
-
-    reply.header("Content-Length", stat.size);
-    return reply.send(fs.createReadStream(file));
+    return sendFileWithRange(reply, item.videoPath, req.headers.range, { contentType: "video/mp4" });
   });
 
-  /** 成片预览页点「生成成片 / 重新生成」：按这页的渲染参数跑合成 */
+  /** 按渲染参数合成 */
   app.post<{ Body: RenderBody }>("/api/task/render", async (req, reply) => {
     try {
       return { state: taskManager.render(parseRenderPatch(req.body ?? {})) };
@@ -301,7 +282,7 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  /** 重试失败的任务：不换工作目录，从失败的阶段接着跑 */
+  /** 从失败的阶段接着跑 */
   app.post("/api/task/retry", async (_req, reply) => {
     try {
       return { state: taskManager.retry() };
@@ -318,7 +299,7 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  /** 成片播放/下载，支持 Range 以便前端拖动进度条 */
+  /** 成片播放与下载 */
   app.get<{ Querystring: { download?: string } }>("/api/result", async (req, reply) => {
     const state = taskManager.getState();
     const file = state?.result;
@@ -326,33 +307,14 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(404).send({ error: "还没有生成成片" });
     }
 
-    const stat = fs.statSync(file);
     const filename = `${state.transcript?.title ?? "video"}.mp4`.replace(/[\\/:*?"<>|]/g, "_");
-    reply.header("Content-Type", "video/mp4");
-    reply.header("Accept-Ranges", "bytes");
-    if (req.query.download === "1") {
-      reply.header("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
-    }
-
-    const range = req.headers.range;
-    if (range) {
-      const match = /bytes=(\d*)-(\d*)/.exec(range);
-      const start = match?.[1] ? Number(match[1]) : 0;
-      const end = match?.[2] ? Number(match[2]) : stat.size - 1;
-      if (Number.isNaN(start) || Number.isNaN(end) || start > end || start >= stat.size) {
-        return reply.code(416).header("Content-Range", `bytes */${stat.size}`).send();
-      }
-      reply.code(206);
-      reply.header("Content-Range", `bytes ${start}-${end}/${stat.size}`);
-      reply.header("Content-Length", end - start + 1);
-      return reply.send(fs.createReadStream(file, { start, end }));
-    }
-
-    reply.header("Content-Length", stat.size);
-    return reply.send(fs.createReadStream(file));
+    return sendFileWithRange(reply, file, req.headers.range, {
+      contentType: "video/mp4",
+      downloadName: req.query.download === "1" ? filename : undefined,
+    });
   });
 
-  /** SSE：先推一次快照，之后每次状态变化推一次完整快照 */
+  /** SSE 快照推送 */
   app.get("/api/stream", (req, reply) => {
     reply.hijack();
     const raw = reply.raw;

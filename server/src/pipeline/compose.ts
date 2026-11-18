@@ -14,20 +14,24 @@ import { ensureDir } from "../paths.js";
 import { prepareBgm } from "../services/bgm.js";
 import { runFfmpeg } from "../services/ffmpeg.js";
 import { probeVideo } from "../services/probe.js";
-import { buildAss, type SubtitleCue } from "../services/subtitle.js";
+import { buildAss, charsPerLine, type SubtitleCue } from "../services/subtitle.js";
 import type { AudioManifest, GenerateOptions, MaterialManifest, TaskContext, Transcript } from "../types.js";
 
-/** 字幕使用系统字体（不再打包字体文件）；Windows 自带微软雅黑，其他平台由 libass 回退 */
+/** 其他平台由 libass 回退 */
 const SUBTITLE_FONT = "Microsoft YaHei";
 const SUBTITLE_POSITION_RATIO = 0.667;
-const SUBTITLE_STROKE = 1;
-const TITLE_STROKE = 2;
-const TITLE_DURATION = 0.5;
-const SUBTITLE_INTERVAL = 0.2;
-/** BGM_VOLUME 只是兜底默认值，实际取配置项 BGM_VOLUME */
+const SUBTITLE_STROKE_RATIO = 1 / 24;
+const TITLE_STROKE_RATIO = 1 / 20;
+const MIN_STROKE = 1;
+/** AABBGGRR */
+const SHADOW_COLOUR = "&H80000000";
 const BGM_VOLUME = 0.1;
+/** 改渲染效果或折行规则时加一，旧片段缓存随之失效 */
+const SUBTITLE_STYLE_VERSION = 3;
+const CLIP_CRF = "18";
+const CLIP_PRESET = "veryfast";
+const CLIP_SIG_SUFFIX = ".json";
 
-/** 渲染参数：全部可在配置文件/环境变量里改，这里只负责合并默认值 */
 interface RenderOptions {
   bgmVolume: number;
   bgmFadeIn: number;
@@ -36,7 +40,7 @@ interface RenderOptions {
   videoFadeOut: number;
 }
 
-/** 任务级参数（成片页里改的）优先，其次配置项，最后内置默认 */
+/** 任务参数 > 配置项 > 内置默认 */
 function renderOptions(cfg: AppConfig, options: GenerateOptions): RenderOptions {
   return {
     bgmVolume: options.bgmVolume ?? numberOrZero(cfg.BGM_VOLUME, BGM_VOLUME),
@@ -47,19 +51,18 @@ function renderOptions(cfg: AppConfig, options: GenerateOptions): RenderOptions 
   };
 }
 
-/** 字幕字号：成片页填了就优先，否则用配置项；0/自动都在这里解析成具体 px */
+/** 0 表示自动 */
 function subtitleFontSize(cfg: AppConfig, options: GenerateOptions): number {
   const size = options.subtitleFontSize ?? numberOrZero(cfg.SUBTITLE_FONT_SIZE, 0);
   return size > 0 ? size : autoSubtitleFontSize(options.width);
 }
 
-/** 淡入淡出不能吃掉整段画面，最多用掉时长的 1/3 */
+/** 淡入淡出最多占时长 1/3 */
 function clampFade(value: number, durationSec: number): number {
   if (value <= 0) return 0;
   return Math.min(value, Math.max(0.1, durationSec / 3));
 }
 
-/** 画面淡入淡出（作用在合并后的视频轨上） */
 function videoFadeChain(o: RenderOptions, durationSec: number): string[] {
   const chain: string[] = [];
   const fadeIn = clampFade(o.videoFadeIn, durationSec);
@@ -72,7 +75,7 @@ function videoFadeChain(o: RenderOptions, durationSec: number): string[] {
   return chain;
 }
 
-/** BGM 音量 + 淡入淡出：只作用在音乐轨上，不动人声 */
+/** 只作用于音乐轨 */
 function bgmChain(o: RenderOptions, durationSec: number): string {
   const chain = [`volume=${o.bgmVolume.toFixed(3)}`];
   const fadeIn = clampFade(o.bgmFadeIn, durationSec);
@@ -96,10 +99,20 @@ interface ParagraphPlan {
   sentences: Sentence[];
   cues: SubtitleCue[];
   duration: number;
+  /** 转场用的首尾静音留白 */
+  padLead: number;
+  padTail: number;
 }
 
-/** 复刻 Python 的时间轴：首段首句前插标题 0.5s，其余每句前留 0.2s 间隔 */
-function planParagraphs(transcript: Transcript, audio: AudioManifest): ParagraphPlan[] {
+interface TimelineOptions {
+  titleDuration: number;
+  interval: number;
+  padLead: number;
+  padTail: number;
+}
+
+/** 排时间轴：首句前插标题，句间留间隔，转场时垫首尾留白 */
+function planParagraphs(transcript: Transcript, audio: AudioManifest, o: TimelineOptions): ParagraphPlan[] {
   const plans: ParagraphPlan[] = [];
 
   for (let pi = 0; pi < transcript.paragraphs.length; pi++) {
@@ -120,10 +133,12 @@ function planParagraphs(transcript: Transcript, audio: AudioManifest): Paragraph
 
         if (pi === 0 && di === 0 && si === 0) {
           const title = transcript.title.trim();
-          if (title) cues.push({ text: title, start: 0, end: TITLE_DURATION, style: "Title" });
-          cursor += TITLE_DURATION;
+          if (title && o.titleDuration > 0) {
+            cues.push({ text: title, start: cursor, end: cursor + o.titleDuration, style: "Title" });
+            cursor += o.titleDuration;
+          }
         } else {
-          cursor += SUBTITLE_INTERVAL;
+          cursor += o.interval;
         }
 
         const start = cursor;
@@ -134,8 +149,24 @@ function planParagraphs(transcript: Transcript, audio: AudioManifest): Paragraph
     }
 
     if (sentences.length > 0) {
-      plans.push({ index: pi + 1, sentences, cues, duration: cursor });
+      plans.push({ index: pi + 1, sentences, cues, duration: cursor, padLead: 0, padTail: 0 });
     }
+  }
+
+  // 首段不垫片头、末段不垫片尾
+  for (let i = 0; i < plans.length; i++) {
+    const plan = plans[i];
+    if (!plan) continue;
+    plan.padLead = i === 0 ? 0 : o.padLead;
+    plan.padTail = i === plans.length - 1 ? 0 : o.padTail;
+    if (plan.padLead === 0 && plan.padTail === 0) continue;
+
+    for (const sentence of plan.sentences) sentence.start += plan.padLead;
+    for (const cue of plan.cues) {
+      cue.start += plan.padLead;
+      cue.end += plan.padLead;
+    }
+    plan.duration += plan.padLead + plan.padTail;
   }
 
   return plans;
@@ -144,24 +175,50 @@ function planParagraphs(transcript: Transcript, audio: AudioManifest): Paragraph
 function assOptions(width: number, height: number, fontSize: number) {
   const subtitleWidth = Math.round(width * SUBTITLE_WIDTH_RATIO);
   const sideMargin = Math.round((width - subtitleWidth) / 2);
-  // 字号：正常调用永远给的是具体 px，0 只作兜底（按画宽自动）
   const subtitleSize = fontSize > 0 ? Math.round(fontSize) : autoSubtitleFontSize(width);
+  const titleSize = Math.round(subtitleSize * TITLE_SIZE_RATIO);
+  const stroke = Math.max(MIN_STROKE, Math.round(subtitleSize * SUBTITLE_STROKE_RATIO * 10) / 10);
+  const titleStroke = Math.max(stroke, Math.round(titleSize * TITLE_STROKE_RATIO * 10) / 10);
   return {
     width,
     height,
     fontName: SUBTITLE_FONT,
     subtitleSize,
-    // 标题跟着字幕字号等比放大，改字号时整体比例不变
-    titleSize: Math.round(subtitleSize * TITLE_SIZE_RATIO),
+    titleSize,
     subtitleMarginV: Math.round(height - height * SUBTITLE_POSITION_RATIO),
     titleMarginV: 0,
     marginL: sideMargin,
     marginR: sideMargin,
-    subtitleOutline: SUBTITLE_STROKE,
-    titleOutline: TITLE_STROKE,
-    // 一行最多放几个全角字：字幕区宽度 ÷ 字号（留一点余量给描边）
-    maxChars: Math.max(6, Math.floor(subtitleWidth / Math.max(1, subtitleSize))),
+    subtitleOutline: stroke,
+    titleOutline: titleStroke,
+    subtitleShadow: Math.round(stroke * 0.66 * 10) / 10,
+    titleShadow: Math.round(titleStroke * 0.66 * 10) / 10,
+    shadowColour: SHADOW_COLOUR,
+    maxChars: charsPerLine(subtitleWidth, subtitleSize),
   };
+}
+
+/** 素材、画幅、字号、时间轴任一变化都会失效 */
+function clipSignature(plan: ParagraphPlan, materialPath: string, width: number, height: number, fps: number, fontSize: number): string {
+  let material = "";
+  try {
+    const stat = fs.statSync(materialPath);
+    material = `${path.basename(materialPath)}:${stat.size}:${stat.mtimeMs}`;
+  } catch {
+    material = path.basename(materialPath);
+  }
+
+  return JSON.stringify({
+    material,
+    width,
+    height,
+    fps,
+    fontSize,
+    style: SUBTITLE_STYLE_VERSION,
+    duration: Number(plan.duration.toFixed(3)),
+    sentences: plan.sentences.map((s) => [s.file, Number(s.start.toFixed(3))]),
+    cues: plan.cues.map((c) => [c.text, Number(c.start.toFixed(3)), Number(c.end.toFixed(3)), c.style]),
+  });
 }
 
 async function renderParagraph(
@@ -173,17 +230,31 @@ async function renderParagraph(
   onProgress: (ratio: number) => void,
 ): Promise<string> {
   const cfg = loadConfig();
-  const fps = num(cfg.FPS, 24);
+  const fps = ctx.options.fps > 0 ? ctx.options.fps : num(cfg.FPS, 24);
   const { width, height } = ctx.options;
+  const fontSize = subtitleFontSize(cfg, ctx.options);
 
   const clipFile = path.join(clipsDir, `${plan.index}.mp4`);
+  const sigFile = path.join(clipsDir, `${plan.index}.mp4${CLIP_SIG_SUFFIX}`);
+  const signature = clipSignature(plan, materialPath, width, height, fps, fontSize);
+
   if (fs.existsSync(clipFile) && fs.statSync(clipFile).size > 0) {
-    ctx.log(`复用已渲染片段 ${path.basename(clipFile)}`);
-    return clipFile;
+    let cached = "";
+    try {
+      cached = fs.readFileSync(sigFile, "utf-8");
+    } catch {
+      // 无签名视为不匹配
+    }
+    if (cached === signature) {
+      ctx.log(`复用已渲染片段 ${path.basename(clipFile)}`);
+      return clipFile;
+    }
+    ctx.log(`第 ${plan.index} 段的素材或参数变了，重新渲染片段`);
+    fs.rmSync(clipFile, { force: true });
   }
 
   const assFile = path.join(subsDir, `${plan.index}.ass`);
-  fs.writeFileSync(assFile, buildAss(plan.cues, assOptions(width, height, subtitleFontSize(cfg, ctx.options))), "utf-8");
+  fs.writeFileSync(assFile, buildAss(plan.cues, assOptions(width, height, fontSize)), "utf-8");
 
   const args: string[] = ["-stream_loop", "-1", "-i", materialPath];
   for (const sentence of plan.sentences) {
@@ -206,8 +277,12 @@ async function renderParagraph(
   if (audioLabels.length === 1) {
     filters.push(`${audioLabels[0]}anull[a]`);
   } else {
-    filters.push(`${audioLabels.join("")}amix=inputs=${audioLabels.length}:duration=longest:normalize=0[a]`);
+    filters.push(`${audioLabels.join("")}amix=inputs=${audioLabels.length}:duration=longest:normalize=0[a0]`);
+    filters.push("[a0]anull[a]");
   }
+
+  // 补齐尾部留白，避免音轨短于画面导致 acrossfade 错位
+  filters.push(`[a]apad=whole_dur=${plan.duration.toFixed(3)}[apad]`);
 
   args.push(
     "-filter_complex",
@@ -215,7 +290,7 @@ async function renderParagraph(
     "-map",
     "[v]",
     "-map",
-    "[a]",
+    "[apad]",
     "-t",
     plan.duration.toFixed(3),
     "-r",
@@ -223,9 +298,9 @@ async function renderParagraph(
     "-c:v",
     "libx264",
     "-preset",
-    "veryfast",
+    CLIP_PRESET,
     "-crf",
-    "20",
+    CLIP_CRF,
     "-pix_fmt",
     "yuv420p",
     "-c:a",
@@ -246,13 +321,15 @@ async function renderParagraph(
     onProgress,
   });
 
+  // 成功后才写签名，失败或被取消的片段不当作缓存
+  fs.writeFileSync(sigFile, signature, "utf-8");
   return clipFile;
 }
 
 interface MergeOptions {
   ctx: TaskContext;
   clips: string[];
-  /** 转场秒数，0 表示直接拼接 */
+  /** 0 表示直接拼接 */
   transition: number;
   output: string;
   encode: string[];
@@ -261,7 +338,7 @@ interface MergeOptions {
   render: RenderOptions;
 }
 
-/** 探测片段时长，失败时退化为按总时长均分，避免因 ffprobe 异常中断合成 */
+/** 探测片段时长，失败时按均值兜底 */
 async function clipDurations(ctx: TaskContext, clips: string[], totalDurationMs: number): Promise<number[]> {
   try {
     const probes = await Promise.all(clips.map((clip) => probeVideo(clip)));
@@ -273,13 +350,12 @@ async function clipDurations(ctx: TaskContext, clips: string[], totalDurationMs:
   }
 }
 
-/** 用 xfade / acrossfade 把片段带转场地串成一条，可选画面淡入淡出与 BGM（必须重编码） */
+/** xfade / acrossfade 带转场串联 */
 async function mergeWithTransitions(options: MergeOptions): Promise<void> {
   const { ctx, clips, transition, output, encode, bgm, totalDurationMs, render } = options;
 
   const durations = await clipDurations(ctx, clips, totalDurationMs);
 
-  // 转场不能长于最短片段的一半，否则 xfade 会没有可用素材
   const shortest = Math.min(...durations);
   const fade = Math.max(0.1, Math.min(transition, shortest / 2));
   if (fade < transition) {
@@ -288,7 +364,7 @@ async function mergeWithTransitions(options: MergeOptions): Promise<void> {
 
   const filters: string[] = [];
 
-  // 统一时间基，xfade 要求两条流的 tb 一致
+  // xfade 要求两条流时间基一致
   for (let i = 0; i < clips.length; i++) {
     filters.push(`[${i}:v]settb=AVTB,setpts=PTS-STARTPTS[v${i}]`);
   }
@@ -311,7 +387,7 @@ async function mergeWithTransitions(options: MergeOptions): Promise<void> {
     audioLabel = `a${k}`;
   }
 
-  // 转场会吃掉重叠的部分，成片时长按这个算，淡出起点才不会落在片尾之后
+  // 转场会吃掉重叠部分
   const outputSec = Math.max(0.1, durations.reduce((sum, d) => sum + d, 0) - (clips.length - 1) * fade);
 
   const args: string[] = [];
@@ -337,10 +413,7 @@ async function mergeWithTransitions(options: MergeOptions): Promise<void> {
   await runFfmpeg(args, { cwd: ctx.workspace, signal: ctx.signal, totalMs: outputSec * 1000 });
 }
 
-/**
- * 不带转场：concat 直接拼接；需要淡入淡出或 BGM 时再套一层滤镜（必须重编码）。
- * 三个开关全关就直接流拷贝，最快。
- */
+/** concat 拼接，无需后处理时直接流拷贝 */
 async function mergeByConcat(options: MergeOptions): Promise<void> {
   const { ctx, clips, output, encode, bgm, totalDurationMs, render } = options;
 
@@ -383,7 +456,7 @@ async function mergeByConcat(options: MergeOptions): Promise<void> {
   await runFfmpeg(args, { cwd: ctx.workspace, signal: ctx.signal, totalMs: totalDurationMs });
 }
 
-/** 分段渲染 → concat 合并 → 混入 BGM */
+/** 分段渲染 → 合并 → 混入 BGM */
 export async function runComposeStage(
   ctx: TaskContext,
   transcript: Transcript,
@@ -401,8 +474,21 @@ export async function runComposeStage(
   const clipsDir = ensureDir(path.join(ctx.workspace, "clips"));
   const subsDir = ensureDir(path.join(ctx.workspace, "subs"));
 
-  const plans = planParagraphs(transcript, audio);
-  if (plans.length === 0) throw new Error("没有可合成的段落");
+  const cfg = loadConfig();
+  const transition = numberOrZero(cfg.TRANSITION_DURATION, 0);
+  const timeline = {
+    titleDuration: numberOrZero(cfg.TITLE_DURATION, 0),
+    interval: numberOrZero(cfg.SUBTITLE_INTERVAL, 0),
+  };
+
+  // 多段且有转场时才补首尾留白
+  const bare = planParagraphs(transcript, audio, { ...timeline, padLead: 0, padTail: 0 });
+  if (bare.length === 0) throw new Error("没有可合成的段落");
+
+  const withTransition = bare.length >= 2 && transition > 0;
+  const pad = withTransition ? transition : 0;
+  const plans =
+    pad > 0 ? planParagraphs(transcript, audio, { ...timeline, padLead: pad, padTail: pad }) : bare;
 
   const totalDurationMs = plans.reduce((sum, p) => sum + p.duration * 1000, 0);
   const clips: string[] = [];
@@ -430,13 +516,9 @@ export async function runComposeStage(
 
   ctx.markStage("compose", "running", "合并片段");
 
-  const cfg = loadConfig();
   const render = renderOptions(cfg, ctx.options);
-  // 转场允许显式设为 0（num 会把 0 当无效值）
-  const transition = numberOrZero(cfg.TRANSITION_DURATION, 0);
-  const withTransition = clips.length >= 2 && transition > 0;
+  const withTransitions = clips.length >= 2 && withTransition;
 
-  // BGM：成片页的开关优先于配置，关掉就完全不混（即使填了自定义音乐）
   const musicRef = (ctx.options.bgmFile ?? "").trim();
   const bgmEnabled = ctx.options.bgmEnabled ?? bool(cfg.BGM_ENABLED, true);
   let bgm: string | null = null;
@@ -457,7 +539,7 @@ export async function runComposeStage(
 
   ctx.log(
     `合并 ${clips.length} 个片段${bgm ? ` 并混入${bgmCustom ? "自定义" : "程序合成"} BGM` : ""}${
-      withTransition ? `，转场 ${transition}s` : ""
+      withTransitions ? `，转场 ${transition}s` : ""
     }`,
   );
 
@@ -483,7 +565,7 @@ export async function runComposeStage(
   ];
 
   const mergeOptions: MergeOptions = { ctx, clips, transition, output, encode, bgm, totalDurationMs, render };
-  if (withTransition) await mergeWithTransitions(mergeOptions);
+  if (withTransitions) await mergeWithTransitions(mergeOptions);
   else await mergeByConcat(mergeOptions);
 
   ctx.markStage("compose", "done", `${clips.length} 段 / ${(totalDurationMs / 1000).toFixed(1)}s`);
