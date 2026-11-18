@@ -3,11 +3,7 @@ import WebSocket from "ws";
 import type { AppConfig } from "../config.js";
 import type { TtsRequest } from "./tts.js";
 
-/**
- * DashScope 流式语音合成（cosyvoice）走 WebSocket：
- *   run-task → task-started → continue-task(文本) → finish-task → 二进制音频帧 → task-finished
- * 与 HTTP 引擎的差别只是传输方式，对外仍返回完整音频 Buffer。
- */
+/** DASHSCOPE_WS_URL 优先，否则由 base url 推导 */
 function wsEndpoint(cfg: AppConfig): string {
   if (cfg.DASHSCOPE_WS_URL) return cfg.DASHSCOPE_WS_URL;
   const base = cfg.DASHSCOPE_BASE_URL.replace(/\/+$/, "");
@@ -20,15 +16,18 @@ interface DashScopeEvent {
   payload?: { message?: string };
 }
 
+/** 协议：run-task → task-started → continue-task → finish-task → 音频帧 */
 export function synthesizeCosyvoice(cfg: AppConfig, req: TtsRequest): Promise<Buffer> {
   const endpoint = wsEndpoint(cfg);
   const taskId = crypto.randomUUID();
   const rate = Number(cfg.TTS_SPEED) > 0 ? Number(cfg.TTS_SPEED) : 1;
 
+  // 多 workspace 需带业务空间，否则落到默认空间
+  const headers: Record<string, string> = { Authorization: `Bearer ${cfg.DASHSCOPE_API_KEY}` };
+  if (cfg.DASHSCOPE_WORKSPACE_ID) headers["X-DashScope-WorkSpace"] = cfg.DASHSCOPE_WORKSPACE_ID;
+
   return new Promise<Buffer>((resolve, reject) => {
-    const socket = new WebSocket(endpoint, {
-      headers: { Authorization: `Bearer ${cfg.DASHSCOPE_API_KEY}` },
-    });
+    const socket = new WebSocket(endpoint, { headers });
 
     const chunks: Buffer[] = [];
     let settled = false;

@@ -8,7 +8,7 @@ export interface PromptPair {
   rewriter: string;
 }
 
-/** prompt 模板里的角色名占位符，运行时替换成配置/任务里的角色名 */
+/** 运行时替换的角色名占位符 */
 const SPEAKER_MAIN_TOKEN = "{{SPEAKER_MAIN}}";
 const SPEAKER_GUEST_TOKEN = "{{SPEAKER_GUEST}}";
 
@@ -34,10 +34,7 @@ function applySpeakers(template: string, speakers: SpeakerNames): string {
   return template.split(SPEAKER_MAIN_TOKEN).join(speakers.main).split(SPEAKER_GUEST_TOKEN).join(speakers.guest);
 }
 
-/**
- * 读取 assets/prompts/<风格>.json，要求包含 prompt_writer 与 prompt_rewriter。
- * 模板里的角色名是占位符，这里按传入的角色名填充（不传则用配置项的默认值）。
- */
+/** 读取 assets/prompts/<风格>.json，填充角色名占位符 */
 export function loadPrompts(source: string, speakers?: SpeakerNames): PromptPair {
   const names = speakers ?? speakerNames();
   return {

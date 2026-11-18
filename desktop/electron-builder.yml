@@ -13,13 +13,48 @@ files:
 
 asar: true
 
+# Electron 自带 55 个语言包，共 48 MB。只留实际会用到的三种：
+# en-US 是 Chromium 的兜底语言，删掉会让界面回退到异常状态。
+# zh-TW 仅 570 KB，占总体积 0.1%，删掉会让繁体用户的菜单回退英文，不值得。
+electronLanguages:
+  - zh-CN
+  - zh-TW
+  - en-US
+
 extraResources:
-  # 随包携带的 ffmpeg / ffprobe
+  # 随包携带的 ffmpeg（不再带 ffprobe，后端有 ffmpeg 兜底）
   - from: build/bin
     to: bin
-  # 后端（含生产依赖），多套一层 payload 以避开 electron-builder 对顶层 node_modules 的排除规则
+  # 后端（含生产依赖），多套一层 payload 以避开 electron-builder 对顶层 node_modules 的排除规则。
+  # 依赖里约 12 MB 是运行时读不到的东西：sourcemap、README、类型声明、类型测试、用例目录。
+  # Node 只加载 package.json 的 main/exports 指向的 .js，这些文件永远不会被读到。
   - from: build/resources/payload
     to: .
+    filter:
+      - "**/*"
+      - "!**/*.map"
+      - "!**/*.md"
+      - "!**/*.markdown"
+      - "!**/*.flow"
+      - "!**/*.d.ts"
+      - "!**/*.d.mts"
+      - "!**/*.d.cts"
+      - "!**/*.tst.ts"
+      - "!**/test/**"
+      - "!**/tests/**"
+      - "!**/__tests__/**"
+      - "!**/docs/**"
+      - "!**/examples/**"
+      # 依赖里散落的构建配置与隐藏文件，运行时读不到
+      - "!**/.github/**"
+      - "!**/.gitignore"
+      - "!**/.gitattributes"
+      - "!**/.npmignore"
+      - "!**/.*.yml"
+      - "!**/.*.yaml"
+      # 后端自身的构建元数据：只在开发期用
+      - "!server/tsconfig.json"
+      - "!server/pnpm-lock.yaml"
   # 前端产物，由后端托管
   - from: ../web/dist
     to: web

@@ -4,7 +4,7 @@ import { findBinary } from "./deps.js";
 export interface FfmpegOptions {
   signal?: AbortSignal;
   cwd?: string;
-  /** 输出总时长（毫秒），用于把 time= 换算成进度 */
+  /** 总时长 ms，用于换算进度 */
   totalMs?: number;
   onProgress?: (ratio: number) => void;
   idleTimeoutMs?: number;
@@ -13,12 +13,12 @@ export interface FfmpegOptions {
 export function ffmpegPath(): string {
   const bin = findBinary("ffmpeg");
   if (!bin) {
-    throw new Error("未检测到 ffmpeg，无法合成视频。请安装 ffmpeg 或使用带内置 ffmpeg 的安装包");
+    throw new Error("未检测到 ffmpeg，请安装 ffmpeg 或使用带内置 ffmpeg 的安装包");
   }
   return bin;
 }
 
-/** 执行 ffmpeg：解析 time= 报告进度，长时间无输出则中断，失败时抛出 stderr 尾部 */
+/** 解析 time= 报进度，空闲超时中断，失败带 stderr 尾部 */
 export function runFfmpeg(args: string[], opts: FfmpegOptions = {}): Promise<void> {
   const bin = ffmpegPath();
   const idleTimeoutMs = opts.idleTimeoutMs ?? 180_000;

@@ -11,103 +11,209 @@
         --text: #1c2431;
         --muted: #6b7787;
         --brand: #2f6fed;
+        --ok: #12a15c;
+        --err: #d9453d;
+        --warn: #b8791a;
         font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
         color: var(--text);
         background: var(--bg);
       }
+      * {
+        box-sizing: border-box;
+      }
       body {
         margin: 0;
-        padding: 0;
         background: var(--bg);
+        /* 只有中间内容区滚动 */
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
       }
       .page {
-        padding: 22px 24px 96px;
-        max-width: 760px;
-        margin: 0 auto;
+        flex: 1 1 auto;
+        overflow-y: auto;
+        /* 始终预留滚动槽，避免内容左右晃动 */
+        scrollbar-gutter: stable;
+        padding: 20px 24px;
+      }
+      .page > * {
+        max-width: 780px;
+        margin-left: auto;
+        margin-right: auto;
+      }
+
+      header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
       }
       h1 {
         font-size: 18px;
-        margin: 0 0 4px;
+        margin: 0;
       }
-      .sub {
-        font-size: 12px;
+      .file {
+        margin-left: auto;
+        font-size: 11px;
         color: var(--muted);
-        margin-bottom: 18px;
         word-break: break-all;
+        text-align: right;
+        max-width: 60%;
       }
-      fieldset {
+
+      /* 分组可折叠，避免字段全铺开过长 */
+      details.group {
+        background: var(--card);
         border: 1px solid var(--border);
         border-radius: 12px;
-        background: var(--card);
-        padding: 14px 16px 6px;
-        margin: 0 0 14px;
+        margin-bottom: 12px;
+        overflow: hidden;
       }
-      legend {
+      details.group > summary {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 16px;
         font-size: 13px;
         font-weight: 600;
-        color: var(--brand);
-        padding: 0 6px;
+        cursor: pointer;
+        list-style: none;
+        user-select: none;
       }
-      .field {
-        display: flex;
-        flex-direction: column;
-        gap: 5px;
-        margin-bottom: 12px;
+      details.group > summary::-webkit-details-marker {
+        display: none;
       }
-      label {
-        font-size: 12px;
+      details.group > summary::before {
+        content: "";
+        width: 0;
+        height: 0;
+        border-left: 5px solid var(--muted);
+        border-top: 4px solid transparent;
+        border-bottom: 4px solid transparent;
+        transition: transform 0.15s;
+        flex: none;
+      }
+      details.group[open] > summary::before {
+        transform: rotate(90deg);
+      }
+      details.group[open] > summary {
+        border-bottom: 1px solid var(--border);
+      }
+      .tag {
+        margin-left: auto;
+        font-size: 11px;
+        font-weight: 400;
         color: var(--muted);
       }
-      input {
+      .tag.ok {
+        color: var(--ok);
+      }
+      .body {
+        padding: 14px 16px 4px;
+      }
+
+      /* 标签固定宽度，输入框左边界对齐 */
+      .field {
+        display: grid;
+        grid-template-columns: 150px 1fr;
+        align-items: center;
+        gap: 4px 12px;
+        margin-bottom: 10px;
+      }
+      label.lbl {
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.4;
+      }
+      label.lbl .hint {
+        display: block;
+        font-size: 11px;
+        color: #98a3b2;
+      }
+      input[type="text"],
+      input[type="password"] {
+        width: 100%;
         border: 1px solid var(--border);
         border-radius: 8px;
-        padding: 8px 10px;
+        padding: 7px 10px;
         font-size: 13px;
         font-family: inherit;
         background: #fbfcfe;
         outline: none;
+        transition: border-color 0.15s, background 0.15s;
       }
       input:focus {
         border-color: var(--brand);
         background: #fff;
       }
-      .row {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 12px;
+      input.invalid {
+        border-color: var(--err);
+        background: #fff8f7;
+      }
+      .field-error {
+        grid-column: 2;
+        font-size: 11px;
+        color: var(--err);
+        margin-top: -2px;
+      }
+      .field-error:empty {
+        display: none;
+      }
+      .with-unit {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .with-unit .unit {
+        font-size: 11px;
+        color: var(--muted);
+        flex: none;
+        min-width: 20px;
       }
       .check {
         display: flex;
         align-items: center;
         gap: 8px;
-        margin-bottom: 12px;
+        margin-bottom: 10px;
         font-size: 12px;
-        color: var(--text);
+        padding-left: 162px;
       }
       .check input {
         width: 15px;
         height: 15px;
+        flex: none;
       }
-      .tools {
+      .note {
+        margin: 0 0 12px;
+        padding: 8px 10px;
+        border-left: 3px solid #cfe0fb;
+        background: #f6f9ff;
+        border-radius: 0 7px 7px 0;
+        font-size: 11px;
+        line-height: 1.65;
+        color: #5d6f8c;
+      }
+
+      .test-row {
         display: flex;
-        align-items: center;
-        gap: 14px;
-        margin: 4px 0 14px;
-        font-size: 12px;
+        align-items: baseline;
+        gap: 8px;
+        margin: 2px 0 12px 162px;
+      }
+      .test-result {
+        font-size: 11px;
+        line-height: 1.5;
         color: var(--muted);
+        word-break: break-word;
+        min-width: 0;
       }
-      .bar {
-        position: fixed;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        padding: 12px 24px;
-        background: rgba(255, 255, 255, 0.96);
-        border-top: 1px solid var(--border);
-        display: flex;
-        justify-content: flex-end;
-        gap: 10px;
+      .test-result.ok {
+        color: var(--ok);
       }
+      .test-result.err {
+        color: var(--err);
+      }
+
       button {
         border-radius: 9px;
         padding: 9px 18px;
@@ -117,6 +223,10 @@
         border: 1px solid var(--border);
         background: #fff;
         color: var(--text);
+        transition: background 0.15s, border-color 0.15s, color 0.15s;
+      }
+      button:hover:not(:disabled) {
+        border-color: #c3cfdd;
       }
       button.primary {
         background: var(--brand);
@@ -124,212 +234,347 @@
         color: #fff;
         font-weight: 600;
       }
+      button.primary:hover:not(:disabled) {
+        background: #2a62d4;
+      }
+      button.link {
+        padding: 3px 8px;
+        font-size: 11px;
+        color: var(--muted);
+        border-color: transparent;
+        background: transparent;
+      }
+      button.link:hover:not(:disabled) {
+        color: var(--brand);
+        background: #f1f6ff;
+      }
       button:disabled {
-        opacity: 0.6;
+        opacity: 0.55;
         cursor: not-allowed;
+      }
+
+      .bar {
+        flex: none;
+        padding: 11px 24px;
+        background: #fff;
+        border-top: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        gap: 10px;
       }
       .status {
         margin-right: auto;
         font-size: 12px;
         color: var(--muted);
-        align-self: center;
+        min-width: 0;
+        line-height: 1.4;
+        word-break: break-word;
       }
       .status.ok {
-        color: #12a15c;
+        color: var(--ok);
       }
       .status.err {
-        color: #d9453d;
+        color: var(--err);
       }
-      .note {
-        margin: 0 0 14px;
-        padding: 10px 12px;
-        border: 1px solid #d8e3f8;
-        border-radius: 9px;
-        background: #f4f8ff;
-        font-size: 12px;
-        line-height: 1.6;
-        color: #5d6f8c;
+      .status.warn {
+        color: var(--warn);
       }
     </style>
   </head>
   <body>
     <div class="page">
-      <h1>设置</h1>
-      <div class="sub" id="config-path">加载中…</div>
+      <header>
+        <h1>设置</h1>
+        <label class="check-inline" style="margin: 0 0 0 8px; padding: 0">
+          <input type="checkbox" id="reveal" />
+          <span style="font-size: 12px; color: #6b7787">显示密钥</span>
+        </label>
+        <div class="file" id="config-path">加载中…</div>
+      </header>
 
-      <div class="tools">
-        <label><input type="checkbox" id="reveal" /> 显示密钥</label>
-        <span>修改后需重启后端才能生效（保存时自动重启）</span>
-      </div>
+      <form id="form" novalidate>
+        <details class="group" open>
+          <summary>大模型（写稿）<span class="tag" id="tag-llm">未配置</span></summary>
+          <div class="body">
+            <div class="field">
+              <label class="lbl">API Key</label>
+              <input type="password" data-key="LLM_API_KEY" autocomplete="off" spellcheck="false" />
+            </div>
+            <div class="field">
+              <label class="lbl">接口地址<span class="hint">可只填域名</span></label>
+              <input
+                type="text"
+                data-key="LLM_API_URL"
+                placeholder="https://api.deepseek.com"
+                spellcheck="false"
+                data-text="1"
+              />
+            </div>
+            <div class="field">
+              <label class="lbl">模型</label>
+              <input type="text" data-key="LLM_MODEL" placeholder="deepseek-flash" spellcheck="false" data-text="1" />
+            </div>
+            <div class="test-row">
+              <button type="button" class="link" data-test="llm">测试连接</button>
+              <span class="test-result" id="test-llm"></span>
+            </div>
+          </div>
+        </details>
 
-      <form id="form">
-        <fieldset>
-          <legend>大模型（写稿）</legend>
-          <div class="field">
-            <label>API Key</label>
-            <input type="password" data-key="LLM_API_KEY" />
-          </div>
-          <div class="row">
+        <details class="group">
+          <summary>配音（通用）</summary>
+          <div class="body">
+            <p class="note">Edge 在线语音免费、无需 Key，是默认配音。下面两个引擎填了 Key 才会出现在「配音设置」里。</p>
             <div class="field">
-              <label>接口地址</label>
-              <input data-key="LLM_API_URL" placeholder="https://api.deepseek.com" />
-            </div>
-            <div class="field">
-              <label>模型</label>
-              <input data-key="LLM_MODEL" placeholder="deepseek-flash" />
+              <label class="lbl">语速<span class="hint">1 = 原速</span></label>
+              <div class="with-unit">
+                <input type="text" data-key="TTS_SPEED" placeholder="1.1" data-num="0.5,2" data-unit="倍" />
+              </div>
             </div>
           </div>
-        </fieldset>
+        </details>
 
-        <p class="note">Edge 在线语音免费、无需 Key，是默认配音；下面两个引擎填了 Key 才会出现在「配音设置」里。</p>
+        <details class="group">
+          <summary>配音（DashScope · CosyVoice）<span class="tag" id="tag-dashscope">未配置</span></summary>
+          <div class="body">
+            <div class="field">
+              <label class="lbl">API Key</label>
+              <input type="password" data-key="DASHSCOPE_API_KEY" autocomplete="off" spellcheck="false" />
+            </div>
+            <div class="field">
+              <label class="lbl">HTTP 地址</label>
+              <input
+                type="text"
+                data-key="DASHSCOPE_BASE_URL"
+                placeholder="https://dashscope.aliyuncs.com/api/v1"
+                spellcheck="false"
+                data-text="1"
+              />
+            </div>
+            <div class="field">
+              <label class="lbl">WebSocket 地址<span class="hint">留空自动推导</span></label>
+              <input
+                type="text"
+                data-key="DASHSCOPE_WS_URL"
+                placeholder="wss://…/api-ws/v1/inference"
+                spellcheck="false"
+                data-text="1"
+              />
+            </div>
+            <div class="field">
+              <label class="lbl">业务空间 ID<span class="hint">留空用默认空间</span></label>
+              <input
+                type="text"
+                data-key="DASHSCOPE_WORKSPACE_ID"
+                placeholder="llm-xxxxxxxx"
+                spellcheck="false"
+                data-text="1"
+              />
+            </div>
+            <div class="field">
+              <label class="lbl">CosyVoice 模型</label>
+              <input
+                type="text"
+                data-key="TTS_COSYVOICE_MODEL"
+                placeholder="cosyvoice-v3-flash"
+                spellcheck="false"
+                data-text="1"
+              />
+            </div>
+            <div class="test-row">
+              <button type="button" class="link" data-test="dashscope">测试连接</button>
+              <span class="test-result" id="test-dashscope"></span>
+            </div>
+          </div>
+        </details>
 
-        <fieldset>
-          <legend>配音（DashScope）</legend>
-          <div class="field">
-            <label>API Key</label>
-            <input type="password" data-key="DASHSCOPE_API_KEY" />
+        <details class="group">
+          <summary>配音（豆包 · 火山引擎）<span class="tag" id="tag-seed">未配置</span></summary>
+          <div class="body">
+            <p class="note">
+              不填 Key 时不会出现豆包引擎。音色已内置（小何、Vivi、云舟、大壹、猴哥等），在「配音设置」里按角色选。
+            </p>
+            <div class="field">
+              <label class="lbl">API Key</label>
+              <input type="password" data-key="SEED_TTS_API_KEY" autocomplete="off" spellcheck="false" />
+            </div>
+            <div class="field">
+              <label class="lbl">资源 ID</label>
+              <input
+                type="text"
+                data-key="TTS_SEED_RESOURCE_ID"
+                placeholder="seed-tts-2.0"
+                spellcheck="false"
+                data-text="1"
+              />
+            </div>
+            <div class="field">
+              <label class="lbl">模型</label>
+              <input
+                type="text"
+                data-key="TTS_SEED_MODEL"
+                placeholder="seed-tts-2.0-expressive"
+                spellcheck="false"
+                data-text="1"
+              />
+            </div>
           </div>
-          <div class="row">
-            <div class="field">
-              <label>HTTP 地址</label>
-              <input data-key="DASHSCOPE_BASE_URL" placeholder="https://dashscope.aliyuncs.com/api/v1" />
-            </div>
-            <div class="field">
-              <label>WebSocket 地址（留空自动推导）</label>
-              <input data-key="DASHSCOPE_WS_URL" placeholder="wss://…/api-ws/v1/inference" />
-            </div>
-          </div>
-          <div class="row">
-            <div class="field">
-              <label>CosyVoice 模型</label>
-              <input data-key="TTS_COSYVOICE_MODEL" />
-            </div>
-            <div class="field">
-              <label>语速（1 为原速）</label>
-              <input data-key="TTS_SPEED" placeholder="1.1" />
-            </div>
-          </div>
-        </fieldset>
+        </details>
 
-        <fieldset>
-          <legend>配音（豆包 · 火山引擎）</legend>
-          <p class="note">不填 Key 时不会出现豆包引擎。音色已内置（小何、Vivi、云舟、大壹、猴哥等），在「配音设置」里按角色选。</p>
-          <div class="field">
-            <label>API Key</label>
-            <input type="password" data-key="SEED_TTS_API_KEY" />
-          </div>
-          <div class="row">
+        <details class="group">
+          <summary>剧本角色名</summary>
+          <div class="body">
+            <p class="note">
+              这两个名字会写进 AI 的写稿要求里（双人风格用两个，脱口秀只用主讲）。在「文案脚本」页可以按任务临时改。
+            </p>
             <div class="field">
-              <label>资源 ID</label>
-              <input data-key="TTS_SEED_RESOURCE_ID" placeholder="seed-tts-2.0" />
+              <label class="lbl">主讲角色名<span class="hint">最多 8 字</span></label>
+              <input type="text" data-key="SPEAKER_MAIN" placeholder="小简" data-max="8" />
             </div>
             <div class="field">
-              <label>模型</label>
-              <input data-key="TTS_SEED_MODEL" placeholder="seed-tts-2.0-expressive" />
+              <label class="lbl">追问角色名<span class="hint">最多 8 字</span></label>
+              <input type="text" data-key="SPEAKER_GUEST" placeholder="老陈" data-max="8" />
             </div>
           </div>
-        </fieldset>
+        </details>
 
-        <fieldset>
-          <legend>剧本角色名</legend>
-          <p class="note">这两个名字会写进 AI 的写稿要求里（双人风格用两个，脱口秀只用主讲）。在「文案脚本」页可以按任务临时改。</p>
-          <div class="row">
+        <details class="group">
+          <summary>素材<span class="tag" id="tag-material">未配置 Key</span></summary>
+          <div class="body">
             <div class="field">
-              <label>主讲角色名</label>
-              <input data-key="SPEAKER_MAIN" placeholder="小简" />
+              <label class="lbl">Pixabay Key</label>
+              <input type="password" data-key="PIXABAY_API_KEY" autocomplete="off" spellcheck="false" />
             </div>
             <div class="field">
-              <label>追问角色名</label>
-              <input data-key="SPEAKER_GUEST" placeholder="老陈" />
+              <label class="lbl">Pexels Key</label>
+              <input type="password" data-key="PEXELS_API_KEY" autocomplete="off" spellcheck="false" />
+            </div>
+            <div class="field">
+              <label class="lbl">素材最短时长</label>
+              <div class="with-unit">
+                <input type="text" data-key="MATERIAL_MIN_DURATION" placeholder="10" data-num="1,120" data-unit="秒" />
+              </div>
             </div>
           </div>
-        </fieldset>
+        </details>
 
-        <fieldset>
-          <legend>素材</legend>
-          <div class="row">
+        <details class="group">
+          <summary>画面</summary>
+          <div class="body">
             <div class="field">
-              <label>Pixabay Key</label>
-              <input type="password" data-key="PIXABAY_API_KEY" />
+              <label class="lbl">宽</label>
+              <div class="with-unit">
+                <input
+                  type="text"
+                  data-key="VIDEO_WIDTH"
+                  placeholder="1080"
+                  data-num="360,3840"
+                  data-unit="px"
+                  data-int="1"
+                />
+              </div>
             </div>
             <div class="field">
-              <label>Pexels Key</label>
-              <input type="password" data-key="PEXELS_API_KEY" />
+              <label class="lbl">高</label>
+              <div class="with-unit">
+                <input
+                  type="text"
+                  data-key="VIDEO_HEIGHT"
+                  placeholder="1920"
+                  data-num="360,3840"
+                  data-unit="px"
+                  data-int="1"
+                />
+              </div>
+            </div>
+            <div class="field">
+              <label class="lbl">帧率</label>
+              <div class="with-unit">
+                <input type="text" data-key="FPS" placeholder="24" data-num="1,120" data-unit="fps" data-int="1" />
+              </div>
+            </div>
+            <div class="field">
+              <label class="lbl">画面淡入<span class="hint">0 = 关闭</span></label>
+              <div class="with-unit">
+                <input type="text" data-key="VIDEO_FADE_IN" placeholder="0.5" data-num="0,5" data-unit="秒" />
+              </div>
+            </div>
+            <div class="field">
+              <label class="lbl">画面淡出<span class="hint">0 = 关闭</span></label>
+              <div class="with-unit">
+                <input type="text" data-key="VIDEO_FADE_OUT" placeholder="0.5" data-num="0,5" data-unit="秒" />
+              </div>
             </div>
           </div>
-          <div class="row">
-            <div class="field">
-              <label>素材最短时长（秒）</label>
-              <input data-key="MATERIAL_MIN_DURATION" placeholder="10" />
-            </div>
-          </div>
-        </fieldset>
+        </details>
 
-        <fieldset>
-          <legend>画面与字幕</legend>
-          <div class="row">
+        <details class="group">
+          <summary>字幕与节奏</summary>
+          <div class="body">
             <div class="field">
-              <label>宽</label>
-              <input data-key="VIDEO_WIDTH" placeholder="1080" />
+              <label class="lbl">字幕字号<span class="hint">0 = 自动</span></label>
+              <div class="with-unit">
+                <input
+                  type="text"
+                  data-key="SUBTITLE_FONT_SIZE"
+                  placeholder="0"
+                  data-num="0,300"
+                  data-unit="px"
+                  data-int="1"
+                />
+              </div>
             </div>
             <div class="field">
-              <label>高</label>
-              <input data-key="VIDEO_HEIGHT" placeholder="1920" />
-            </div>
-          </div>
-          <div class="row">
-            <div class="field">
-              <label>帧率</label>
-              <input data-key="FPS" placeholder="24" />
+              <label class="lbl">片头标题停留<span class="hint">0 = 不显示标题</span></label>
+              <div class="with-unit">
+                <input type="text" data-key="TITLE_DURATION" placeholder="1.6" data-num="0,30" data-unit="秒" />
+              </div>
             </div>
             <div class="field">
-              <label>字幕字号（0 = 自动，1080 宽约 72px）</label>
-              <input data-key="SUBTITLE_FONT_SIZE" placeholder="0" />
-            </div>
-          </div>
-          <div class="row">
-            <div class="field">
-              <label>段落转场（秒，0 = 关闭）</label>
-              <input data-key="TRANSITION_DURATION" placeholder="0.5" />
+              <label class="lbl">相邻台词间隔<span class="hint">0 = 紧接</span></label>
+              <div class="with-unit">
+                <input type="text" data-key="SUBTITLE_INTERVAL" placeholder="0.2" data-num="0,10" data-unit="秒" />
+              </div>
             </div>
             <div class="field">
-              <label>画面淡入（秒，0 = 关闭）</label>
-              <input data-key="VIDEO_FADE_IN" placeholder="0.5" />
-            </div>
-          </div>
-          <div class="row">
-            <div class="field">
-              <label>画面淡出（秒，0 = 关闭）</label>
-              <input data-key="VIDEO_FADE_OUT" placeholder="0.5" />
+              <label class="lbl">段落转场<span class="hint">0 = 关闭</span></label>
+              <div class="with-unit">
+                <input type="text" data-key="TRANSITION_DURATION" placeholder="0.5" data-num="0,10" data-unit="秒" />
+              </div>
             </div>
           </div>
-        </fieldset>
+        </details>
 
-        <fieldset>
-          <legend>背景音乐</legend>
-          <label class="check"><input type="checkbox" data-key="BGM_ENABLED" /> 混入 BGM（关掉后只保留配音）</label>
-          <div class="row">
+        <details class="group">
+          <summary>背景音乐</summary>
+          <div class="body">
+            <label class="check"><input type="checkbox" data-key="BGM_ENABLED" /> 混入 BGM（关掉后只保留配音）</label>
             <div class="field">
-              <label>BGM 音量（1 = 原音量）</label>
-              <input data-key="BGM_VOLUME" placeholder="0.1" />
+              <label class="lbl">BGM 音量<span class="hint">1 = 原音量</span></label>
+              <div class="with-unit">
+                <input type="text" data-key="BGM_VOLUME" placeholder="0.1" data-num="0,4" data-unit="倍" />
+              </div>
             </div>
             <div class="field">
-              <label>BGM 淡入（秒，0 = 关闭）</label>
-              <input data-key="AUDIO_FADE_IN" placeholder="0.8" />
+              <label class="lbl">BGM 淡入<span class="hint">0 = 关闭</span></label>
+              <div class="with-unit">
+                <input type="text" data-key="AUDIO_FADE_IN" placeholder="0.8" data-num="0,30" data-unit="秒" />
+              </div>
+            </div>
+            <div class="field">
+              <label class="lbl">BGM 淡出<span class="hint">0 = 关闭</span></label>
+              <div class="with-unit">
+                <input type="text" data-key="AUDIO_FADE_OUT" placeholder="1.2" data-num="0,30" data-unit="秒" />
+              </div>
             </div>
           </div>
-          <div class="row">
-            <div class="field">
-              <label>BGM 淡出（秒，0 = 关闭）</label>
-              <input data-key="AUDIO_FADE_OUT" placeholder="1.2" />
-            </div>
-          </div>
-        </fieldset>
+        </details>
       </form>
     </div>
 
     <div class="bar">
       <span class="status" id="status"></span>
+      <button type="button" class="link" id="reset">恢复默认值</button>
       <button type="button" id="cancel">取消</button>
       <button type="button" class="primary" id="save">保存并重启后端</button>
     </div>
@@ -338,13 +583,18 @@
       const form = document.getElementById("form");
       const status = document.getElementById("status");
       const inputs = Array.from(form.querySelectorAll("input[data-key]"));
+      const saveButton = document.getElementById("save");
+      const resetButton = document.getElementById("reset");
+
+      let defaults = {};
+      /** 加载时的快照，用于判断是否有未保存修改 */
+      let loaded = {};
 
       function say(text, kind) {
         status.textContent = text;
         status.className = `status ${kind ?? ""}`;
       }
 
-      /** 开关类配置在文件里是字符串 "1" / "0" */
       function isToggle(input) {
         return input.type === "checkbox";
       }
@@ -355,14 +605,115 @@
         return !["0", "false", "off", "no"].includes(text);
       }
 
-      document.getElementById("reveal").addEventListener("change", (event) => {
-        for (const input of inputs) {
-          if (input.dataset.secret === "1") input.type = event.target.checked ? "text" : "password";
+      function errorSlot(input) {
+        const field = input.closest(".field");
+        if (!field) return null;
+        let slot = field.querySelector(".field-error");
+        if (!slot) {
+          slot = document.createElement("div");
+          slot.className = "field-error";
+          field.appendChild(slot);
         }
-      });
+        return slot;
+      }
+
+      function setInvalid(input, message) {
+        input.classList.toggle("invalid", Boolean(message));
+        const slot = errorSlot(input);
+        if (slot) slot.textContent = message ?? "";
+      }
+
+      /** data-num="最小,最大"，data-int="1" 要求整数；空值合法，后端会回退默认值 */
+      function checkNumber(input) {
+        if (!input.dataset.num) return "";
+        const raw = input.value.trim();
+        if (!raw) return "";
+
+        const [minText, maxText] = input.dataset.num.split(",");
+        const min = Number(minText);
+        const max = Number(maxText);
+        const unit = input.dataset.unit ?? "";
+
+        // 带单位会被后端当成非法值静默回退默认值
+        if (!/^\d+(\.\d+)?$/.test(raw)) return "只能填数字，不要带单位或字母";
+        let n = Number(raw);
+        if (input.dataset.int === "1" && !Number.isInteger(n)) return "请填整数";
+
+        if (n < min) return `不能小于 ${min}${unit}`;
+        if (n > max) return `不能大于 ${max}${unit}`;
+        return "";
+      }
+
+      function checkText(input) {
+        if (!input.dataset.max) return "";
+        const raw = input.value.trim();
+        if (!raw) return "";
+        if (raw.length > Number(input.dataset.max)) return `最多 ${input.dataset.max} 个字`;
+        return "";
+      }
+
+      function validateInput(input) {
+        if (isToggle(input)) return "";
+        return checkNumber(input) || checkText(input);
+      }
+
+      function validateAll() {
+        let first = null;
+        for (const input of inputs) {
+          const message = validateInput(input);
+          setInvalid(input, message);
+          if (message && !first) first = input;
+        }
+        return first;
+      }
+
+      function collect() {
+        const values = {};
+        for (const input of inputs) {
+          values[input.dataset.key] = isToggle(input) ? (input.checked ? "1" : "0") : input.value.trim();
+        }
+        return values;
+      }
+
+      function isDirty() {
+        const now = collect();
+        return Object.keys(now).some((k) => now[k] !== loaded[k]);
+      }
+
+      /** 分组标题右侧的配置状态，省的为确认是否填过而展开 */
+      function refreshTags() {
+        const v = collect();
+        const set = (id, text, on) => {
+          const el = document.getElementById(id);
+          el.textContent = text;
+          el.classList.toggle("ok", Boolean(on));
+        };
+        const llm = Boolean(v.LLM_API_KEY && v.LLM_API_URL && v.LLM_MODEL);
+        set("tag-llm", llm ? "已配置" : "未配置", llm);
+        const ds = Boolean(v.DASHSCOPE_API_KEY);
+        set("tag-dashscope", ds ? "已配置" : "未配置", ds);
+        const seed = Boolean(v.SEED_TTS_API_KEY);
+        set("tag-seed", seed ? "已配置" : "未配置", seed);
+        const keys = [v.PIXABAY_API_KEY, v.PEXELS_API_KEY].filter(Boolean).length;
+        set("tag-material", keys ? `${keys} 个 Key` : "未配置 Key", keys > 0);
+      }
+
+      function reveal(input) {
+        const details = input.closest("details");
+        if (details) details.open = true;
+        input.scrollIntoView({ block: "center", behavior: "smooth" });
+        input.focus({ preventScroll: true });
+      }
+
+      function applyReveal(checked) {
+        for (const input of inputs) {
+          if (input.dataset.secret === "1") input.type = checked ? "text" : "password";
+        }
+      }
 
       async function load() {
         const config = await window.aisv.getConfig();
+        defaults = config.__defaults ?? {};
         for (const input of inputs) {
           const key = input.dataset.key;
           if (isToggle(input)) {
@@ -372,33 +723,110 @@
           input.value = config[key] ?? "";
           if (input.type === "password") input.dataset.secret = "1";
         }
-        document.getElementById("config-path").textContent = `配置文件：${config.__file ?? ""}`;
+        loaded = collect();
+        document.getElementById("config-path").textContent = `${config.__file ?? ""}`;
+        refreshTags();
         say("");
       }
 
-      document.getElementById("save").addEventListener("click", async () => {
-        const button = document.getElementById("save");
-        button.disabled = true;
-        const values = {};
+      form.addEventListener("input", (event) => {
+        const input = event.target;
+        if (!(input instanceof HTMLInputElement) || !input.dataset.key) return;
+        setInvalid(input, validateInput(input));
+        refreshTags();
+      });
+
+      form.addEventListener("change", (event) => {
+        if (event.target instanceof HTMLInputElement && event.target.dataset.key) refreshTags();
+      });
+
+      document.getElementById("reveal").addEventListener("change", (event) => {
+        applyReveal(event.target.checked);
+      });
+
+      for (const button of form.querySelectorAll("button[data-test]")) {
+        button.addEventListener("click", async () => {
+          const target = button.dataset.test;
+          const output = document.getElementById(`test-${target}`);
+          const bad = Array.from(inputs).filter((i) => validateInput(i));
+          if (bad.length) {
+            say("有字段格式不对，先修正再测试", "err");
+            reveal(bad[0]);
+            return;
+          }
+          button.disabled = true;
+          output.className = "test-result";
+          output.textContent = "测试中…";
+          try {
+            const result = await window.aisv.testConfig(target, collect());
+            output.className = `test-result ${result.ok ? "ok" : "err"}`;
+            const cost = result.ms >= 1000 ? `${(result.ms / 1000).toFixed(1)}s` : `${result.ms}ms`;
+            output.textContent = result.ok
+              ? `通过（${cost}）· ${result.message}`
+              : `失败（${cost}）· ${result.message}`;
+          } catch (error) {
+            output.className = "test-result err";
+            output.textContent = `失败 · ${error.message ?? error}`;
+          } finally {
+            button.disabled = false;
+          }
+        });
+      }
+
+      resetButton.addEventListener("click", () => {
+        if (!Object.keys(defaults).length) return;
+        // 默认值里 Key 为空，恢复会清掉已填密钥，先确认
+        const secretCount = inputs.filter(
+          (i) => i.dataset.secret === "1" && i.value.trim() && !defaults[i.dataset.key],
+        ).length;
+        if (secretCount && !confirm(`默认值里密钥为空，恢复后将清空 ${secretCount} 个已填的 Key。继续吗？`)) return;
         for (const input of inputs) {
-          values[input.dataset.key] = isToggle(input) ? (input.checked ? "1" : "0") : input.value.trim();
+          const key = input.dataset.key;
+          if (isToggle(input)) input.checked = isOn(defaults[key], true);
+          else input.value = defaults[key] ?? "";
+          setInvalid(input, "");
         }
+        refreshTags();
+        say("已填入默认值，点「保存并重启后端」才会生效", "warn");
+      });
+
+      saveButton.addEventListener("click", async () => {
+        const bad = validateAll();
+        if (bad) {
+          say("有字段格式不对，已在对应项下方标出", "err");
+          reveal(bad);
+          return;
+        }
+        saveButton.disabled = true;
+        resetButton.disabled = true;
         try {
-          const saved = await window.aisv.saveConfig(values);
+          await window.aisv.saveConfig(collect());
           say("已保存，正在重启后端…", "ok");
           const restarted = await window.aisv.restartBackend();
           if (!restarted.ok) throw new Error(restarted.error ?? "重启失败");
+          if (restarted.reused) {
+            // 外部启动的后端主进程停不掉，需用户手动重启
+            say("已保存。当前后端是手动启动的（pnpm dev:server），需要手动重启才会加载新配置", "warn");
+            saveButton.disabled = false;
+            resetButton.disabled = false;
+            return;
+          }
+          loaded = collect();
           say("已生效", "ok");
           setTimeout(() => window.aisv.close(), 600);
         } catch (error) {
-          say(String(error.message ?? error), "err");
-          button.disabled = false;
+          say(String(error?.message ?? error), "err");
+          saveButton.disabled = false;
+          resetButton.disabled = false;
         }
       });
 
-      document.getElementById("cancel").addEventListener("click", () => window.aisv.close());
+      document.getElementById("cancel").addEventListener("click", () => {
+        if (isDirty() && !confirm("有修改还没保存，确定关闭吗？")) return;
+        window.aisv.close();
+      });
 
-      load().catch((error) => say(`读取配置失败：${error.message ?? error}`, "err"));
+      load().catch((error) => say(`读取配置失败：${error?.message ?? error}`, "err"));
     </script>
   </body>
 </html>

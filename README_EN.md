@@ -1,51 +1,34 @@
 English | [简体中文](README.md)
 
-# AI Short Video Engine
+<h1 align="center">AI Short Video Engine</h1>
 
-Turn a web article, a piece of copy, or just a URL into a vertical short video with multi-voice narration and burned-in subtitles.
+<p align="center"><b>Drop in a link, get a vertical short video ready to post.</b></p>
 
-An Electron desktop app, TypeScript end to end (Electron + Fastify + React), with ffmpeg bundled — on Windows, just unzip and run.
+<p align="center">Fetch article → AI script → per-line dubbing → footage matching → subtitled final cut<br />Fully automatic, pausing only twice for your approval</p>
 
-```
-Script or URL → Script generation → Voice synthesis → Material review → Final preview
-```
+<p align="center">
+  <a href="https://github.com/chenwr727/AI-Short-Video-Engine/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/chenwr727/AI-Short-Video-Engine?color=2f6fed"></a>
+  <a href="https://github.com/chenwr727/AI-Short-Video-Engine/releases"><img alt="Downloads" src="https://img.shields.io/badge/download-Windows%20portable-2f6fed"></a>
+  <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-2f6fed">
+  <img alt="Electron" src="https://img.shields.io/badge/Electron-44-47848F?logo=electron&logoColor=white">
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white">
+  <img alt="React" src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black">
+  <img alt="Fastify" src="https://img.shields.io/badge/Fastify-5-000000?logo=fastify&logoColor=white">
+</p>
 
-![Electron](https://img.shields.io/badge/Electron-44-47848F?logo=electron&logoColor=white)
-![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
-![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
-![Fastify](https://img.shields.io/badge/Fastify-5-000000?logo=fastify&logoColor=white)
-![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-2f6fed)
+<p align="center">Portable on Windows · ffmpeg bundled · no GPU required · free TTS out of the box</p>
 
-## Contents
-
-- [Features](#features)
-- [Sample Showcase](#sample-showcase)
-- [Quick Start](#quick-start)
-- [Configuration](#configuration)
-- [Workflow](#workflow)
-- [Task Artifacts and Resuming](#task-artifacts-and-resuming)
-- [Project Structure](#project-structure)
-- [Common Commands](#common-commands)
-- [Packaging](#packaging)
-- [Environment Variables](#environment-variables)
-- [FAQ](#faq)
-- [Known Limitations](#known-limitations)
-- [Acknowledgements](#acknowledgements)
-- [License](#license)
-
-## Features
-
-- **One pipeline end to end**: fetch the article body (including 36kr decryption) → LLM draft → rewrite into a structured script → split into sentences → TTS → retrieve footage → compose the subtitled video
-- **Two human checkpoints**: pause after script generation to edit any line; pause after material matching to preview each segment and swap clips — no more "wrong script discovered after dubbing" or mismatched footage
-- **Multiple TTS engines**: Edge online voices (free, default) / CosyVoice (DashScope) / Doubao Seed-TTS (Volcengine), with a fixed voice per role
-- **Semantic footage matching**: Pixabay / Pexels search, portrait-first, with a duration-based fallback when AI selection fails
-- **Subtitles and transitions**: ASS + libass rendering (auto line wrap with system fonts), `xfade` / `acrossfade` transitions, procedurally generated BGM
-- **Resumable at any point**: every stage persists its artifacts (`_terms.json`, audio files, `_videos.json`, `_output.mp4`), so a rerun only fills in what is missing
-- **Desktop experience**: custom title-bar menu (File / Help), settings dialog on first launch, graphical config panel, portable mode
+<p align="center">
+  <a href="#sample-showcase">Samples</a> ·
+  <a href="#quick-start">Quick Start</a> ·
+  <a href="#workflow">Workflow</a> ·
+  <a href="#configuration">Configuration</a> ·
+  <a href="#faq">FAQ</a>
+</p>
 
 ## Sample Showcase
 
-> The sample videos are edited and compressed to show partial effects only. Use the same source article with a different script style to reproduce them, or generate a full video with this app.
+One 36kr article, one script style swap, a completely different video. Samples are trimmed and compressed to show partial effects only:
 
 📄 **Original article**: [36kr article](https://36kr.com/p/3286128054051718)
 
@@ -66,41 +49,68 @@ Script or URL → Script generation → Voice synthesis → Material review → 
   </tbody>
 </table>
 
-These map to the script styles in the app: **Podcast** (two speakers, information-dense), **Crosstalk** (Chinese comic duo, fast-paced banter), and **Stand-up** (solo narration, only the host name is needed).
+- **Podcast**: two speakers, information-dense, great for knowledge content
+- **Crosstalk**: fast banter between a comic duo, turning business logic into everyday jokes
+- **Stand-up**: solo narration, only the host name is required
+
+## Why This One
+
+The hard part of "one-click AI video" was never generation — it is discovering, after the render, that the tone is off or the footage does not fit, and having to run the whole thing again.
+
+So this pipeline inserts a human checkpoint at **the two most expensive moments**:
+
+- **Script review**: the AI drafts and stops. Edit the title and any line, then confirm to proceed to dubbing — no waiting three minutes to hear that the opening is wrong.
+- **Footage review**: preview each clip, hit **Replace** to search for another candidate, and the pick swaps in immediately.
+
+Everything else stays out of your way:
+
+- **Resumable**: every stage writes its artifacts to disk, so a rerun only fills in what is missing instead of refetching the article.
+- **Zero-cost TTS**: Edge online voices by default — render a video without entering a single key. Switch to CosyVoice or Doubao when you want richer voices.
+- **Semantic footage matching**: Pixabay / Pexels search with portrait-first ranking, plus a duration-based fallback so AI selection failures never stall the run.
+- **Tunable after render**: change subtitle size, BGM on/off or volume and hit **Regenerate** — only composition reruns, all audio and footage are reused.
+- **Runs out of the box**: the Windows portable build bundles ffmpeg / ffprobe, no Node, Python, or any other runtime needed.
 
 ## Quick Start
 
-### Option 1: Portable build (Windows)
+### 1. Get the app
 
-Download `AI Short Video-x.y.z-win-portable.zip` from [Releases](https://github.com/chenwr727/AI-Short-Video-Engine/releases), unzip it, and double-click `AI Short Video.exe`.
+Download `AI Short Video-x.y.z-win-portable.zip` from [Releases](https://github.com/chenwr727/AI-Short-Video-Engine/releases), unzip it, and double-click `AI Short Video.exe`. About 200 MB, everything included.
 
-ffmpeg / ffprobe are bundled — no Node, Python, or any other runtime is needed. The settings dialog opens on first launch; add your API keys and you are ready to go.
-
-Data lives in `UserData/` next to the exe:
+Data lives in `UserData/` next to the exe — delete that folder for a clean uninstall:
 
 ```
 UserData/config.json   # generated on first launch
 UserData/data/         # workspaces, rendered videos, footage cache
 ```
 
-### Option 2: Run from source
+### 2. Add keys
 
-Requires Node.js 20+ (22 LTS recommended) and pnpm. `main` is the default branch:
+The settings dialog opens on first launch; afterwards use `Ctrl+,`. Only two things matter:
+
+| Need | Required | Notes |
+| --- | --- | --- |
+| LLM | **Yes** | Any OpenAI-compatible endpoint: key + domain + model name |
+| Footage | **At least one** | Pixabay or Pexels — free keys on signup |
+| TTS | Not needed | Edge online voices are free by default; add CosyVoice / Doubao keys for more voices |
+
+Saving restarts the backend automatically — no need to relaunch the app.
+
+### 3. Run one
+
+Paste a URL or article text → pick a script style → click **Start**. Each step tells you exactly what comes next.
+
+### Run from source
+
+Requires Node.js 20+ (22 LTS recommended) and pnpm:
 
 ```bash
-# Clone the main branch
 git clone -b main https://github.com/chenwr727/AI-Short-Video-Engine.git
 cd AI-Short-Video-Engine
 
-# For an existing clone: switch back to main and update
-git checkout main && git pull --ff-only
+pnpm install                  # server + web
+npm --prefix desktop install  # desktop
 
-# Dependencies: pnpm for server + web, npm for desktop
-pnpm install
-npm --prefix desktop install
-
-# Start (builds web → compiles the main process → launches the backend → opens the window)
-pnpm dev
+pnpm dev                      # build web → compile main process → start backend → open window
 ```
 
 If the Electron binary download fails, run the installer once manually:
@@ -126,49 +136,30 @@ pnpm dev:web      # Vite at http://127.0.0.1:3000 (/api proxied to 4000)
 
 In dev mode Electron reuses an already running backend on `:4000` instead of starting a second one.
 
-## Configuration
-
-Fill in the fields via **File → Settings…** (`Ctrl+,`); saving automatically restarts the backend. Config file location:
-
-| Mode | Path |
-| --- | --- |
-| Portable | `<next to exe>/UserData/config.json` |
-| Installed / dev | `%APPDATA%/aisv-desktop/config.json` |
-
-**Minimal setup**: `LLM_API_KEY` (plus `LLM_API_URL` / `LLM_MODEL` where required) and either `PIXABAY_API_KEY` or `PEXELS_API_KEY`. TTS defaults to the free Edge online voices, so no extra key is needed.
-
-Field reference (environment variables take precedence over the file, which is handy for temporary overrides):
-
-| Group | Field | Description |
-| --- | --- | --- |
-| LLM | `LLM_API_KEY` / `LLM_API_URL` / `LLM_MODEL` | **Required**. Any OpenAI-compatible endpoint; `LLM_API_URL` may be just the domain — the API path is appended automatically |
-| TTS (pick one) | — | Edge online voices are free, need no key, and work by default |
-| TTS (DashScope) | `DASHSCOPE_API_KEY` / `DASHSCOPE_BASE_URL` / `DASHSCOPE_WS_URL` / `TTS_COSYVOICE_MODEL` | CosyVoice appears once a key is set; leave the WebSocket URL empty to derive it automatically |
-| TTS (Doubao) | `SEED_TTS_API_KEY` / `TTS_SEED_RESOURCE_ID` / `TTS_SEED_MODEL` | The Doubao engine appears once a key is set |
-| Footage | `PIXABAY_API_KEY` / `PEXELS_API_KEY` | **At least one is required**, otherwise footage search is unavailable |
-| Footage | `MATERIAL_MIN_DURATION` | Minimum candidate clip length in seconds, default 10 |
-| Video | `VIDEO_WIDTH` / `VIDEO_HEIGHT` / `FPS` / `TTS_SPEED` | Defaults: 1080×1920 / 24 fps / 1.1× speed |
-| Video | `TRANSITION_DURATION` | Transition length in seconds, default 0.5; set 0 to disable |
-| Subtitles | `SUBTITLE_FONT_SIZE` | Font size in px, default 0 = computed from video width (~72px at 1080, ~48px at 720); titles are 1.4× larger |
-| Video | `VIDEO_FADE_IN` / `VIDEO_FADE_OUT` | Fade in/out at the start/end, default 0.5; set 0 to disable |
-| BGM | `BGM_ENABLED` | Mix in background music, default 1; set 0 to keep narration only |
-| BGM | `BGM_VOLUME` | BGM volume, default 0.1 (1 = original level) |
-| BGM | `AUDIO_FADE_IN` / `AUDIO_FADE_OUT` | BGM fade in/out in seconds, defaults 0.8 / 1.2; set 0 to disable |
-| BGM | `AISV_MUSIC_DIR` | Custom music directory, default `<data dir>/music`; bare filenames on the preview page resolve here |
-
-These are global defaults. The **Final Preview** page also lets you override subtitle size, BGM on/off, BGM volume, and custom music per task: the size field shows the concrete px value computed for the current resolution (never 0), and mp3/wav/m4a/aac/ogg/flac files are accepted (absolute path, or a filename inside `AISV_MUSIC_DIR`). If the file is missing, the app falls back to generated music and logs a warning. Clicking **Regenerate** reruns only composition and reuses all audio and footage; changing the subtitle size additionally re-renders the segments with burned-in subtitles.
-
-The voice list lives in `server/src/voices.ts` and is selected per role in the UI — nothing to add to the config file.
-
 ## Workflow
 
-1. **Script input**: paste a URL or article text, pick a script style, and click **Start**
-2. **Script generation**: the AI fetches and drafts the script, then pauses for your review; the title and every line are editable
-3. **Voice synthesis**: choose a voice for each role, plus the TTS engine and speed (default 1.1×, configurable via `TTS_SPEED`), then start dubbing
-4. **Material review**: choose a footage source (Pixabay / Pexels) and output resolution, then click **Match materials**; preview each clip and use **Replace** to search for another candidate; confirm and click **Next: final preview** (this does **not** auto-render)
-5. **Final preview**: set subtitle size, BGM on/off, BGM volume, and custom music, then click **Render video**; afterwards you can tweak these and click **Regenerate**. On desktop, **Show in folder** opens the file location (in a browser it downloads the file)
+```mermaid
+flowchart LR
+    A([URL or text]) --> B[Fetch body]
+    B --> C[LLM draft]
+    C --> D[Structured script]
+    D --> E{{Script review}}
+    E --> F[Split and TTS]
+    F --> G[Footage search]
+    G --> H{{Footage review}}
+    H --> I[Subtitles transitions BGM]
+    I --> J([Final mp4])
+```
 
-The step bar at the top lets you revisit completed steps; snapshots come from backend SSE events.
+The UI mirrors this in five steps; the step bar at the top lets you revisit completed steps at any time:
+
+1. **Script input**: paste a URL or article text, pick a script style, click **Start**
+2. **Script generation**: the AI fetches and drafts, then pauses for review; the title and every line are editable
+3. **Voice synthesis**: choose a voice per role, plus the TTS engine and speed (default 1.1×, configurable via `TTS_SPEED`)
+4. **Material review**: choose a footage source and output resolution, click **Match materials**; preview each clip and use **Replace** for another candidate. Confirming moves on (it does **not** auto-render)
+5. **Final preview**: set subtitle size, BGM on/off and volume, click **Render video**; tweak and click **Regenerate** afterwards
+
+On desktop, **Show in folder** opens the file location (in a browser it downloads the file).
 
 ## Task Artifacts and Resuming
 
@@ -190,6 +181,38 @@ Each task keeps a full set of intermediate files under `<data dir>/workspaces/<t
 
 A rerun after an interruption reuses what is already on disk and only fills in the missing parts; clicking **Regenerate** on the preview page deletes `_output.mp4` and `clips/` and reruns composition, keeping all audio and footage.
 
+## Configuration
+
+Fill in the fields via **File → Settings…** (`Ctrl+,`); saving restarts the backend automatically. Config file location:
+
+| Mode | Path |
+| --- | --- |
+| Portable | `<next to exe>/UserData/config.json` |
+| Installed / dev | `%APPDATA%/aisv-desktop/config.json` |
+
+Field reference (environment variables take precedence over the file, which is handy for temporary overrides):
+
+| Group | Field | Description |
+| --- | --- | --- |
+| LLM | `LLM_API_KEY` / `LLM_API_URL` / `LLM_MODEL` | **Required**. Any OpenAI-compatible endpoint; `LLM_API_URL` may be just the domain — the API path is appended automatically |
+| TTS (default) | — | Edge online voices are free, need no key, and work out of the box |
+| TTS (DashScope) | `DASHSCOPE_API_KEY` / `DASHSCOPE_BASE_URL` / `DASHSCOPE_WS_URL` / `TTS_COSYVOICE_MODEL` | CosyVoice appears once a key is set; leave the WebSocket URL empty to derive it automatically |
+| TTS (Doubao) | `SEED_TTS_API_KEY` / `TTS_SEED_RESOURCE_ID` / `TTS_SEED_MODEL` | The Doubao engine appears once a key is set |
+| Footage | `PIXABAY_API_KEY` / `PEXELS_API_KEY` | **At least one is required**, otherwise footage search is unavailable |
+| Footage | `MATERIAL_MIN_DURATION` | Minimum candidate clip length in seconds, default 10 |
+| Video | `VIDEO_WIDTH` / `VIDEO_HEIGHT` / `FPS` / `TTS_SPEED` | Defaults: 1080×1920 / 24 fps / 1.1× speed |
+| Video | `TRANSITION_DURATION` | Transition length in seconds, default 0.5; set 0 to disable |
+| Subtitles | `SUBTITLE_FONT_SIZE` | Font size in px, default 0 = computed from video width (~72px at 1080, ~48px at 720); titles are 1.4× larger |
+| Video | `VIDEO_FADE_IN` / `VIDEO_FADE_OUT` | Fade in/out at the start/end, default 0.5; set 0 to disable |
+| BGM | `BGM_ENABLED` | Mix in background music, default 1; set 0 to keep narration only |
+| BGM | `BGM_VOLUME` | BGM volume, default 0.1 (1 = original level) |
+| BGM | `AUDIO_FADE_IN` / `AUDIO_FADE_OUT` | BGM fade in/out in seconds, defaults 0.8 / 1.2; set 0 to disable |
+| BGM | `AISV_MUSIC_DIR` | Custom music directory, default `<data dir>/music`; bare filenames on the preview page resolve here |
+
+These are global defaults. The **Final Preview** page also lets you override subtitle size, BGM on/off, BGM volume, and custom music per task: the size field shows the concrete px value computed for the current resolution (never 0), and mp3/wav/m4a/aac/ogg/flac files are accepted (absolute path, or a filename inside `AISV_MUSIC_DIR`). If the file is missing, the app falls back to generated music and logs a warning. Changing the subtitle size additionally re-renders the segments with burned-in subtitles.
+
+The voice list lives in `server/src/voices.ts` (5 Edge / 10 CosyVoice / 10 Doubao) and is selected per role in the UI — nothing to add to the config file.
+
 ## Project Structure
 
 ```
@@ -201,12 +224,12 @@ server/           Fastify + TypeScript backend
   src/pipeline/     Fetch & draft / split / TTS / footage / composition
   src/services/     LLM, TTS (edge / cosyvoice / seed), footage sites, ffmpeg, subtitles
   src/task/         Task state machine and pipeline orchestration (two human checkpoints)
-  assets/prompts/   Prompt templates (podcast / crosstalk / stand-up styles)
+  assets/prompts/   Prompt templates (podcast / crosstalk / stand-up)
   data/             Runtime artifacts: workspaces/, cache/, out/ (not committed)
 web/              React + Vite frontend (served by the backend in packaged builds)
 ```
 
-For desktop development and packaging details, see [desktop/README.md](desktop/README.md).
+For desktop development and packaging details, see [desktop/README_EN.md](desktop/README_EN.md).
 
 ## Common Commands
 
@@ -216,7 +239,7 @@ For desktop development and packaging details, see [desktop/README.md](desktop/R
 | `pnpm dev:server` | Backend only |
 | `pnpm dev:web` | Frontend only (Vite) |
 | `pnpm build:web` | Build frontend output into `web/dist` |
-| `pnpm typecheck` | Typecheck server + web |
+| `pnpm typecheck` | Config consistency check + server / web typecheck |
 | `pnpm dist:win` | Build the Windows portable zip |
 | `pnpm dist:mac` / `pnpm dist:linux` | Build dmg / AppImage |
 
@@ -226,7 +249,7 @@ For desktop development and packaging details, see [desktop/README.md](desktop/R
 pnpm dist:win     # output: desktop/release/AI Short Video-<version>-win-portable.zip
 ```
 
-The archive is about 200MB (ffmpeg/ffprobe included). `compression: maximum` makes the zip step slow, so switch to `normal` for day-to-day iteration.
+The archive is about 200 MB (ffmpeg/ffprobe included). `compression: maximum` makes the zip step slow, so switch to `normal` for day-to-day iteration.
 
 Build flow: frontend build → icon generation → copy ffmpeg/ffprobe → stage the backend and install production dependencies → compile the main process → electron-builder → artifact self-check.
 

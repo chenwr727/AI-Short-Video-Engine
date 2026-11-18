@@ -47,14 +47,50 @@ interface PixabayHit {
   videos?: Record<string, PixabayVideo>;
 }
 
+/** 合成是 scale + crop，按裁后高度评估素材 */
+function croppedHeight(width: number, height: number, targetRatio: number): number {
+  if (width <= 0 || height <= 0) return 0;
+  return width / height > targetRatio ? height : width / targetRatio;
+}
+
+/** 裁后高度下限：最多放大 1.5 倍 */
+function minCroppedHeight(targetHeight: number): number {
+  return Math.max(480, Math.round(targetHeight / 1.5));
+}
+
+/** 优先选裁后达标且最小的档位 */
+function pickRendition<T extends { width: number; height: number }>(files: T[], query: MaterialQuery): T | null {
+  const targetRatio = query.width / query.height;
+  const floor = minCroppedHeight(query.height);
+  let enough: T | null = null;
+  let enoughHeight = Number.POSITIVE_INFINITY;
+  let best: T | null = null;
+  let bestHeight = 0;
+
+  for (const file of files) {
+    const height = croppedHeight(file.width, file.height, targetRatio);
+    if (height < floor) continue;
+    if (height >= query.height) {
+      if (height < enoughHeight) {
+        enoughHeight = height;
+        enough = file;
+      }
+    } else if (height > bestHeight) {
+      bestHeight = height;
+      best = file;
+    }
+  }
+
+  return enough ?? best;
+}
+
 async function searchPixabay(term: string, query: MaterialQuery): Promise<MaterialInfo[]> {
+  // 不传 min_width/min_height，否则会误杀可裁切的横屏素材
   const params = new URLSearchParams({
     key: query.apiKey,
     q: term,
     lang: PIXABAY_LANG,
     video_type: PIXABAY_VIDEO_TYPE,
-    min_width: String(query.width),
-    min_height: String(query.height),
     safesearch: "true",
     page: String(query.page),
     per_page: "20",
@@ -66,18 +102,7 @@ async function searchPixabay(term: string, query: MaterialQuery): Promise<Materi
   for (const hit of data.hits ?? []) {
     if (!hit.videos || hit.duration < query.minDuration) continue;
 
-    // 选一档宽高都不小于目标、且高度最接近的画质
-    let best: PixabayVideo | null = null;
-    let bestDiff = Number.POSITIVE_INFINITY;
-    for (const video of Object.values(hit.videos)) {
-      if (video.width < query.width || video.height < query.height) continue;
-      const diff = video.height - query.height;
-      if (diff < bestDiff) {
-        bestDiff = diff;
-        best = video;
-      }
-      if (diff === 0) break;
-    }
+    const best: PixabayVideo | null = pickRendition(Object.values(hit.videos), query);
     if (!best) continue;
 
     items.push({
@@ -131,25 +156,13 @@ async function searchPexels(term: string, query: MaterialQuery): Promise<Materia
     Authorization: query.apiKey,
   })) as { videos?: PexelsVideo[] };
 
-  const targetRatio = query.width / query.height;
   const items: MaterialInfo[] = [];
 
   for (const video of data.videos ?? []) {
     if (video.duration < query.minDuration) continue;
 
-    const ratio = video.width / video.height;
-    if (Math.abs(ratio - targetRatio) / targetRatio > 0.05) continue;
-
-    let best: PexelsFile | null = null;
-    let bestDiff = Number.POSITIVE_INFINITY;
-    for (const file of video.video_files ?? []) {
-      if (file.width < query.width || file.height < query.height) continue;
-      const diff = file.width - query.width;
-      if (diff < bestDiff) {
-        bestDiff = diff;
-        best = file;
-      }
-    }
+    // 服务端已按 orientation 过滤，这里按裁后像素把关
+    const best = pickRendition(video.video_files ?? [], query);
     if (!best) continue;
 
     items.push({
@@ -173,7 +186,7 @@ export function searchMaterials(source: MaterialSource, term: string, query: Mat
   return searchPixabay(term, query);
 }
 
-/** 下载到 data/cache/videos（URL md5 命名），已存在则复用并重新校验 */
+/** 下载到 cache/videos，按 URL 哈希命名，已存在则复用 */
 export async function downloadMaterial(url: string, signal: AbortSignal, idleTimeoutMs = 30_000): Promise<string> {
   const dir = ensureDir(path.join(cacheDir(), "videos"));
   const key = url.split("?")[0] ?? url;
@@ -194,7 +207,7 @@ export async function downloadMaterial(url: string, signal: AbortSignal, idleTim
   const stopOnCancel = () => controller.abort();
   signal.addEventListener("abort", stopOnCancel, { once: true });
 
-  // 没有心跳就断开：素材站偶尔会挂起连接，只靠总超时会让任务卡死
+  // 素材站可能挂起连接，仅靠总超时会让任务卡死
   let idleTimer: NodeJS.Timeout | undefined;
   let idle = false;
   const resetIdle = () => {

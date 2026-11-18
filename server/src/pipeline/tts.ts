@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { loadConfig, num } from "../config.js";
@@ -64,28 +65,43 @@ async function synthesizeWithRetry(
   throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
-/**
- * 配音阶段：按 (段, 对话, 句) 逐条合成，文件名与 Python 版一致（i_j_k.wav）。
- * 已存在的音频直接复用，因此中断后重跑只补缺失的部分。
- */
+/** 台词指纹，用于判断配音清单是否过期 */
+export function transcriptFingerprint(transcript: Transcript): string {
+  const texts = transcript.paragraphs.flatMap((p) => p.dialogues.flatMap((d) => d.contents));
+  return crypto.createHash("sha1").update(texts.join("\u0001")).digest("hex").slice(0, 16);
+}
+
+/** 旧清单没有 fingerprint，视为不匹配 */
+export function audioMatchesTranscript(audio: AudioManifest, transcript: Transcript): boolean {
+  return audio.fingerprint === transcriptFingerprint(transcript);
+}
+
+/** 按 (段, 对话, 句) 合成 i_j_k 音频，已存在则复用 */
 export async function runTtsStage(ctx: TaskContext, transcript: Transcript): Promise<AudioManifest> {
   const manifestFile = path.join(ctx.workspace, MANIFEST);
   if (fs.existsSync(manifestFile)) {
     const cached = JSON.parse(fs.readFileSync(manifestFile, "utf-8")) as AudioManifest;
-    ctx.log("复用已生成的配音清单（_durations.json）");
-    ctx.markStage("tts", "skipped", "命中缓存");
-    return cached;
+    // 台词改过则清单与音频一并失效
+    if (audioMatchesTranscript(cached, transcript)) {
+      ctx.log("复用已生成的配音清单（_durations.json）");
+      ctx.markStage("tts", "skipped", "命中缓存");
+      return cached;
+    }
+    ctx.log("台词有改动，重新生成配音", "warn");
+    fs.rmSync(manifestFile, { force: true });
+    for (const name of fs.readdirSync(ctx.workspace)) {
+      if (/^\d+_\d+_\d+\.(wav|mp3)$/i.test(name)) fs.rmSync(path.join(ctx.workspace, name), { force: true });
+    }
   }
 
   ctx.markStage("tts", "running");
   const cfg = loadConfig();
-  // 语速以配音页选的为准，没选就用配置里的 TTS_SPEED
   const speed = ctx.options.ttsSpeed > 0 ? ctx.options.ttsSpeed : num(cfg.TTS_SPEED, 1.1);
   const engine = createTtsEngine({ ...cfg, TTS_SPEED: String(speed) }, ctx.options.ttsEngine);
   const voices = voiceList(ctx.options.ttsEngine);
   ctx.log(`配音引擎：${ctx.options.ttsEngine} / ${engine.model} · 语速 ${speed.toFixed(2)}×`);
 
-  // 同一角色固定使用同一音色；前端指定了角色音色就优先用，否则按顺序轮换
+  // 同一角色固定音色：指定的优先，否则按音色表轮换
   const speakerVoice = new Map<string, string>();
   const preset = ctx.options.voiceMap ?? {};
   let nextVoice = 0;
@@ -153,6 +169,7 @@ export async function runTtsStage(ctx: TaskContext, transcript: Transcript): Pro
     model: engine.model,
     paragraphs,
     totalDuration,
+    fingerprint: transcriptFingerprint(transcript),
   };
   fs.writeFileSync(manifestFile, JSON.stringify(manifest, null, 2), "utf-8");
   ctx.markStage("tts", "done", `${paragraphs.length} 段 / ${totalDuration.toFixed(1)}s`);

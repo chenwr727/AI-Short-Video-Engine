@@ -4,32 +4,26 @@ export type MaterialSource = "pixabay" | "pexels";
 
 export interface GenerateOptions {
   promptSource: PromptSource;
-  /** 剧本里的两个角色名（主讲 / 追问），默认取配置项 */
+  /** 主讲 / 追问 */
   speakers: { main: string; guest: string };
   ttsEngine: TtsEngine;
-  /** 默认音色；实际按角色分配时优先用 voiceMap */
+  /** 默认音色，voiceMap 优先 */
   voice: string;
-  /** 角色 → 音色，确认剧本时由前端指定 */
+  /** 角色 → 音色 */
   voiceMap?: Record<string, string>;
   materialSource: MaterialSource;
   width: number;
   height: number;
   fps: number;
   ttsSpeed: number;
-  /** 成片渲染参数：undefined 表示用配置里的默认值，可在「成片预览」页改后重新生成 */
-  /** 字幕字号（px），0 = 按画宽自动 */
+  /** px，0 = 按画宽自动 */
   subtitleFontSize?: number;
-  /** 是否混入 BGM */
   bgmEnabled?: boolean;
   bgmVolume?: number;
-  /**
-   * 任务级自定义 BGM：绝对路径，或音乐目录（AISV_MUSIC_DIR）下的文件名。
-   * 在「成片预览」页指定，留空表示沿用配置里的 BGM 开关 + 程序合成。
-   */
+  /** 绝对路径或 musicDir 下的文件名 */
   bgmFile?: string;
 }
 
-/** 「成片预览」页点「生成成片」时下发的渲染参数 */
 export interface RenderPatch {
   subtitleFontSize?: number;
   bgmEnabled?: boolean;
@@ -37,12 +31,12 @@ export interface RenderPatch {
   bgmFile?: string;
 }
 
-/** 内部剧本：已按标点分句，可直接进入配音与字幕 */
+/** 已分句的台词 */
 export interface Dialogue {
   speaker: string;
-  /** 展示/字幕文本 */
+  /** 展示与字幕文本 */
   contents: string[];
-  /** 送 TTS 的文本（可带情绪/语气标签），与 contents 一一对应 */
+  /** 送 TTS 的文本，可带情绪标签，与 contents 一一对应 */
   contentsTts: string[];
 }
 
@@ -56,7 +50,7 @@ export interface Transcript {
   paragraphs: Paragraph[];
 }
 
-/** LLM 产出的原始剧本（未分句），落盘格式与 Python 版一致 */
+/** LLM 原始输出，未分句 */
 export interface RawDialogue {
   speaker: string;
   content: string;
@@ -95,7 +89,6 @@ export type TaskStatus =
   | "failed"
   | "cancelled";
 
-/** 配音产物清单，供素材匹配与合成阶段消费 */
 export interface AudioFileInfo {
   file: string;
   duration: number;
@@ -120,9 +113,10 @@ export interface AudioManifest {
   model: string;
   paragraphs: AudioParagraph[];
   totalDuration: number;
+  /** 台词指纹，改动后旧清单不可复用 */
+  fingerprint?: string;
 }
 
-/** 匹配到的素材 */
 export interface MaterialInfo {
   id: number;
   url: string;
@@ -133,7 +127,7 @@ export interface MaterialInfo {
   views: number;
   isAiGenerated: boolean;
   imageUrl: string;
-  /** 下载后的本地路径 */
+  /** 本地缓存路径 */
   videoPath: string;
 }
 
@@ -151,7 +145,7 @@ export interface LogLine {
   time: string;
   level: "info" | "warn" | "error";
   text: string;
-  /** 日志属于哪个阶段，前端按步骤过滤时用；任务级日志不带 */
+  /** 任务级日志不带 */
   stage?: string;
 }
 
@@ -174,7 +168,6 @@ export interface TaskState {
 
 export type TaskEvent = { type: "snapshot"; state: TaskState | null };
 
-/** 传给流水线各阶段的上下文 */
 export interface TaskContext {
   input: string;
   options: GenerateOptions;

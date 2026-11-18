@@ -22,7 +22,7 @@ export function getMeta(): Promise<Meta> {
 export interface GeneratePayload {
   input: string;
   promptSource: string;
-  /** 剧本里的两个角色名（主讲 / 追问） */
+  /** 主讲 / 追问 */
   speakers: { main: string; guest: string };
   ttsEngine: string;
   voice: string;
@@ -48,14 +48,18 @@ export async function startGenerate(payload: GeneratePayload): Promise<TaskState
   return data.state;
 }
 
-/** 用同一份输入重新生成剧本；speakers 传空值则沿用任务原来的角色名 */
-export async function regenerateScript(speakers?: { main?: string; guest?: string }): Promise<TaskState> {
+/** 未传的字段沿用原值 */
+export async function regenerateScript(patch: {
+  input?: string;
+  promptSource?: string;
+  speakers?: { main?: string; guest?: string };
+}): Promise<TaskState> {
   const data = await request<{ state: TaskState }>(
     "/task/regenerate",
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ speakers }),
+      body: JSON.stringify(patch),
     },
     "重新生成剧本失败",
   );
@@ -87,7 +91,21 @@ export async function confirmScript(payload: ConfirmPayload): Promise<TaskState>
   return data.state;
 }
 
-/** 确认素材（只提交手动换过的段与分辨率），随后开始合成 */
+/** 台词不动，按新引擎/音色/语速重做配音 */
+export async function regenerateTts(patch: ConfirmPayload["options"] = {}): Promise<TaskState> {
+  const data = await request<{ state: TaskState }>(
+    "/task/tts/regenerate",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ options: patch }),
+    },
+    "重新生成配音失败",
+  );
+  return data.state;
+}
+
+/** 提交手动换过的段与分辨率 */
 export async function confirmMaterial(
   items: (MaterialInfo & { paragraph: number })[] = [],
   resolution?: string,
@@ -118,26 +136,28 @@ export async function searchMaterial(paragraph: number, terms?: string[]): Promi
   return data.candidates;
 }
 
-/** 某段素材的本地预览地址；带上素材 url 做版本，换素材后播放器才会重新加载 */
+/** 带版本号，换素材后播放器才会重新加载 */
 export function materialPreviewUrl(paragraph: number, version?: string): string {
   return `${BASE}/material/${paragraph}${version ? `?v=${encodeURIComponent(version)}` : ""}`;
 }
 
-/** 素材确认页：按台词检索并匹配素材（可先指定素材来源） */
-export async function matchMaterial(materialSource?: string): Promise<TaskState> {
+/** 分辨率一起传，检索才按新画幅筛选 */
+export async function matchMaterial(
+  patch: { materialSource?: string; resolution?: string; force?: boolean } = {},
+): Promise<TaskState> {
   const data = await request<{ state: TaskState }>(
     "/task/material/match",
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ materialSource }),
+      body: JSON.stringify(patch),
     },
     "匹配素材失败",
   );
   return data.state;
 }
 
-/** 成片预览页的渲染参数（字号 / BGM 开关 / 自定义音乐） */
+/** 字号 / BGM 开关 / 自定义音乐 */
 export interface RenderPatch {
   subtitleFontSize: number;
   bgmEnabled: boolean;
@@ -145,7 +165,7 @@ export interface RenderPatch {
   bgmFile: string;
 }
 
-/** 点「生成成片 / 重新生成」：按当前参数跑合成，配音与素材命中缓存 */
+/** 配音与素材命中缓存时只重跑合成 */
 export async function renderVideo(patch: RenderPatch): Promise<TaskState> {
   const data = await request<{ state: TaskState }>(
     "/task/render",
@@ -159,7 +179,7 @@ export async function renderVideo(patch: RenderPatch): Promise<TaskState> {
   return data.state;
 }
 
-/** 重试失败的任务：沿用原工作目录，已完成的阶段会命中缓存 */
+/** 沿用原工作目录，已完成阶段命中缓存 */
 export async function retryTask(): Promise<TaskState> {
   const data = await request<{ state: TaskState }>("/task/retry", { method: "POST" }, "重试失败");
   return data.state;
@@ -170,19 +190,21 @@ export async function cancelTask(): Promise<TaskState> {
   return data.state;
 }
 
-/** 订阅任务快照；EventSource 断线会自动重连 */
-export function subscribeTask(onState: (state: TaskState | null) => void): () => void {
+/** onReconnect 在断开后又连上时触发 */
+export function subscribeTask(onState: (state: TaskState | null) => void, onReconnect?: () => void): () => void {
   const es = new EventSource(`${BASE}/stream`);
+  let opened = false;
+  es.onopen = () => {
+    if (opened) onReconnect?.();
+    opened = true;
+  };
   es.addEventListener("snapshot", (event) => {
     try {
       const data = JSON.parse((event as MessageEvent).data) as { state: TaskState | null };
       onState(data.state);
     } catch {
-      // 忽略坏帧，等下一次快照
+      // 忽略坏帧
     }
   });
-  es.onerror = () => {
-    // 交给浏览器自动重连
-  };
   return () => es.close();
 }

@@ -2,7 +2,7 @@ export interface Option {
   id: string;
   label: string;
   description?: string;
-  /** 该脚本风格有几个角色（脱口秀为单人） */
+  /** 该风格的角色数，脱口秀为单人 */
   speakers?: number;
 }
 
@@ -22,10 +22,8 @@ export interface SpeakerNames {
 
 export interface Meta {
   promptSources: Option[];
-  /** 角色名的配置默认值 */
   speakers: SpeakerNames;
   ttsEngines: TtsEngineOption[];
-  /** 配音语速默认值（配置项 TTS_SPEED） */
   ttsSpeed: number;
   /** 成片预览页的渲染默认值 */
   render: {
@@ -158,7 +156,7 @@ export interface LogLine {
   time: string;
   level: "info" | "warn" | "error";
   text: string;
-  /** 属于哪个阶段；任务级日志没有这个字段 */
+  /** 所属阶段，任务级日志没有 */
   stage?: string;
 }
 
@@ -175,11 +173,11 @@ export interface TaskState {
     height: number;
     fps: number;
     ttsSpeed: number;
-    /** 成片预览页的渲染参数；未设置表示用配置默认值 */
+    /** 未设置则用配置默认值 */
     subtitleFontSize?: number;
     bgmEnabled?: boolean;
     bgmVolume?: number;
-    /** 成片页选的自定义 BGM；空表示用默认 BGM */
+    /** 空表示用默认 */
     bgmFile?: string;
   };
   workspace: string;

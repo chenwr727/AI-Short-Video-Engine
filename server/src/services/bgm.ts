@@ -2,18 +2,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { musicDir } from "../paths.js";
 
-/**
- * 程序化生成 BGM：一段循环琶音 + 低音根音，44.1kHz 立体声 16bit WAV。
- * 不再依赖 assets/bgm.mp3，长度按成片时长现算，避免循环拼接的接缝。
- * 算法沿用 TextToTalk 的 bgmService。
- */
 const SR = 44100;
 const MASTER = 0.25;
-/** A 小调走向的琶音音高（A4-C5-E5-A5 等） */
+/** A 小调琶音音高 */
 const ARP = [261.63, 329.63, 392.0, 523.25, 440.0, 392.0, 329.63, 261.63];
 const NOTESEC = 0.33;
 const CHUNK_SAMPLES = Math.floor(SR * 0.5);
 
+/** 合成琶音 + 低音，输出 44.1kHz 立体声 WAV */
 async function synthBgmWav(durationSec: number): Promise<Buffer> {
   const n = Math.floor(SR * durationSec);
   const samples = new Float64Array(n);
@@ -78,7 +74,7 @@ async function synthBgmWav(durationSec: number): Promise<Buffer> {
   return buf;
 }
 
-/** 生成 BGM 文件，失败返回 null，由调用方决定是否跳过混音 */
+/** 失败返回 null */
 export async function generateBgm(file: string, durationSec: number): Promise<string | null> {
   try {
     fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -90,13 +86,10 @@ export async function generateBgm(file: string, durationSec: number): Promise<st
   }
 }
 
-/** 自定义音乐支持的容器/编码（最终交给 ffmpeg 解码，这里只做粗筛） */
+/** 只做粗筛，能否解码交给 ffmpeg */
 const MUSIC_EXT = new Set([".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac", ".opus", ".wma"]);
 
-/**
- * 解析自定义音乐：绝对路径直接用；否则先找 musicDir()，再按当前工作目录找。
- * 只做存在性与扩展名校验，能不能解码交给 ffmpeg。
- */
+/** 绝对路径直接用，否则先找 musicDir 再找 cwd */
 export function resolveMusicFile(ref: string): { file: string | null; reason?: string } {
   const text = (ref ?? "").trim().replace(/^["']|["']$/g, "");
   if (!text) return { file: null };
@@ -122,19 +115,18 @@ export function resolveMusicFile(ref: string): { file: string | null; reason?: s
 
 export interface BgmPlan {
   file: string;
-  /** true = 用户指定的音乐，false = 程序合成 */
+  /** true = 用户指定，false = 程序合成 */
   custom: boolean;
 }
 
 export interface PrepareBgmOptions {
-  /** 程序合成时的落盘路径 */
   output: string;
   durationSec: number;
-  /** 成片页选的自定义音乐（绝对路径或音乐目录下的文件名），留空则合成 */
+  /** 留空则程序合成 */
   ref?: string;
 }
 
-/** 选定本次成片要混的 BGM：优先自定义音乐，找不到就退回程序合成 */
+/** 优先用自定义音乐，找不到则退回程序合成 */
 export async function prepareBgm(options: PrepareBgmOptions): Promise<{ plan: BgmPlan | null; reason?: string }> {
   const resolved = resolveMusicFile(options.ref ?? "");
   if (resolved.file) return { plan: { file: resolved.file, custom: true } };

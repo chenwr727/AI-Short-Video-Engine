@@ -1,6 +1,7 @@
-// 把后端暂存到 build/resources/payload/server 并安装生产依赖。
-// 多套一层 payload/ 是为了绕开 electron-builder 对 extraResources 顶层 node_modules 的排除规则。
+// 暂存后端到 build/resources/payload/server 并装生产依赖；
+// 多套一层 payload/ 是为了绕开 electron-builder 对顶层 node_modules 的排除
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -22,7 +23,7 @@ try {
   fs.rmSync(dest, { recursive: true, force: true });
 } catch (e) {
   console.warn(`[stage] 清空旧暂存目录失败，改为覆盖写入：${e?.message ?? e}`);
-  // 兜底：至少要清掉源码与资源，否则已删除的字体/BGM 会继续进包
+  // 兜底清掉源码与资源，避免旧文件继续进包
   for (const dir of ["assets", "src"]) {
     try {
       fs.rmSync(path.join(dest, dir), { recursive: true, force: true });
@@ -53,7 +54,7 @@ fs.cpSync(src, dest, {
 });
 console.log(`[stage] 已复制 server（跳过 ${skipped} 个运行时产物路径）`);
 
-// prompts 随 server/assets 一起复制，这里只做齐全性检查，缺了尽早暴露
+// assets 随 server 一起复制，这里只做齐全性检查
 const requiredAssets = ["assets/prompts"];
 for (const rel of requiredAssets) {
   if (!fs.existsSync(path.join(dest, rel))) {
@@ -61,18 +62,53 @@ for (const rel of requiredAssets) {
   }
 }
 
-const pnpmBin = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-const args = ["install", "--prod", "--node-linker=hoisted", "--ignore-workspace", "--ignore-scripts"];
-console.log(`[stage] 安装生产依赖（${args.join(" ")}）`);
+/** 依赖指纹，一致则跳过安装 */
+const stampFile = path.join(dest, "node_modules", ".aisv-stage-stamp");
 
-const r =
-  process.platform === "win32"
-    ? spawnSync("cmd.exe", ["/d", "/s", "/c", [pnpmBin, ...args].join(" ")], { cwd: dest, encoding: "utf-8" })
-    : spawnSync(pnpmBin, args, { cwd: dest, encoding: "utf-8" });
+function fingerprint() {
+  const hash = createHash("sha256");
+  for (const file of [path.join(dest, "package.json"), path.join(dest, "pnpm-lock.yaml")]) {
+    try {
+      hash.update(path.basename(file)).update(fs.readFileSync(file));
+    } catch {
+      hash.update(path.basename(file)).update("missing");
+    }
+  }
+  return hash.digest("hex");
+}
 
-if (r.status !== 0) {
-  console.error(`[stage] 安装依赖失败：\n${r.stdout ?? ""}\n${r.stderr ?? ""}`);
-  process.exit(1);
+const want = fingerprint();
+let stamp = "";
+try {
+  stamp = fs.readFileSync(stampFile, "utf-8").trim();
+} catch {
+  // 无标记则正常安装
+}
+
+const depsReady = stamp === want && fs.existsSync(path.join(dest, "node_modules", "fastify", "package.json"));
+
+if (depsReady) {
+  console.log("[stage] 生产依赖未变化，跳过安装");
+} else {
+  const pnpmBin = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+  const args = ["install", "--prod", "--node-linker=hoisted", "--ignore-workspace", "--ignore-scripts"];
+  console.log(`[stage] 安装生产依赖（${args.join(" ")}）`);
+
+  const r =
+    process.platform === "win32"
+      ? spawnSync("cmd.exe", ["/d", "/s", "/c", [pnpmBin, ...args].join(" ")], { cwd: dest, encoding: "utf-8" })
+      : spawnSync(pnpmBin, args, { cwd: dest, encoding: "utf-8" });
+
+  if (r.status !== 0) {
+    console.error(`[stage] 安装依赖失败：\n${r.stdout ?? ""}\n${r.stderr ?? ""}`);
+    process.exit(1);
+  }
+
+  try {
+    fs.writeFileSync(stampFile, want + "\n", "utf-8");
+  } catch (e) {
+    console.warn(`[stage] 写入依赖缓存标记失败：${e?.message ?? e}`);
+  }
 }
 
 const must = [

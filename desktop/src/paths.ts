@@ -12,17 +12,13 @@ export function webDistDir(): string {
   return app.isPackaged ? path.join(process.resourcesPath, "web") : path.join(repoRoot, "web", "dist");
 }
 
-/**
- * 二进制目录：打包态是 resources/bin；
- * 开发态优先用 build/bin（`npm run ffmpeg` 会把 ffmpeg 与 ffprobe 一起放进去），
- * 只有它不存在时才退回 ffmpeg-static——那个包里没有 ffprobe。
- */
+/** 开发态优先 build/bin，退回 ffmpeg-static */
 export function binDir(): string {
   if (app.isPackaged) return path.join(process.resourcesPath, "bin");
 
   const staged = path.join(repoRoot, "desktop", "build", "bin");
-  const hasFfprobe = ["ffprobe.exe", "ffprobe"].some((name) => fs.existsSync(path.join(staged, name)));
-  if (hasFfprobe) return staged;
+  const hasFfmpeg = ["ffmpeg.exe", "ffmpeg"].some((name) => fs.existsSync(path.join(staged, name)));
+  if (hasFfmpeg) return staged;
 
   return path.join(repoRoot, "desktop", "node_modules", "ffmpeg-static");
 }
@@ -31,7 +27,7 @@ export function userDataDir(): string {
   return app.getPath("userData");
 }
 
-/** 运行期数据（工作目录、成片、素材缓存）：打包态落在应用数据目录，开发态留在 server/data */
+/** 打包态在应用数据目录，开发态在 server/data */
 export function runtimeDataDir(): string {
   return app.isPackaged ? path.join(userDataDir(), "data") : path.join(serverDir(), "data");
 }
@@ -53,7 +49,7 @@ function dirWritable(dir: string): boolean {
   }
 }
 
-/** 依据 exe 同级 portable.txt 切换免安装模式；目录不可写时回退到默认数据目录 */
+/** exe 同级有 portable.txt 时启用免安装模式，不可写则回退 */
 export function setupPortableMode(): void {
   if (!app.isPackaged) return;
   try {

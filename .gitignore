@@ -17,6 +17,11 @@ config.json
 # 免安装版解压后生成的便携数据目录（含 config.json 与成片）
 UserData/
 
+# 调试留痕：临时脚本、截图、浏览器自动化状态
+.tmp-*/
+.tmp-*
+.playwright-cli/
+
 # 遗留目录（Python 版虚拟环境，可手动删除）
 .venv/
 
