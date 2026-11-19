@@ -168,8 +168,7 @@ export function MaterialStep(props: MaterialStepProps) {
                     <video className="material-video" src={preview} controls preload="metadata" playsInline />
                     <div className="material-info">
                       <div className="material-title">
-                        第 {item.paragraph} 段
-                        {candidate && <span className="pill info">待替换</span>}
+                        第 {item.paragraph} 段{candidate && <span className="pill info">待替换</span>}
                       </div>
                       <div className="material-tags">{info.tags || `#${info.id}`}</div>
                       <div className="material-meta">
@@ -228,9 +227,7 @@ export function MaterialStep(props: MaterialStepProps) {
             })}
           </div>
         ) : (
-          <p className="hint">
-            {matching ? "正在匹配素材，进度见上面的阶段列表。" : "素材还没匹配出来。"}
-          </p>
+          <p className="hint">{matching ? "正在匹配素材，进度见上面的阶段列表。" : "素材还没匹配出来。"}</p>
         )}
 
         <LogPanel logs={task.logs} tall stages={MATERIAL_STAGE_IDS} collapsible />
@@ -289,12 +286,7 @@ export function MaterialStep(props: MaterialStepProps) {
           </button>
         )}
         {failed && !manifest && task.status === "failed" && (
-          <button
-            className={canMatchAgain ? "secondary" : "primary"}
-            type="button"
-            disabled={busy}
-            onClick={onRetry}
-          >
+          <button className={canMatchAgain ? "secondary" : "primary"} type="button" disabled={busy} onClick={onRetry}>
             重试失败步骤
           </button>
         )}

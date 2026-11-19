@@ -119,7 +119,9 @@ class TaskManager {
   }
 
   /** 换新工作目录重跑剧本，未传字段沿用原值 */
-  regenerate(patch: { input?: string; promptSource?: PromptSource; speakers?: { main?: string; guest?: string } } = {}): TaskState {
+  regenerate(
+    patch: { input?: string; promptSource?: PromptSource; speakers?: { main?: string; guest?: string } } = {},
+  ): TaskState {
     const state = this.requireState();
     const options: GenerateOptions = {
       ...state.options,
@@ -194,11 +196,7 @@ class TaskManager {
     const controller = new AbortController();
     this.controller = controller;
     this.setStatus("running");
-    this.log(
-      `重新生成配音：${state.options.ttsEngine} · ${state.options.ttsSpeed}× 语速`,
-      "info",
-      "tts",
-    );
+    this.log(`重新生成配音：${state.options.ttsEngine} · ${state.options.ttsSpeed}× 语速`, "info", "tts");
     this.emit();
     void this.executeTts(controller, state.transcript);
     return state;
@@ -395,7 +393,8 @@ class TaskManager {
   }
 
   /** 沿用工作目录，从缺失的位置接着跑 */
-  retry(): TaskState {    const state = this.requireState();
+  retry(): TaskState {
+    const state = this.requireState();
     if (state.status !== "failed" && state.status !== "cancelled") {
       throw new TaskError("只有失败或已停止的任务可以继续", 400);
     }
@@ -429,11 +428,7 @@ class TaskManager {
 
   cancel(): TaskState {
     const state = this.requireState();
-    if (
-      state.status !== "running" &&
-      state.status !== "awaiting_script" &&
-      state.status !== "awaiting_material"
-    ) {
+    if (state.status !== "running" && state.status !== "awaiting_script" && state.status !== "awaiting_material") {
       throw new TaskError("任务已结束，无需取消", 400);
     }
 
@@ -617,11 +612,7 @@ class TaskManager {
   }
 
   /** 匹配素材 */
-  private async executeMatch(
-    controller: AbortController,
-    transcript: Transcript,
-    audio: AudioManifest,
-  ): Promise<void> {
+  private async executeMatch(controller: AbortController, transcript: Transcript, audio: AudioManifest): Promise<void> {
     const ctx = this.makeCtx(controller);
     if (!ctx) return;
 

@@ -11,14 +11,7 @@ export interface AisvBridge {
 }
 
 export type MenuAction =
-  | "settings"
-  | "output-dir"
-  | "data-dir"
-  | "config-file"
-  | "quit"
-  | "about"
-  | "docs"
-  | "feedback";
+  "settings" | "output-dir" | "data-dir" | "config-file" | "quit" | "about" | "docs" | "feedback";
 
 export function bridge(): AisvBridge | null {
   return (window as unknown as { aisv?: AisvBridge }).aisv ?? null;

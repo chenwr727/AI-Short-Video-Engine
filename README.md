@@ -240,6 +240,8 @@ web/              React + Vite 前端（打包态由后端托管）
 | `pnpm dev:web` | 只启动前端（Vite） |
 | `pnpm build:web` | 构建前端产物到 `web/dist` |
 | `pnpm typecheck` | 配置一致性校验 + server / web 类型检查 |
+| `pnpm test` | 运行后端纯函数单元测试 |
+| `pnpm lint` / `pnpm format` | ESLint 检查 / Prettier 格式化 |
 | `pnpm dist:win` | 打包 Windows 免安装 zip |
 | `pnpm dist:mac` / `pnpm dist:linux` | 打包 dmg / AppImage |
 
@@ -268,6 +270,7 @@ pnpm dist:win     # 产物：desktop/release/AI Short Video-<version>-win-portab
 | `AISV_OPEN_SETTINGS=1` | 启动即打开设置页 |
 | `AISV_OPEN_DEVTOOLS=1` | 开发态自动打开 DevTools |
 | `AISV_LOG_LEVEL` | 后端日志级别，默认 `info` |
+| `AISV_CACHE_MAX_MB` | 素材缓存上限（MB），默认 2048，超出按最久未用淘汰 |
 
 ## 常见问题
 

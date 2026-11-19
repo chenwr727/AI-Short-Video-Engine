@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "AI Short Video Engine 桌面版（Electron + Fastify + React）",
+  "packageManager": "pnpm@12.8.1",
   "scripts": {
     "dev:server": "pnpm -C server dev",
     "dev:web": "pnpm -C web dev",
@@ -12,6 +13,18 @@
     "dist:mac": "npm --prefix desktop run dist:mac",
     "dist:linux": "npm --prefix desktop run dist:linux",
     "check:config": "node scripts/check-config-sync.mjs",
-    "typecheck": "node scripts/check-config-sync.mjs && pnpm -C server run typecheck && pnpm -C web run typecheck"
+    "typecheck": "node scripts/check-config-sync.mjs && pnpm -C server run typecheck && pnpm -C web run typecheck",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "pnpm -C server test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.15.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.14.0",
+    "prettier": "^3.10.1",
+    "typescript-eslint": "^8.73.0"
   }
 }

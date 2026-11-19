@@ -157,7 +157,9 @@ export async function runTtsStage(ctx: TaskContext, transcript: Transcript): Pro
 
       const dialogueDuration = files.reduce((sum, f) => sum + f.duration, 0);
       dialogues.push({ speaker: dialogue.speaker, voice, duration: dialogueDuration, files });
-      ctx.log(`第 ${pi + 1} 段 · ${dialogue.speaker}（${voice}）：${files.length} 句 / ${dialogueDuration.toFixed(1)}s`);
+      ctx.log(
+        `第 ${pi + 1} 段 · ${dialogue.speaker}（${voice}）：${files.length} 句 / ${dialogueDuration.toFixed(1)}s`,
+      );
     }
 
     paragraphs.push({ index: pi + 1, duration: paragraphDuration, dialogues });

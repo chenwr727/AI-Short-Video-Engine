@@ -34,12 +34,7 @@ export function formatAssTime(seconds: number): string {
 
 /** 替换 ASS 语法字符 */
 export function escapeAssText(text: string): string {
-  return text
-    .replace(/\\/g, "／")
-    .replace(/\{/g, "（")
-    .replace(/\}/g, "）")
-    .replace(/\r?\n/g, " ")
-    .trim();
+  return text.replace(/\\/g, "／").replace(/\{/g, "（").replace(/\}/g, "）").replace(/\r?\n/g, " ").trim();
 }
 
 const CJK = /[\u1100-\u11ff\u2e80-\u9fff\ua960-\ua97f\uac00-\ud7ff\uf900-\ufaff\ufe30-\ufe4f\uff00-\uffef]/;
@@ -178,7 +173,7 @@ function optLines(chars: string[], width: number[], maxChars: number, levels: Ui
   for (let k = lineCount; k >= 1; k--) {
     const end = (next[k] as number[])[at] as number;
     // 断点必须前进，防止异常输入死循环
-    const safeEnd = end > at ? Math.min(end, n) : (k === 1 ? n : at + 1);
+    const safeEnd = end > at ? Math.min(end, n) : k === 1 ? n : at + 1;
     cuts.push(safeEnd);
     at = safeEnd;
   }

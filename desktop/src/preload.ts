@@ -22,7 +22,6 @@ contextBridge.exposeInMainWorld("aisv", {
   /** 取消返回空串 */
   pickMusic: () => ipcRenderer.invoke("music:pick") as Promise<string>,
   /** 在资源管理器中定位 */
-  revealFile: (file: string) =>
-    ipcRenderer.invoke("app:reveal-file", file) as Promise<{ ok: boolean; error?: string }>,
+  revealFile: (file: string) => ipcRenderer.invoke("app:reveal-file", file) as Promise<{ ok: boolean; error?: string }>,
   close: () => ipcRenderer.invoke("settings:close") as Promise<void>,
 });

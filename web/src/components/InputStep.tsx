@@ -16,8 +16,7 @@ interface InputStepProps {
 }
 
 export function InputStep(props: InputStepProps) {
-  const { form, onChange, canNext, running, awaiting, error, canRegenerate, onRegenerate, busy, onNext } =
-    props;
+  const { form, onChange, canNext, running, awaiting, error, canRegenerate, onRegenerate, busy, onNext } = props;
   const empty = !form.content.trim();
 
   return (

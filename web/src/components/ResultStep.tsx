@@ -155,12 +155,7 @@ export function ResultStep(props: ResultStepProps) {
                 disabled={rendering || picking}
               />
               {onPickMusic && (
-                <button
-                  className="secondary"
-                  type="button"
-                  onClick={() => void pick()}
-                  disabled={rendering || picking}
-                >
+                <button className="secondary" type="button" onClick={() => void pick()} disabled={rendering || picking}>
                   {picking ? "选择中…" : "选择…"}
                 </button>
               )}

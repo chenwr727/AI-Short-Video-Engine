@@ -138,6 +138,8 @@ export interface MaterialItem extends MaterialInfo {
 
 export interface MaterialManifest {
   source: MaterialSource;
+  /** 来源 + 画幅 + 时长门槛，变了清单不可复用 */
+  signature?: string;
   items: MaterialItem[];
 }
 

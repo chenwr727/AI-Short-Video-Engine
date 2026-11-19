@@ -4,7 +4,15 @@ import { loadConfig, num } from "../config.js";
 import { chat, extractJsonArray, extractJsonObject } from "../services/llm.js";
 import { downloadMaterial, searchMaterials } from "../services/material.js";
 import { loadSearchTermsPrompt, loadVideoSelectPrompt } from "../services/prompts.js";
-import type { AudioManifest, MaterialInfo, MaterialItem, MaterialManifest, TaskContext, Transcript } from "../types.js";
+import type {
+  AudioManifest,
+  GenerateOptions,
+  MaterialInfo,
+  MaterialItem,
+  MaterialManifest,
+  TaskContext,
+  Transcript,
+} from "../types.js";
 
 const TERMS_FILE = "_terms.json";
 const VIDEOS_FILE = "_videos.json";
@@ -229,17 +237,18 @@ function isAspectClose(item: MaterialInfo, width: number, height: number): boole
   return Math.abs(ratio - target) / target <= 0.35;
 }
 
+/** 来源、画幅、时长门槛任一变化都要重新匹配 */
+function materialSignature(options: GenerateOptions, minDuration: number): string {
+  return JSON.stringify([options.materialSource, options.width, options.height, minDuration]);
+}
+
 /** 素材清单落盘 */
 export function saveMaterialManifest(workspace: string, manifest: MaterialManifest): void {
   fs.writeFileSync(path.join(workspace, VIDEOS_FILE), JSON.stringify(manifest, null, 2), "utf-8");
 }
 
 /** 按检索词抓候选素材 */
-export async function searchCandidates(
-  ctx: TaskContext,
-  terms: string[],
-  used: Set<string>,
-): Promise<MaterialInfo[]> {
+export async function searchCandidates(ctx: TaskContext, terms: string[], used: Set<string>): Promise<MaterialInfo[]> {
   const cfg = loadConfig();
   const source = ctx.options.materialSource;
   const apiKey = source === "pexels" ? cfg.PEXELS_API_KEY : cfg.PIXABAY_API_KEY;
@@ -298,14 +307,16 @@ export async function runMaterialStage(
   audio: AudioManifest,
 ): Promise<MaterialManifest> {
   const source = ctx.options.materialSource;
+  const cfg = loadConfig();
+  const signature = materialSignature(ctx.options, num(cfg.MATERIAL_MIN_DURATION, 10));
   const manifestFile = path.join(ctx.workspace, VIDEOS_FILE);
   if (fs.existsSync(manifestFile)) {
     const cached = JSON.parse(fs.readFileSync(manifestFile, "utf-8")) as MaterialManifest;
-    if (cached.source === source && Array.isArray(cached.items) && cached.items.length > 0) {
+    if (cached.signature === signature && Array.isArray(cached.items) && cached.items.length > 0) {
       ctx.log("复用已匹配的素材（_videos.json）");
       return cached;
     }
-    ctx.log(`素材来源已改为 ${source}，重新匹配素材`, "warn");
+    ctx.log(`素材来源、画幅或时长门槛变了，重新匹配素材（${source}）`, "warn");
     fs.rmSync(manifestFile, { force: true });
   }
 
@@ -376,7 +387,7 @@ export async function runMaterialStage(
     items.push({ ...item, videoPath, paragraph: pi + 1, searchTerms: paragraphTerms });
   }
 
-  const manifest: MaterialManifest = { source, items };
+  const manifest: MaterialManifest = { source, signature, items };
   saveMaterialManifest(ctx.workspace, manifest);
   return manifest;
 }

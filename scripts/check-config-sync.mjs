@@ -127,6 +127,4 @@ if (problems.length) {
   process.exit(1);
 }
 
-console.log(
-  `配置一致：server ${server.size} 项 / desktop ${desktop.size} 项 / 表单 ${new Set(form).size} 个输入框`,
-);
+console.log(`配置一致：server ${server.size} 项 / desktop ${desktop.size} 项 / 表单 ${new Set(form).size} 个输入框`);

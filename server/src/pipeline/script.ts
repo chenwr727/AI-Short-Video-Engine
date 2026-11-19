@@ -65,10 +65,7 @@ export function toTranscript(raw: RawTranscript): Transcript {
 }
 
 export function sentenceCount(transcript: Transcript): number {
-  return transcript.paragraphs.reduce(
-    (sum, p) => sum + p.dialogues.reduce((s, d) => s + d.contents.length, 0),
-    0,
-  );
+  return transcript.paragraphs.reduce((sum, p) => sum + p.dialogues.reduce((s, d) => s + d.contents.length, 0), 0);
 }
 
 function readJson<T>(file: string): T {
