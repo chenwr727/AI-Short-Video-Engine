@@ -43,6 +43,19 @@ export function loadPrompts(source: string, speakers?: SpeakerNames): PromptPair
   };
 }
 
+export interface CriticPrompts {
+  critic: string;
+  repair: string;
+}
+
+/** 审稿与按意见修复，风格无关 */
+export function loadCriticPrompts(): CriticPrompts {
+  return {
+    critic: readPrompt("critic.json", "prompt_critic"),
+    repair: readPrompt("critic.json", "prompt_repair"),
+  };
+}
+
 export function loadSearchTermsPrompt(): string {
   return readPrompt("material.json", "prompt_search_terms");
 }
