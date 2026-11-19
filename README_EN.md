@@ -271,6 +271,8 @@ Usually unnecessary; useful for troubleshooting or custom deployments:
 | `AISV_OPEN_DEVTOOLS=1` | Auto-open DevTools in dev mode |
 | `AISV_LOG_LEVEL` | Backend log level, default `info` |
 | `AISV_CACHE_MAX_MB` | Footage cache limit in MB, default 2048; least recently used files are evicted |
+| `AISV_SCRIPT_REVIEW=0` | Disable script review and revision (on by default, one extra model call per task) |
+| `AISV_SCRIPT_REVIEW_THRESHOLD` | Review pass score, 0~1, default 0.82 |
 
 ## FAQ
 
@@ -298,6 +300,7 @@ Make sure `web/dist` has been built (`pnpm build:web`). Backend logs appear in t
 - Footage depends on third-party sites (Pixabay / Pexels): an internet connection and a valid key are required
 - Subtitles are rendered with system fonts: Microsoft YaHei on Windows, libass fallback on macOS / Linux, so glyphs may differ
 - CosyVoice and Doubao need keys from their respective platforms; the engines are hidden in the UI until configured
+- Login walls and aggressive anti-bot pages are not scraped; the app asks you to paste the article body instead
 
 ## Acknowledgements
 

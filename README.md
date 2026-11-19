@@ -271,6 +271,8 @@ pnpm dist:win     # 产物：desktop/release/AI Short Video-<version>-win-portab
 | `AISV_OPEN_DEVTOOLS=1` | 开发态自动打开 DevTools |
 | `AISV_LOG_LEVEL` | 后端日志级别，默认 `info` |
 | `AISV_CACHE_MAX_MB` | 素材缓存上限（MB），默认 2048，超出按最久未用淘汰 |
+| `AISV_SCRIPT_REVIEW=0` | 关闭剧本审稿与返修（默认开启，每条多一次模型调用） |
+| `AISV_SCRIPT_REVIEW_THRESHOLD` | 审稿通过分，0~1，默认 0.82 |
 
 ## 常见问题
 
@@ -298,6 +300,7 @@ Electron 会复用已在运行的后端；单独跑 `pnpm dev:server` 时可用 
 - 素材依赖第三方站（Pixabay / Pexels），必须联网且有可用 Key
 - 字幕用系统字体渲染：Windows 走微软雅黑，macOS / Linux 由 libass 回退，字形可能有差异
 - CosyVoice 与豆包需要各自平台的 Key，未配置时界面上不会出现对应引擎
+- 需要登录或强反爬的站点抓不到正文时，会直接提示改用「粘贴正文」
 
 ## 致谢
 
