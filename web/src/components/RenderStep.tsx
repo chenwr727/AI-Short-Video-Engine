@@ -107,7 +107,11 @@ function AudioBoard({ manifest }: { manifest: AudioManifest }) {
                 onClick={(event) => {
                   event.preventDefault();
                   if (playingKey === key) stop();
-                  else play(lines.map((line) => line.file), key);
+                  else
+                    play(
+                      lines.map((line) => line.file),
+                      key,
+                    );
                 }}
               >
                 {playingKey === key ? "停止" : "播放整段"}

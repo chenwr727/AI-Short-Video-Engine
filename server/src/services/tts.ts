@@ -24,7 +24,9 @@ export function createTtsEngine(cfg: AppConfig, engine: TtsEngine): TtsEngineRun
   }
 
   if (!cfg.DASHSCOPE_API_KEY) {
-    throw new Error("未配置 DASHSCOPE_API_KEY，无法使用 CosyVoice 配音。请编辑 config.json 后重启应用，或改用 Edge 在线语音");
+    throw new Error(
+      "未配置 DASHSCOPE_API_KEY，无法使用 CosyVoice 配音。请编辑 config.json 后重启应用，或改用 Edge 在线语音",
+    );
   }
   return { model: cfg.TTS_COSYVOICE_MODEL, synthesize: (req) => synthesizeCosyvoice(cfg, req) };
 }

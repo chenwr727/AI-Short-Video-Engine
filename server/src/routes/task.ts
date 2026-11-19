@@ -5,14 +5,7 @@ import { autoSubtitleFontSize, loadConfig, normalizeSpeaker, num, numberOrZero, 
 import { MATERIAL_SOURCES, PROMPT_SOURCES, RESOLUTIONS, ttsEngines } from "../meta.js";
 import { TaskError, taskManager, type MaterialReplacement } from "../task/manager.js";
 import { mimeOf, sendFileWithRange } from "./send.js";
-import type {
-  GenerateOptions,
-  MaterialSource,
-  PromptSource,
-  RawTranscript,
-  RenderPatch,
-  TtsEngine,
-} from "../types.js";
+import type { GenerateOptions, MaterialSource, PromptSource, RawTranscript, RenderPatch, TtsEngine } from "../types.js";
 
 interface GenerateBody {
   input?: string;
@@ -49,11 +42,9 @@ function parseOptions(body: GenerateBody): GenerateOptions {
   const voice = engine.voices.find((v) => v.id === body.voice)?.id ?? engine.voices[0]?.id;
   if (!voice) throw new TaskError(`TTS 引擎 ${engine.id} 没有可用音色`, 500);
 
-  const materialSource = (
-    MATERIAL_SOURCES.find((o) => o.id === body.materialSource)?.id ??
+  const materialSource = (MATERIAL_SOURCES.find((o) => o.id === body.materialSource)?.id ??
     MATERIAL_SOURCES[0]?.id ??
-    "pixabay"
-  ) as MaterialSource;
+    "pixabay") as MaterialSource;
 
   const resolutionId = RESOLUTIONS.find((r) => r.id === body.resolution)?.id ?? RESOLUTIONS[0]?.id ?? "1080x1920";
   const [w, h] = resolutionId.split("x").map((v) => Number(v));
@@ -183,8 +174,7 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
           guest: normalizeSpeaker(req.body?.speakers?.guest, ""),
         };
         const promptSource = PROMPT_SOURCES.find((o) => o.id === req.body?.promptSource)?.id as
-          | PromptSource
-          | undefined;
+          PromptSource | undefined;
         const input = typeof req.body?.input === "string" ? req.body.input : undefined;
         return { state: taskManager.regenerate({ input, promptSource, speakers }) };
       } catch (error) {
@@ -224,14 +214,17 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
   );
 
   /** 确认素材 */
-  app.post<{ Body: { items?: MaterialReplacement[]; resolution?: string } }>("/api/task/material", async (req, reply) => {
-    try {
-      const state = await taskManager.confirmMaterial(req.body?.items, parseMaterialPatch(req.body ?? {}));
-      return { state };
-    } catch (error) {
-      return fail(reply, error);
-    }
-  });
+  app.post<{ Body: { items?: MaterialReplacement[]; resolution?: string } }>(
+    "/api/task/material",
+    async (req, reply) => {
+      try {
+        const state = await taskManager.confirmMaterial(req.body?.items, parseMaterialPatch(req.body ?? {}));
+        return { state };
+      } catch (error) {
+        return fail(reply, error);
+      }
+    },
+  );
 
   /** 重新检索某一段的候选素材 */
   app.post<{ Body: { paragraph?: number; terms?: string[] } }>("/api/task/material/search", async (req, reply) => {

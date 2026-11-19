@@ -19,6 +19,8 @@ export interface MaterialQuery {
 const PIXABAY_LANG = "zh";
 const PIXABAY_VIDEO_TYPE = "all";
 const PEXELS_LOCALE = "zh-CN";
+/** 素材缓存上限（MB），超出按最久未用淘汰 */
+const CACHE_MAX_MB = Number(process.env.AISV_CACHE_MAX_MB) || 2048;
 
 async function getJson(url: string, headers: Record<string, string> = {}): Promise<unknown> {
   const res = await fetch(url, {
@@ -186,6 +188,32 @@ export function searchMaterials(source: MaterialSource, term: string, query: Mat
   return searchPixabay(term, query);
 }
 
+/** 超出上限时按 mtime 淘汰，跳过刚下载的文件 */
+function pruneCache(keep: string): void {
+  try {
+    const dir = path.join(cacheDir(), "videos");
+    const files = fs
+      .readdirSync(dir)
+      .filter((name) => name.endsWith(".mp4"))
+      .map((name) => {
+        const file = path.join(dir, name);
+        const stat = fs.statSync(file);
+        return { file, size: stat.size, mtime: stat.mtimeMs };
+      })
+      .sort((a, b) => a.mtime - b.mtime);
+
+    let total = files.reduce((sum, f) => sum + f.size, 0);
+    for (const f of files) {
+      if (total <= CACHE_MAX_MB * 1024 * 1024) break;
+      if (f.file === keep) continue;
+      fs.rmSync(f.file, { force: true });
+      total -= f.size;
+    }
+  } catch {
+    // 缓存目录不可用时跳过
+  }
+}
+
 /** 下载到 cache/videos，按 URL 哈希命名，已存在则复用 */
 export async function downloadMaterial(url: string, signal: AbortSignal, idleTimeoutMs = 30_000): Promise<string> {
   const dir = ensureDir(path.join(cacheDir(), "videos"));
@@ -234,10 +262,11 @@ export async function downloadMaterial(url: string, signal: AbortSignal, idleTim
       throw e;
     });
     fs.renameSync(temp, file);
+    pruneCache(file);
     return file;
   } catch (error) {
     fs.rmSync(temp, { force: true });
-    if (idle) throw new Error(`素材下载超时（${idleTimeoutMs / 1000}s 无数据）：${key.slice(0, 80)}`);
+    if (idle) throw new Error(`素材下载超时（${idleTimeoutMs / 1000}s 无数据）：${key.slice(0, 80)}`, { cause: error });
     throw error;
   } finally {
     if (idleTimer) clearTimeout(idleTimer);

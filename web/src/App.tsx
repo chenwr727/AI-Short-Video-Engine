@@ -415,7 +415,10 @@ export default function App() {
 
   /** 重跑剧本，参数取表单当前值 */
   async function onRegenerate() {
-    if (task?.transcript && !confirmDiscard("重新生成会丢弃当前剧本（含未保存的修改），以及已生成的配音、素材与成片。继续？")) {
+    if (
+      task?.transcript &&
+      !confirmDiscard("重新生成会丢弃当前剧本（含未保存的修改），以及已生成的配音、素材与成片。继续？")
+    ) {
       return;
     }
     setBusy(true);

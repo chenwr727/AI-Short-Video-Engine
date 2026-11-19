@@ -1,0 +1,11 @@
+node_modules
+dist
+build
+release
+data
+server/data
+UserData
+pnpm-lock.yaml
+package-lock.json
+*.md
+desktop/assets

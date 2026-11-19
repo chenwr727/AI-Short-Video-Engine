@@ -57,7 +57,7 @@ export function ScriptStep(props: ScriptStepProps) {
   // 只看写稿阶段的失败
   const failed = Boolean(
     task?.status === "failed" &&
-      task.stages.some((stage) => SCRIPT_STAGE_IDS.includes(stage.id) && stage.status === "failed"),
+    task.stages.some((stage) => SCRIPT_STAGE_IDS.includes(stage.id) && stage.status === "failed"),
   );
   const stages = task ? task.stages.filter((stage) => SCRIPT_STAGE_IDS.includes(stage.id)) : [];
   // 已确认时展示只读版本

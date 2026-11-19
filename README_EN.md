@@ -240,6 +240,8 @@ For desktop development and packaging details, see [desktop/README_EN.md](deskto
 | `pnpm dev:web` | Frontend only (Vite) |
 | `pnpm build:web` | Build frontend output into `web/dist` |
 | `pnpm typecheck` | Config consistency check + server / web typecheck |
+| `pnpm test` | Run backend unit tests for pure functions |
+| `pnpm lint` / `pnpm format` | ESLint check / Prettier formatting |
 | `pnpm dist:win` | Build the Windows portable zip |
 | `pnpm dist:mac` / `pnpm dist:linux` | Build dmg / AppImage |
 
@@ -268,6 +270,7 @@ Usually unnecessary; useful for troubleshooting or custom deployments:
 | `AISV_OPEN_SETTINGS=1` | Open the settings page on startup |
 | `AISV_OPEN_DEVTOOLS=1` | Auto-open DevTools in dev mode |
 | `AISV_LOG_LEVEL` | Backend log level, default `info` |
+| `AISV_CACHE_MAX_MB` | Footage cache limit in MB, default 2048; least recently used files are evicted |
 
 ## FAQ
 

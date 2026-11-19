@@ -94,9 +94,7 @@ export function resolveMusicFile(ref: string): { file: string | null; reason?: s
   const text = (ref ?? "").trim().replace(/^["']|["']$/g, "");
   if (!text) return { file: null };
 
-  const candidates = path.isAbsolute(text)
-    ? [text]
-    : [path.join(musicDir(), text), path.resolve(process.cwd(), text)];
+  const candidates = path.isAbsolute(text) ? [text] : [path.join(musicDir(), text), path.resolve(process.cwd(), text)];
 
   const hit = candidates.find((file) => {
     try {

@@ -19,12 +19,14 @@ function decode36kr(html: string): string {
 
     const decipher = crypto.createDecipheriv("aes-128-ecb", Buffer.from("efabccee-b754-4c", "utf-8"), null);
     decipher.setAutoPadding(true);
-    const plain = Buffer.concat([
-      decipher.update(Buffer.from(state.state, "base64")),
-      decipher.final(),
-    ]).toString("utf-8");
+    const plain = Buffer.concat([decipher.update(Buffer.from(state.state, "base64")), decipher.final()]).toString(
+      "utf-8",
+    );
 
-    const parsed = JSON.parse(plain) as Record<string, any>;
+    const parsed = JSON.parse(plain) as {
+      article?: { detail?: { data?: unknown } };
+      articleDetail?: { articleDetailData?: { data?: unknown } };
+    };
     const data = parsed.article?.detail?.data ?? parsed.articleDetail?.articleDetailData?.data;
     return data ? JSON.stringify(data) : "";
   } catch {

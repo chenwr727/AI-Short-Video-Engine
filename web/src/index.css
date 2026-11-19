@@ -15,7 +15,12 @@
   --scrollbar: 10px;
   --shadow-sm: 0 1px 2px rgba(16, 32, 64, 0.05);
   --shadow-md: 0 18px 40px -28px rgba(16, 32, 64, 0.45);
-  font-family: "Segoe UI", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+  font-family:
+    "Segoe UI",
+    "Microsoft YaHei",
+    system-ui,
+    -apple-system,
+    sans-serif;
   color: var(--text);
   background: var(--bg);
 }
@@ -31,8 +36,7 @@ body {
   overflow: hidden;
   background:
     radial-gradient(1100px 520px at 10% -10%, #dbe8ff 0%, rgba(219, 232, 255, 0) 62%),
-    radial-gradient(900px 460px at 92% -6%, #d8f7f0 0%, rgba(216, 247, 240, 0) 58%),
-    var(--bg);
+    radial-gradient(900px 460px at 92% -6%, #d8f7f0 0%, rgba(216, 247, 240, 0) 58%), var(--bg);
   background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
 }
@@ -220,7 +224,10 @@ body.electron.mac .tb-inner {
   color: var(--muted);
   white-space: nowrap;
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s, color 0.15s;
+  transition:
+    border-color 0.15s,
+    background 0.15s,
+    color 0.15s;
 }
 
 .env-pill:hover {
@@ -321,7 +328,9 @@ body.electron.mac .tb-inner {
   font-weight: 600;
   color: var(--text);
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
 }
 
 .env-settings:hover {
@@ -352,7 +361,9 @@ body.electron.mac .tb-inner {
   line-height: 20px;
   color: #4a5a72;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 
 .menu-btn:hover,
@@ -518,15 +529,22 @@ body.electron.mac .tb-inner {
   color: var(--text);
   background: #fbfdff;
   outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s,
+    background 0.15s;
 }
 
 .field select {
   appearance: none;
-  background-image: linear-gradient(45deg, transparent 50%, #7b88a0 50%),
-    linear-gradient(135deg, #7b88a0 50%, transparent 50%);
-  background-position: calc(100% - 18px) 52%, calc(100% - 13px) 52%;
-  background-size: 5px 5px, 5px 5px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, #7b88a0 50%), linear-gradient(135deg, #7b88a0 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) 52%,
+    calc(100% - 13px) 52%;
+  background-size:
+    5px 5px,
+    5px 5px;
   background-repeat: no-repeat;
   padding-right: 34px;
 }
@@ -597,7 +615,10 @@ body.electron.mac .tb-inner {
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: transform 0.12s, box-shadow 0.15s, filter 0.15s;
+  transition:
+    transform 0.12s,
+    box-shadow 0.15s,
+    filter 0.15s;
   box-shadow: 0 10px 22px -12px rgba(47, 111, 237, 0.85);
 }
 
@@ -627,7 +648,9 @@ body.electron.mac .tb-inner {
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
 }
 
 .secondary:hover:not(:disabled) {
@@ -946,7 +969,10 @@ body.electron.mac .tb-inner {
   background: transparent;
   color: #b3bdcc;
   cursor: pointer;
-  transition: color 0.15s, background 0.15s, border-color 0.15s;
+  transition:
+    color 0.15s,
+    background 0.15s,
+    border-color 0.15s;
 }
 
 .line-del:hover:not(:disabled) {
@@ -979,7 +1005,10 @@ body.electron.mac .tb-inner {
   background: #fbfdff;
   resize: vertical;
   outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s,
+    background 0.15s;
 }
 
 .dialogue textarea:focus {
@@ -1093,7 +1122,9 @@ body.electron.mac .tb-inner {
   color: var(--brand);
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.15s, border-color 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
 }
 
 .play-btn:hover {
@@ -1171,7 +1202,11 @@ body.electron.mac .tb-inner {
   color: #6b7c96;
   font-size: 14px;
   font-weight: 700;
-  transition: background 0.18s, color 0.18s, box-shadow 0.18s, transform 0.18s;
+  transition:
+    background 0.18s,
+    color 0.18s,
+    box-shadow 0.18s,
+    transform 0.18s;
 }
 
 .step.active .step-dot {
@@ -1179,7 +1214,9 @@ body.electron.mac .tb-inner {
   border-color: transparent;
   color: #fff;
   transform: translateY(-1px);
-  box-shadow: 0 0 0 4px rgba(47, 111, 237, 0.13), 0 10px 20px -10px rgba(47, 111, 237, 0.9);
+  box-shadow:
+    0 0 0 4px rgba(47, 111, 237, 0.13),
+    0 10px 20px -10px rgba(47, 111, 237, 0.9);
 }
 
 /* 排除当前页，蓝色高亮才不会被绿色盖掉 */
@@ -1254,7 +1291,9 @@ body.electron.mac .tb-inner {
   font-weight: 600;
   color: var(--brand);
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
 }
 
 .resume-btn:hover {
@@ -1413,13 +1452,19 @@ body.electron.mac .tb-inner {
   color: var(--text);
   background-color: #fff;
   appearance: none;
-  background-image: linear-gradient(45deg, transparent 50%, #7b88a0 50%),
-    linear-gradient(135deg, #7b88a0 50%, transparent 50%);
-  background-position: calc(100% - 18px) 52%, calc(100% - 13px) 52%;
-  background-size: 5px 5px, 5px 5px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, #7b88a0 50%), linear-gradient(135deg, #7b88a0 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) 52%,
+    calc(100% - 13px) 52%;
+  background-size:
+    5px 5px,
+    5px 5px;
   background-repeat: no-repeat;
   outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 
 .voice-row select:focus {
@@ -1520,7 +1565,10 @@ body.electron.mac .tb-inner {
   border-radius: 10px;
   background: #fff;
   cursor: pointer;
-  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s,
+    transform 0.15s;
 }
 
 .candidate:hover:not(:disabled) {

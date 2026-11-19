@@ -112,7 +112,7 @@ interface TimelineOptions {
 }
 
 /** 排时间轴：首句前插标题，句间留间隔，转场时垫首尾留白 */
-function planParagraphs(transcript: Transcript, audio: AudioManifest, o: TimelineOptions): ParagraphPlan[] {
+export function planParagraphs(transcript: Transcript, audio: AudioManifest, o: TimelineOptions): ParagraphPlan[] {
   const plans: ParagraphPlan[] = [];
 
   for (let pi = 0; pi < transcript.paragraphs.length; pi++) {
@@ -199,8 +199,15 @@ function assOptions(width: number, height: number, fontSize: number) {
 }
 
 /** 素材、画幅、字号、时间轴任一变化都会失效 */
-function clipSignature(plan: ParagraphPlan, materialPath: string, width: number, height: number, fps: number, fontSize: number): string {
-  let material = "";
+export function clipSignature(
+  plan: ParagraphPlan,
+  materialPath: string,
+  width: number,
+  height: number,
+  fps: number,
+  fontSize: number,
+): string {
+  let material: string;
   try {
     const stat = fs.statSync(materialPath);
     material = `${path.basename(materialPath)}:${stat.size}:${stat.mtimeMs}`;
@@ -418,11 +425,7 @@ async function mergeByConcat(options: MergeOptions): Promise<void> {
   const { ctx, clips, output, encode, bgm, totalDurationMs, render } = options;
 
   const listFile = path.join(ctx.workspace, "listfile.txt");
-  fs.writeFileSync(
-    listFile,
-    `${clips.map((clip) => `file '${clip.replace(/'/g, "'\\''")}'`).join("\n")}\n`,
-    "utf-8",
-  );
+  fs.writeFileSync(listFile, `${clips.map((clip) => `file '${clip.replace(/'/g, "'\\''")}'`).join("\n")}\n`, "utf-8");
 
   const needFilter = Boolean(bgm) || render.videoFadeIn > 0 || render.videoFadeOut > 0;
   if (!needFilter) {
@@ -435,7 +438,10 @@ async function mergeByConcat(options: MergeOptions): Promise<void> {
   }
 
   const durations = await clipDurations(ctx, clips, totalDurationMs);
-  const outputSec = Math.max(0.1, durations.reduce((sum, d) => sum + d, 0));
+  const outputSec = Math.max(
+    0.1,
+    durations.reduce((sum, d) => sum + d, 0),
+  );
   const videoChain = videoFadeChain(render, outputSec);
 
   const args: string[] = ["-f", "concat", "-safe", "0", "-i", listFile];
@@ -487,8 +493,7 @@ export async function runComposeStage(
 
   const withTransition = bare.length >= 2 && transition > 0;
   const pad = withTransition ? transition : 0;
-  const plans =
-    pad > 0 ? planParagraphs(transcript, audio, { ...timeline, padLead: pad, padTail: pad }) : bare;
+  const plans = pad > 0 ? planParagraphs(transcript, audio, { ...timeline, padLead: pad, padTail: pad }) : bare;
 
   const totalDurationMs = plans.reduce((sum, p) => sum + p.duration * 1000, 0);
   const clips: string[] = [];

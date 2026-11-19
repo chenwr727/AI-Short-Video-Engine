@@ -64,8 +64,7 @@ async function probeWithFfmpeg(file: string): Promise<VideoProbe | null> {
   const durationMatch = /Duration:\s*(\d+):(\d{2}):(\d{2}(?:\.\d+)?)/.exec(stderr);
   if (!durationMatch) return null;
 
-  const duration =
-    Number(durationMatch[1]) * 3600 + Number(durationMatch[2]) * 60 + Number(durationMatch[3]);
+  const duration = Number(durationMatch[1]) * 3600 + Number(durationMatch[2]) * 60 + Number(durationMatch[3]);
   if (!Number.isFinite(duration) || duration <= 0) return null;
 
   // MKV 常带封面附加流，取面积最大的一条
