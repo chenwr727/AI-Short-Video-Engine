@@ -1,6 +1,6 @@
 import { SCRIPT_STAGE_IDS } from "../phases";
 import type { Meta, RawTranscript, TaskState } from "../types";
-import { Panel } from "./Panel";
+import { ConfigSection, Panel } from "./Panel";
 import { LogPanel, StageList } from "./StageList";
 import { ScriptOptions } from "./ScriptOptions";
 import type { FormState } from "./stepTypes";
@@ -66,6 +66,7 @@ export function ScriptStep(props: ScriptStepProps) {
   const dialogueTotal = edit ? edit.paragraphs.reduce((sum, paragraph) => sum + paragraph.dialogues.length, 0) : 0;
 
   const optionsDisabled = running || busy;
+  const styleLabel = meta?.promptSources.find((option) => option.id === form.promptSource)?.label ?? "未选风格";
 
   const regenerateButton = task ? (
     <button
@@ -97,15 +98,21 @@ export function ScriptStep(props: ScriptStepProps) {
       }
       fill
     >
-      {/* 始终渲染，避免布局跳动 */}
-      <div className="panel-config">
+      {/* 剧本已出来时默认收起，把高度留给台词 */}
+      <ConfigSection
+        title="脚本风格与角色"
+        summary={[styleLabel, form.speakerMain || meta?.speakers.main, form.speakerGuest || meta?.speakers.guest]
+          .filter(Boolean)
+          .join(" · ")}
+        defaultOpen={!transcript}
+      >
         <ScriptOptions meta={meta} form={form} onChange={onFormChange} disabled={optionsDisabled} />
         {awaiting && (
           <p className="hint options-hint">
             改完上面的风格或角色名，点「重新生成」会按新设置重写整篇；当前剧本与后面的配音、素材、成片都会作废。
           </p>
         )}
-      </div>
+      </ConfigSection>
 
       {failed && <div className="alert">{task?.error ?? "剧本生成失败"}</div>}
 
