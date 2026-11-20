@@ -1019,6 +1019,21 @@ body.electron.mac .tb-inner {
 
 /* 成片 */
 
+/* 成片预览占满剩余高度 */
+.panel-fill:has(> .panel-stage) {
+  height: 100%;
+}
+
+.panel-stage {
+  /* basis 0：高度只由剩余空间决定 */
+  flex: 1 1 0;
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
 /* 按自身比例显示，定宽会撑成横条 */
 .player {
   display: block;
@@ -1029,6 +1044,11 @@ body.electron.mac .tb-inner {
   border-radius: 12px;
   background: #0b1220;
   box-shadow: 0 16px 32px -24px rgba(11, 18, 32, 0.9);
+}
+
+.panel-stage .player {
+  margin: 0;
+  max-height: 100%;
 }
 
 .audio-summary {
@@ -1816,9 +1836,78 @@ body.electron.mac .tb-inner {
 /* 参数区固定在滚动区之上 */
 .panel-fill > .panel-config {
   flex: none;
-  padding-bottom: 14px;
+  padding-bottom: 12px;
   border-bottom: 1px solid var(--border);
   margin-bottom: 14px;
+}
+
+/* 收起后只留标题行 */
+.panel-fill > .panel-config.is-collapsed {
+  padding-bottom: 6px;
+  margin-bottom: 10px;
+}
+
+.config-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 2px 0;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  color: #5b6a80;
+  text-align: left;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.config-toggle:hover {
+  color: var(--brand);
+}
+
+.config-caret {
+  flex: none;
+  width: 10px;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--muted);
+  transition: transform 0.15s;
+}
+
+.panel-config.is-collapsed .config-caret {
+  transform: rotate(-90deg);
+}
+
+.config-name {
+  flex: none;
+}
+
+/* 收起时的一行参数摘要 */
+.config-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.config-action {
+  flex: none;
+  margin-left: auto;
+  padding-left: 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--brand);
+}
+
+.config-body {
+  padding-top: 12px;
 }
 
 .panel-fill .panel-scroll::-webkit-scrollbar {
@@ -1967,6 +2056,46 @@ body.electron.mac .tb-inner {
   .statusbar .sb-sep:first-of-type,
   .statusbar .sb-item:nth-child(3) {
     display: none;
+  }
+}
+
+/* 矮窗口：压紧页头与卡片留白 */
+@media (max-height: 780px) {
+  .app-top {
+    padding-top: 12px;
+    padding-bottom: 10px;
+  }
+
+  body.electron .app-top {
+    padding-top: 42px;
+  }
+
+  .brand-sub {
+    display: none;
+  }
+
+  .app-top .header {
+    margin-bottom: 10px;
+  }
+
+  .stepper-wrap {
+    padding: 12px 20px 10px;
+  }
+
+  .card {
+    padding: 16px 20px;
+  }
+
+  .panel-head {
+    margin-bottom: 12px;
+  }
+
+  .panel-head h2 {
+    margin-bottom: 3px;
+  }
+
+  .panel-fill:has(> .panel-scroll) {
+    max-height: max(100%, 460px);
   }
 }
 

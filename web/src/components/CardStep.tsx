@@ -3,7 +3,7 @@ import { cardStillUrl } from "../api";
 import { CARD_STAGE_IDS } from "../phases";
 import type { CardSpec, Meta, TaskState } from "../types";
 import { CardPlayer } from "./CardPlayer";
-import { Panel } from "./Panel";
+import { ConfigSection, Panel } from "./Panel";
 import { LogPanel, StageList } from "./StageList";
 
 interface CardStepProps {
@@ -135,7 +135,7 @@ export function CardStep(props: CardStepProps) {
       }
       fill
     >
-      <div className="panel-config">
+      <ConfigSection title="批量设置" summary="统一配色 · 章节卡时长 · 换模板" defaultOpen={!manifest}>
         <div className="row row-3">
           <div className="field">
             <label>统一配色</label>
@@ -188,7 +188,7 @@ export function CardStep(props: CardStepProps) {
           </div>
         </div>
         <p className="hint">批量操作作用于全部卡片；只想改一张，用卡片上的「编辑」。</p>
-      </div>
+      </ConfigSection>
 
       <div className="panel-scroll">
         <StageList stages={task.stages.filter((stage) => CARD_STAGE_IDS.includes(stage.id))} />

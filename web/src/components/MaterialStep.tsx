@@ -2,7 +2,7 @@ import { useState } from "react";
 import { materialPreviewUrl, searchMaterial } from "../api";
 import { MATERIAL_STAGE_IDS } from "../phases";
 import type { MaterialInfo, MaterialItem, Meta, TaskState } from "../types";
-import { Panel } from "./Panel";
+import { ConfigSection, Panel } from "./Panel";
 import { LogPanel, StageList } from "./StageList";
 import type { RenderFormState } from "./stepTypes";
 
@@ -57,6 +57,9 @@ export function MaterialStep(props: MaterialStepProps) {
   const canMatchAgain = failed && !manifest && Boolean(task.audio);
 
   const sourceHint = meta?.materialSources.find((option) => option.id === form.materialSource)?.description;
+  const sourceLabel =
+    meta?.materialSources.find((option) => option.id === form.materialSource)?.label ?? form.materialSource;
+  const resolutionLabel = meta?.resolutions.find((option) => option.id === form.resolution)?.label ?? form.resolution;
 
   const [panel, setPanel] = useState<{ paragraph: number; list: MaterialInfo[] } | null>(null);
   const [searching, setSearching] = useState(0);
@@ -111,7 +114,7 @@ export function MaterialStep(props: MaterialStepProps) {
       }
       fill
     >
-      <div className="panel-config">
+      <ConfigSection title="素材来源与分辨率" summary={`${sourceLabel} · ${resolutionLabel}`} defaultOpen={!manifest}>
         <div className="row">
           <div className="field">
             <label htmlFor="material-source">素材来源</label>
@@ -154,7 +157,7 @@ export function MaterialStep(props: MaterialStepProps) {
                 : "上次匹配没成功。可以换个素材来源或分辨率，再点「用新来源重新匹配」。"
               : "素材来源决定从哪个站检索；分辨率决定成片尺寸。"}
         </p>
-      </div>
+      </ConfigSection>
 
       <div className="panel-scroll">
         <StageList stages={task.stages.filter((stage) => MATERIAL_STAGE_IDS.includes(stage.id))} />

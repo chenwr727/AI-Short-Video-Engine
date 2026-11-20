@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 /** 步骤页统一外壳 */
 export function Panel({
@@ -26,5 +26,36 @@ export function Panel({
       </div>
       {children}
     </section>
+  );
+}
+
+/** 顶部参数区，可收起把高度让给下面的日志或预览 */
+export function ConfigSection({
+  title,
+  summary,
+  defaultOpen = true,
+  children,
+}: {
+  title: string;
+  /** 收起时显示的一行摘要 */
+  summary?: string;
+  /** 已有产物时传 false */
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+
+  return (
+    <div className={`panel-config${open ? "" : " is-collapsed"}`}>
+      <button className="config-toggle" type="button" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <span className="config-caret" aria-hidden="true">
+          ▾
+        </span>
+        <span className="config-name">{title}</span>
+        {!open && summary && <span className="config-summary">{summary}</span>}
+        <span className="config-action">{open ? "收起" : "展开"}</span>
+      </button>
+      {open && <div className="config-body">{children}</div>}
+    </div>
   );
 }

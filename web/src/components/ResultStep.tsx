@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { RenderPatch } from "../api";
 import type { Meta, TaskState } from "../types";
-import { Panel } from "./Panel";
+import { ConfigSection, Panel } from "./Panel";
 
 interface ResultStepProps {
   task: TaskState | null;
@@ -86,6 +86,9 @@ export function ResultStep(props: ResultStepProps) {
     });
   }
 
+  const bgmText = bgmEnabled ? `BGM ${bgmVolume}` : "无 BGM";
+  const configSummary = `字幕 ${fontSize}px · ${bgmText}${music.trim() ? ` · ${music.trim()}` : " · 默认音乐"}`;
+
   return (
     <Panel
       title="成片预览"
@@ -96,8 +99,8 @@ export function ResultStep(props: ResultStepProps) {
       }
       fill
     >
-      {/* 渲染参数固定在顶部 */}
-      <div className="panel-config">
+      {/* 有片子时默认收起，把高度留给预览 */}
+      <ConfigSection title="渲染参数" summary={configSummary} defaultOpen={!hasVideo}>
         <div className="row">
           <div className="field">
             <label htmlFor="subtitle-size">字幕字号（px）</label>
@@ -167,19 +170,19 @@ export function ResultStep(props: ResultStepProps) {
           字号按画面宽度算好（{defaultFontSize}px，当前 {task.options.width}×{task.options.height}），可以直接改。
           改字号会重新渲染分段片段，只改 BGM 则复用片段、仅重跑合并与混音。
         </p>
-      </div>
+      </ConfigSection>
 
-      {/* 成片滚动，操作行固定在底部 */}
-      <div className="panel-scroll">
+      {/* 预览占满剩余高度 */}
+      <div className="panel-stage">
         {hasVideo ? (
           // updatedAt 作版本号，播放器才会换新片
           <video className="player" src={`/api/result?v=${encodeURIComponent(task.updatedAt)}`} controls playsInline />
         ) : (
           <p className="hint">还没有生成成片。</p>
         )}
-
-        {error && <div className="alert">{error}</div>}
       </div>
+
+      {error && <div className="alert">{error}</div>}
 
       {/* 主操作固定最右 */}
       <div className="panel-actions">

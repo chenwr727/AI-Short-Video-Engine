@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { RENDER_STAGE_IDS } from "../phases";
 import type { AudioManifest, Meta, TaskState, TtsEngineOption } from "../types";
-import { Panel } from "./Panel";
+import { ConfigSection, Panel } from "./Panel";
 import { VoiceOptions } from "./RenderSetupStep";
 import { LogPanel, StageList } from "./StageList";
 import type { RenderFormState } from "./stepTypes";
@@ -172,7 +172,13 @@ export function RenderStep(props: RenderStepProps) {
   return (
     <Panel title={title} desc={desc} fill>
       {props.voices && (
-        <div className="panel-config">
+        <ConfigSection
+          title="音色与语速"
+          summary={`${props.engine?.label ?? "默认引擎"} · ${props.voices.ttsSpeed || 1} 倍速 · ${
+            (props.speakers ?? []).length
+          } 个角色`}
+          defaultOpen={!task.audio}
+        >
           <VoiceOptions
             speakers={props.speakers ?? []}
             form={props.voices}
@@ -187,7 +193,7 @@ export function RenderStep(props: RenderStepProps) {
               {props.regenerateHint ?? "改完上面的音色或语速，点「重新生成」会重做配音；素材与成片会一起作废。"}
             </p>
           )}
-        </div>
+        </ConfigSection>
       )}
 
       <div className="panel-scroll">
