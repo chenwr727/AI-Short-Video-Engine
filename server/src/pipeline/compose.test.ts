@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import test from "node:test";
 import type { AudioManifest, Transcript } from "../types.js";
-import { clipSignature, planParagraphs } from "./compose.js";
+import { clipSignature, planParagraphs, shotDurations } from "./compose.js";
 
 const TIMELINE = { titleDuration: 1.6, interval: 0.2, padLead: 0, padTail: 0 };
 
@@ -84,4 +84,30 @@ test("片段签名随字号与素材变化", () => {
   assert.equal(base, clipSignature(plan, path.join("missing", "a.mp4"), 1080, 1920, 24, 72));
   assert.notEqual(base, clipSignature(plan, path.join("missing", "a.mp4"), 1080, 1920, 24, 80));
   assert.notEqual(base, clipSignature(plan, path.join("missing", "b.mp4"), 1080, 1920, 24, 72));
+  assert.notEqual(
+    base,
+    clipSignature(plan, [path.join("missing", "a.mp4"), path.join("missing", "b.mp4")], 1080, 1920, 24, 72),
+  );
+});
+
+test("段内切镜按句子边界切，总时长不变", () => {
+  const [plan] = planParagraphs(
+    transcriptOf([{ speaker: "小简", contents: ["甲", "乙", "丙", "丁"] }]),
+    audioOf([1, 1, 1, 1]),
+    { titleDuration: 0, interval: 0, padLead: 0, padTail: 0 },
+  );
+  assert.ok(plan);
+
+  near(plan.duration, 4);
+  assert.deepEqual(shotDurations(plan, 1), [4]);
+
+  const two = shotDurations(plan, 2);
+  assert.equal(two.length, 2);
+  near(two.reduce((sum, d) => sum + d, 0), 4);
+  near(two[0] ?? 0, 2);
+
+  const three = shotDurations(plan, 3);
+  assert.equal(three.length, 3);
+  near(three.reduce((sum, d) => sum + d, 0), 4);
+  near(three[0] ?? 0, 1);
 });

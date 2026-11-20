@@ -17,6 +17,15 @@ interface GenerateBody {
   resolution?: string;
 }
 
+const CARD_ID_PATTERN = /^[a-z0-9-]+$/i;
+
+/** 卡片接口共用：顺手挡掉路径分隔符 */
+function requireCardId(raw: unknown): string {
+  const id = String(raw ?? "").trim();
+  if (!CARD_ID_PATTERN.test(id)) throw new TaskError("卡片标识不合法", 400);
+  return id;
+}
+
 function fail(reply: FastifyReply, error: unknown) {
   if (error instanceof TaskError) {
     return reply.code(error.statusCode).send({ error: error.message });
@@ -264,6 +273,102 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
     }
 
     return sendFileWithRange(reply, item.videoPath, req.headers.range, { contentType: "video/mp4" });
+  });
+
+  /** 整份版式重做 */
+  app.post("/api/task/cards/regenerate", async (_req, reply) => {
+    try {
+      return { state: taskManager.regenerateCards() };
+    } catch (error) {
+      return fail(reply, error);
+    }
+  });
+
+  /** 换一张卡：重写文案或换配色 */
+  app.post<{ Body: { id?: string; mode?: string } }>("/api/task/cards/rewrite", async (req, reply) => {
+    try {
+      const id = requireCardId(req.body?.id);
+      const mode = req.body?.mode === "accent" ? "accent" : "text";
+      return { state: await taskManager.rewriteCard(id, mode) };
+    } catch (error) {
+      return fail(reply, error);
+    }
+  });
+
+  /** 改一张卡的参数 */
+  app.post<{
+    Body: {
+      id?: string;
+      title?: string;
+      label?: string;
+      accent?: string;
+      durationSec?: number;
+      handle?: string;
+      compositionId?: string;
+    };
+  }>("/api/task/cards/update", async (req, reply) => {
+    try {
+      const id = requireCardId(req.body?.id);
+      const { title, label, accent, durationSec, handle, compositionId } = req.body ?? {};
+      return {
+        state: taskManager.updateCard(id, { title, label, accent, durationSec, handle, compositionId }),
+      };
+    } catch (error) {
+      return fail(reply, error);
+    }
+  });
+
+  /** 批量应用：统一配色 / 章节时长 / 换模板 */
+  app.post<{ Body: { accent?: string; chapterDurationSec?: number; cycleTemplate?: boolean } }>(
+    "/api/task/cards/batch",
+    async (req, reply) => {
+      try {
+        const { accent, chapterDurationSec, cycleTemplate } = req.body ?? {};
+        return { state: taskManager.applyCardsPatch({ accent, chapterDurationSec, cycleTemplate }) };
+      } catch (error) {
+        return fail(reply, error);
+      }
+    },
+  );
+
+  /** 删掉一张卡 */
+  app.post<{ Body: { id?: string } }>("/api/task/cards/remove", async (req, reply) => {
+    try {
+      const id = requireCardId(req.body?.id);
+      return { state: taskManager.removeCard(id) };
+    } catch (error) {
+      return fail(reply, error);
+    }
+  });
+
+  /** 确认版式 */
+  app.post("/api/task/cards", async (_req, reply) => {
+    try {
+      return { state: taskManager.confirmCards() };
+    } catch (error) {
+      return fail(reply, error);
+    }
+  });
+
+  /** 卡片静帧，没渲过就现渲 */
+  app.get<{ Params: { id: string } }>("/api/card/:id/still", async (req, reply) => {
+    try {
+      const id = requireCardId(path.basename(req.params.id));
+      const file = await taskManager.cardStill(id);
+      return sendFileWithRange(reply, file, req.headers.range, { contentType: "image/png" });
+    } catch (error) {
+      return fail(reply, error);
+    }
+  });
+
+  /** 已渲染的卡片视频 */
+  app.get<{ Params: { id: string } }>("/api/card/:id", async (req, reply) => {
+    try {
+      const id = requireCardId(path.basename(req.params.id));
+      return sendFileWithRange(reply, taskManager.cardVideo(id), req.headers.range, { contentType: "video/mp4" });
+    } catch (error) {
+      return fail(reply, error);
+    }
   });
 
   /** 按渲染参数合成 */

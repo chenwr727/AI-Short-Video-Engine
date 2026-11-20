@@ -10,8 +10,10 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@remotion/player": "^4.0.545",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "remotion": "^4.0.545"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",

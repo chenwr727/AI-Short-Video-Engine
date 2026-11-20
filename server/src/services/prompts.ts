@@ -63,3 +63,7 @@ export function loadSearchTermsPrompt(): string {
 export function loadVideoSelectPrompt(): string {
   return readPrompt("video_select.json", "prompt_video_select");
 }
+
+export function loadVisionSelectPrompt(): string {
+  return readPrompt("vision_select.json", "prompt_vision_select");
+}

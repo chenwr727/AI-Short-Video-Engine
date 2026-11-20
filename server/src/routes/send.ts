@@ -53,6 +53,8 @@ export function mimeOf(file: string): string {
       return "video/mp4";
     case ".m4a":
       return "audio/mp4";
+    case ".png":
+      return "image/png";
     default:
       return "application/octet-stream";
   }

@@ -4,7 +4,7 @@
 
 <p align="center"><b>丢一个链接进去，拿到一条能直接发的竖屏短视频。</b></p>
 
-<p align="center">抓正文 → AI 写稿 → 分句配音 → 匹配素材 → 烧字幕成片<br />全流程自动，中途只停两次等你点头</p>
+<p align="center">抓正文 → AI 写稿 → 分句配音 → 匹配素材 → 版式卡 → 烧字幕成片<br />全流程自动，只在关键节点停下等你点头</p>
 
 <p align="center">
   <a href="https://github.com/chenwr727/AI-Short-Video-Engine/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/chenwr727/AI-Short-Video-Engine?color=2f6fed"></a>
@@ -57,10 +57,11 @@
 
 "AI 一键成片"的坑从来不在生成，而在**生成完才发现不对**：腔调跑偏、素材不搭，整条片子只能重跑一遍。
 
-所以这条流水线在**最贵的两个节点**插入人工确认：
+所以这条流水线在**最贵的几个节点**插入人工确认：
 
 - **剧本确认**：AI 写完稿先停下，标题和每句台词都能直接改，确认后才配音。不用等到听完 3 分钟才发现开头就错了。
 - **素材确认**：每段画面可逐段播放，不顺眼点「换一个」重新检索候选，选中即替换。
+- **版式确认**（可选，`CARDS_ENABLED=1`）：素材定下后多一步，AI 给片头、章节、片尾挑模板写文案，逐张预览，改到满意再合成。
 
 其余环节尽量不让你操心：
 
@@ -147,17 +148,19 @@ flowchart LR
     E --> F[分句与配音]
     F --> G[素材检索]
     G --> H{{素材确认}}
-    H --> I[字幕 转场 BGM]
+    H --> HC{{版式确认（可选）}}
+    HC --> I[字幕 转场 BGM]
     I --> J([成片 mp4])
 ```
 
-界面上对应五步，顶部步骤条可随时点回已完成的步骤回看：
+界面上对应六步（版式确认只在 `CARDS_ENABLED=1` 时出现），顶部步骤条可随时点回已完成的步骤回看：
 
 1. **文案脚本**：粘贴网页链接或正文，选择脚本风格，点「开始生成」
 2. **剧本生成**：AI 抓取并写稿，完成后停下等你确认；标题与每句台词都能直接改
 3. **配音生成**：为每个角色选音色、配音引擎与语速（默认 1.1 倍，可用 `TTS_SPEED` 改默认值）
 4. **素材确认**：选素材来源与成片分辨率，点「开始匹配素材」；逐段预览，不满意点「换一个」，确认后进下一步（此时**不会**自动合成）
-5. **成片预览**：设置字幕字号、BGM 开关与音量，点「生成成片」；之后可改参数再点「重新生成」
+5. **版式确认**：AI 产出的片头、章节、片尾卡逐张预览，可改文案与时长、换模板、删卡或整份重来；没有想要的就直接确认，成片只留正文
+6. **成片预览**：设置字幕字号、BGM 开关与音量，点「生成成片」；之后可改参数再点「重新生成」
 
 桌面端点「在文件夹中显示」直接定位成片文件（浏览器里是下载）。
 
@@ -175,6 +178,8 @@ flowchart LR
   _durations.json    # 配音时长
   _videos.json       # 素材清单
   clips/ subs/       # 分段视频与 ASS 字幕
+  cards/             # 卡片视频与静帧，文件名带参数指纹
+  _task.json         # 任务状态快照（含版式清单），用于断点恢复
   _bgm.wav           # 混入的背景音乐
   _output.mp4        # 成片
 ```
@@ -200,14 +205,26 @@ flowchart LR
 | 配音（豆包） | `SEED_TTS_API_KEY` / `TTS_SEED_RESOURCE_ID` / `TTS_SEED_MODEL` | 填 Key 后出现豆包引擎 |
 | 素材 | `PIXABAY_API_KEY` / `PEXELS_API_KEY` | **至少填一个**，否则无法检索素材 |
 | 素材 | `MATERIAL_MIN_DURATION` | 候选素材最短时长（秒），默认 10 |
+| 素材 | `VISION_SELECT` | 用缩略图让模型看画面选片，默认 1；模型不支持图片输入时自动退回标签选片 |
+| 素材 | `SHOTS_PER_PARAGRAPH` | 每段镜头数 1-3，默认 2；按句子边界切镜，1 = 整段只用一条素材 |
+| 素材 | `QUOTE_FALLBACK` | 1 = 某段搜不到素材时改用设计卡，默认开；0 = 直接报错中断 |
 | 画面 | `VIDEO_WIDTH` / `VIDEO_HEIGHT` / `FPS` / `TTS_SPEED` | 默认 1080×1920 / 24fps / 1.1 倍速 |
+| 画面 | `CAMERA_MOTION` | 运镜强度 0-10，默认 6；推近/拉远/平移按段落轮换，0 = 静止画面 |
+| 画面 | `COLOR_GRADE` | 调色强度 0-10，默认 5；统一对比度/饱和/暗角/颗粒，0 = 不调色 |
 | 画面 | `TRANSITION_DURATION` | 段落转场秒数，默认 0.5；设为 0 关闭转场 |
+| 画面 | `TRANSITION_STYLE` | `mixed`（默认）按段落轮换转场，`fade` 统一淡入淡出 |
 | 字幕 | `SUBTITLE_FONT_SIZE` | 字幕字号（px），默认 0 = 按画面宽度自动换算（1080 宽约 72px，720 宽约 48px）；标题按 1.4 倍放大 |
 | 画面 | `VIDEO_FADE_IN` / `VIDEO_FADE_OUT` | 成片开头/结尾淡入淡出秒数，默认 0.5；设为 0 关闭 |
 | BGM | `BGM_ENABLED` | 是否混入背景音乐，默认 1；填 0 只保留配音 |
 | BGM | `BGM_VOLUME` | BGM 音量，默认 0.1（1 = 原音量） |
 | BGM | `AUDIO_FADE_IN` / `AUDIO_FADE_OUT` | BGM 淡入/淡出秒数，默认 0.8 / 1.2；设为 0 关闭 |
 | BGM | `AISV_MUSIC_DIR` | 自定义音乐目录，默认 `<数据目录>/music`；成片页只填文件名时按它解析 |
+| 音效 | `SFX_ENABLED` / `SFX_VOLUME` | 转场与片头音效，默认开 / 0.2；音效由 ffmpeg 程序合成，可用 `AISV_SFX_DIR` 放 `whoosh.wav` / `impact.wav` 替换 |
+| 片头 | `INTRO_ENABLED` | 1 = 用 Remotion 模板渲染片头（需先安装 `remotion/` 依赖），默认 0；渲染失败自动回退到字幕标题 |
+| 片尾 | `OUTRO_DURATION` / `OUTRO_TITLE` / `OUTRO_HANDLE` | 片尾卡片秒数（0 = 不加）、标题文案、账号名（留空不显示） |
+| 过场 | `CHAPTER_CARD` / `CHAPTER_DURATION` | 1 = 段落之间插入 Remotion 过场卡，默认关；单张时长默认 2 秒 |
+| 版式 | `CARDS_ENABLED` | 1 = 素材确认后多一步「版式确认」，AI 为片头 / 章节 / 片尾选模板写文案，默认关；需要 `remotion/` 依赖 |
+| 版式 | `CARD_ACCENT` | 卡片主色，默认 `#ff5a3c`；AI 只能在这个色板（主色 + 5 个预设）里挑 |
 
 以上是全局默认值。**成片预览** 页还能按任务单独改字幕字号、是否插入 BGM、BGM 音量与自定义音乐：字号框里显示的是按当前分辨率算好的具体 px（不显示 0），支持 mp3/wav/m4a/aac/ogg/flac（绝对路径，或 `AISV_MUSIC_DIR` 目录下的文件名），文件找不到时自动退回程序合成并在日志里提示。改字号会额外重渲染烧了字幕的分段片段。
 
@@ -221,15 +238,51 @@ desktop/          Electron 外壳（窗口与自绘菜单、拉起后端、设�
   src/preload.ts    暴露给渲染层的最小桥（窗口菜单 / 设置读写）
   assets/settings.html  图形化配置面板
 server/           Fastify + TypeScript 后端
-  src/pipeline/     抓取写稿 / 分句 / 配音 / 素材 / 合成
-  src/services/     LLM、TTS（edge / cosyvoice / seed）、素材站、ffmpeg、字幕
-  src/task/         任务状态机与流水线编排（含两个人工确认暂停点）
+  src/pipeline/     抓取写稿 / 分句 / 配音 / 素材 / 版式卡 / 合成
+  src/services/     LLM、TTS（edge / cosyvoice / seed）、素材站、ffmpeg、字幕、Remotion、音效
+  src/card-templates.ts  卡片模板清单（片头 / 章节 / 片尾 / 兜底观点卡）
+  src/task/         任务状态机与流水线编排（含三个人工确认暂停点，版式那步可关）
   assets/prompts/   提示词模板（播客 / 相声 / 脱口秀）
   data/             运行期产物：workspaces/、cache/、out/（不入库）
 web/              React + Vite 前端（打包态由后端托管）
+remotion/         可选的 Remotion 子工程：片头 / 片尾 / 版式卡（独立依赖，不打包进桌面版）
 ```
 
 桌面端开发与打包细节见 [desktop/README.md](desktop/README.md)。
+
+## Remotion 片头 / 片尾 / 版式卡（可选）
+
+`remotion/` 是一个独立的 Remotion 子工程，负责两张卡片：片头（深色渐变背景、逐行弹入的大标题、强调线、底部进度条）与片尾（关注引导、账号胶囊）。后端通过子进程调用它，**不会把 Remotion 依赖装进 `server/`**。
+
+```bash
+cd remotion
+npm install   # 首次渲染还会下载 Chrome Headless Shell（约 131 MB）
+npm run studio   # 打开 Studio 实时调标题、配色与节奏
+```
+
+装好后在设置页勾选「用 Remotion 模板渲染片头」（或 `INTRO_ENABLED=1`），合成时会先渲染片头，再用 ffmpeg 补静音轨、统一编码参数，最后跟正文片段一起走转场拼接。片头时长取自 `TITLE_DURATION`。
+
+片尾独立开关：把 `OUTRO_DURATION` 设成大于 0（如 3），就会在正文后追加一张关注引导卡，文案与账号名分别由 `OUTRO_TITLE`、`OUTRO_HANDLE` 控制。
+
+同一套模板还负责**兜底设计卡**：某段素材搜不到或全部下载失败时，不再中断任务，而是渲染一张「引号 + 核心句 + 观点」的排版卡顶上（`QUOTE_FALLBACK=1`，默认开）。Remotion 也不可用时再退到纯色渐变底，保证一定出片。
+
+需要段落之间有呼吸感时，打开 `CHAPTER_CARD=1`：每段开头先插一张过场卡（大序号 + 本段第一句 + 底部段落进度点）。它是纯增量插入，正文片段整体右移，音频与字幕都在各自片段内部，不需要改时间轴。
+
+### 版式确认与卡片模板（可选）
+
+`CARDS_ENABLED=1` 时，素材确认后会多出一步「版式确认」：一次模型调用产出整份清单——片头（`TitleCard` / `TitleHero`）、章节卡（`ChapterCard` / `ChapterSplit`，从第 2 段起，最多 6 张）、片尾（`OutroCard` / `OutroMinimal`）。主色由视觉模型在色板里挑（`CARD_ACCENT` + 5 个预设）。
+
+这一步是所见即所得：每张卡都用最终渲染的同一套组件出静帧和逐帧预览，改标题、角标、时长、配色立刻重绘；可以单张换模板 / 换文案 / 换配色，也可以「全部换模板」，不满意就整份「换一批」。改过的卡按参数指纹重渲，没动的复用 `cards/` 里的旧文件。
+
+模型不可用或返回不合法时回退到内置模板（片头取标题、章节卡取每段首句、片尾取关注引导），不阻塞流水线。
+
+需要知道的：
+
+- 卡片与前后片段之间固定走 `fade`，正片之间的转场仍按 `TRANSITION_STYLE` 轮换，观感不会被章节卡打断。
+- **任一步失败都会回退**到原来的 ASS 大字标题，不会中断出片；日志里会写明原因。
+- 想改样式直接编辑 `remotion/src/` 下对应的组件（`TitleCard` / `TitleHero` / `ChapterCard` / `ChapterSplit` / `OutroCard` / `OutroMinimal` / `QuoteCard`），详见 [remotion/README.md](remotion/README.md)。
+- 桌面版**默认不打包**这个目录（`node_modules` + Chrome Shell 约几百 MB）。要用的话把整个 `remotion/` 放到应用根目录，或设置 `AISV_REMOTION_DIR` 指向它。
+- 单次渲染约 5~8 秒（1080×1920，1.6 秒片头）；同一任务重试会复用已渲染的 `intro.mp4`。
 
 ## 常用命令
 
@@ -266,6 +319,9 @@ pnpm dist:win     # 产物：desktop/release/AI Short Video-<version>-win-portab
 | `AISV_OUT_DIR` | 成片输出目录 |
 | `AISV_ASSETS_DIR` | prompts 等静态资源目录 |
 | `AISV_BIN_DIR` | 随包 ffmpeg / ffprobe 所在目录 |
+| `AISV_MUSIC_DIR` | 自定义音乐目录，默认 `<数据目录>/music` |
+| `AISV_SFX_DIR` | 自定义音效目录（放 `whoosh.wav` / `impact.wav`），默认用程序合成的音效 |
+| `AISV_REMOTION_DIR` | 指定 `remotion/` 子工程位置，打包态用 |
 | `PORT` / `HOST` | 后端监听地址，默认 `4000` / `127.0.0.1` |
 | `AISV_OPEN_SETTINGS=1` | 启动即打开设置页 |
 | `AISV_OPEN_DEVTOOLS=1` | 开发态自动打开 DevTools |
@@ -301,6 +357,7 @@ Electron 会复用已在运行的后端；单独跑 `pnpm dev:server` 时可用 
 - 字幕用系统字体渲染：Windows 走微软雅黑，macOS / Linux 由 libass 回退，字形可能有差异
 - CosyVoice 与豆包需要各自平台的 Key，未配置时界面上不会出现对应引擎
 - 需要登录或强反爬的站点抓不到正文时，会直接提示改用「粘贴正文」
+- 片头 / 片尾 / 版式卡依赖 `remotion/` 子工程的依赖与 Chrome Headless Shell；未安装时卡片渲染失败会被跳过，片头回退到字幕标题
 
 ## 致谢
 

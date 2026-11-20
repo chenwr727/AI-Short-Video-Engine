@@ -33,6 +33,9 @@ export interface Meta {
   };
   materialSources: Option[];
   resolutions: Option[];
+  /** 版式页可选的卡片配色与模板 */
+  cardAccents: string[];
+  cardTemplates: Record<CardKind, { id: string; name: string; hint: string }[]>;
 }
 
 export interface Health {
@@ -45,6 +48,7 @@ export interface Health {
     dashscope: { configured: boolean };
     tts: { edge: boolean; dashscope: boolean; seed: boolean };
     material: { pixabay: boolean; pexels: boolean };
+    cards: { enabled: boolean };
   };
   deps: { ffmpeg: string | null; ffprobe: string | null };
 }
@@ -122,9 +126,35 @@ export type TaskStatus =
   | "tts_ready"
   | "material_ready"
   | "awaiting_material"
+  | "awaiting_cards"
+  | "cards_ready"
   | "completed"
   | "failed"
   | "cancelled";
+
+export type CardKind = "intro" | "chapter" | "outro" | "quote";
+
+export interface CardSpec {
+  id: string;
+  kind: CardKind;
+  compositionId: string;
+  /** 章节卡关联的段号 */
+  paragraph?: number;
+  title: string;
+  label: string;
+  handle?: string;
+  accent: string;
+  durationSec: number;
+  fingerprint?: string;
+  videoPath?: string;
+  stillPath?: string;
+}
+
+export interface CardManifest {
+  items: CardSpec[];
+  signature?: string;
+  style?: string;
+}
 
 export interface AudioFileInfo {
   file: string;
@@ -187,6 +217,8 @@ export interface TaskState {
   transcript: Transcript | null;
   audio: AudioManifest | null;
   material: MaterialManifest | null;
+  /** 关闭版式阶段时为 null */
+  cards: CardManifest | null;
   result: string | null;
   error: string | null;
   createdAt: string;

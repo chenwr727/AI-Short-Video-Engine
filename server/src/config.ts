@@ -36,6 +36,37 @@ export interface AppConfig {
   AUDIO_FADE_OUT: string;
   VIDEO_FADE_IN: string;
   VIDEO_FADE_OUT: string;
+  /** 0 = 关闭，1-10 = 缓慢推拉/平移的强度 */
+  CAMERA_MOTION: string;
+  /** 0 = 关闭，1-10 = 对比度/饱和/暗角/颗粒的强度 */
+  COLOR_GRADE: string;
+  /** fade = 统一淡入淡出，mixed = 按段落轮换转场 */
+  TRANSITION_STYLE: string;
+  /** 1 = 用缩略图让模型看画面选片，0 = 只按标签文本选 */
+  VISION_SELECT: string;
+  /** 每段镜头数 1-3，1 = 整段只用一条素材 */
+  SHOTS_PER_PARAGRAPH: string;
+  /** 1 = 没检索到素材时改用设计卡，0 = 直接报错中断 */
+  QUOTE_FALLBACK: string;
+  /** 1 = 转场与片头加音效 */
+  SFX_ENABLED: string;
+  /** 音效音量，1 = 原音量 */
+  SFX_VOLUME: string;
+  /** 1 = 用 Remotion 模板渲染片头，需要 remotion/ 子工程已安装依赖 */
+  INTRO_ENABLED: string;
+  /** Remotion 片尾秒数，0 = 不加片尾 */
+  OUTRO_DURATION: string;
+  OUTRO_TITLE: string;
+  /** 片尾账号名，留空则不显示 */
+  OUTRO_HANDLE: string;
+  /** 1 = 段落之间插入 Remotion 过场卡 */
+  CHAPTER_CARD: string;
+  /** 过场卡秒数，过短会被转场吃掉，建议 2 秒以上 */
+  CHAPTER_DURATION: string;
+  /** 1 = 素材之后多一步「生成版式」，由 AI 选模板并写卡片文案 */
+  CARDS_ENABLED: string;
+  /** 卡片主色，AI 只在这个色板里挑 */
+  CARD_ACCENT: string;
   SPEAKER_MAIN: string;
   SPEAKER_GUEST: string;
 }
@@ -69,6 +100,22 @@ const DEFAULTS: AppConfig = {
   AUDIO_FADE_OUT: "1.2",
   VIDEO_FADE_IN: "0.5",
   VIDEO_FADE_OUT: "0.5",
+  CAMERA_MOTION: "6",
+  COLOR_GRADE: "5",
+  TRANSITION_STYLE: "mixed",
+  VISION_SELECT: "1",
+  SHOTS_PER_PARAGRAPH: "2",
+  QUOTE_FALLBACK: "1",
+  SFX_ENABLED: "1",
+  SFX_VOLUME: "0.2",
+  INTRO_ENABLED: "0",
+  OUTRO_DURATION: "0",
+  OUTRO_TITLE: "关注我，下期见",
+  OUTRO_HANDLE: "",
+  CHAPTER_CARD: "0",
+  CHAPTER_DURATION: "2",
+  CARDS_ENABLED: "0",
+  CARD_ACCENT: "#ff5a3c",
   SPEAKER_MAIN: "小简",
   SPEAKER_GUEST: "老陈",
 };
@@ -149,6 +196,14 @@ export function numberOrZero(value: string, fallback: number): number {
 }
 
 /** 留空用 fallback */
+/** 卡片可选主色，主色之外只允许这几个，避免出现荧光色 */
+const CARD_EXTRA_ACCENTS = ["#3b82f6", "#22c55e", "#eab308", "#a855f7", "#f97316"];
+
+export function cardAccentPalette(cfg: AppConfig = loadConfig()): string[] {
+  const base = (cfg.CARD_ACCENT ?? "").trim() || "#ff5a3c";
+  return [base, ...CARD_EXTRA_ACCENTS.filter((color) => color !== base)];
+}
+
 export function bool(value: string, fallback: boolean): boolean {
   const v = (value ?? "").trim().toLowerCase();
   if (!v) return fallback;

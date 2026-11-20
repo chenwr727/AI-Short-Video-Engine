@@ -455,6 +455,14 @@
                 <input type="text" data-key="MATERIAL_MIN_DURATION" placeholder="10" data-num="1,120" data-unit="秒" />
               </div>
             </div>
+            <label class="check"><input type="checkbox" data-key="VISION_SELECT" /> 看缩略图选片（需要模型支持图片输入，失败会自动回退到标签选片）</label>
+            <div class="field">
+              <label class="lbl">每段镜头数<span class="hint">1 = 整段只用一条素材</span></label>
+              <div class="with-unit">
+                <input type="text" data-key="SHOTS_PER_PARAGRAPH" placeholder="2" data-num="1,3" data-unit="个" data-int="1" />
+              </div>
+            </div>
+            <label class="check"><input type="checkbox" data-key="QUOTE_FALLBACK" /> 没素材时改用设计卡（不中断出片）</label>
           </div>
         </details>
 
@@ -505,6 +513,18 @@
                 <input type="text" data-key="VIDEO_FADE_OUT" placeholder="0.5" data-num="0,5" data-unit="秒" />
               </div>
             </div>
+            <div class="field">
+              <label class="lbl">运镜强度<span class="hint">0 = 静止画面</span></label>
+              <div class="with-unit">
+                <input type="text" data-key="CAMERA_MOTION" placeholder="6" data-num="0,10" data-unit="级" data-int="1" />
+              </div>
+            </div>
+            <div class="field">
+              <label class="lbl">调色强度<span class="hint">0 = 不调色</span></label>
+              <div class="with-unit">
+                <input type="text" data-key="COLOR_GRADE" placeholder="5" data-num="0,10" data-unit="级" data-int="1" />
+              </div>
+            </div>
           </div>
         </details>
 
@@ -530,6 +550,32 @@
                 <input type="text" data-key="TITLE_DURATION" placeholder="1.6" data-num="0,30" data-unit="秒" />
               </div>
             </div>
+            <label class="check"><input type="checkbox" data-key="INTRO_ENABLED" /> 用 Remotion 模板渲染片头（需要先安装 remotion/ 依赖，失败自动回退）</label>
+            <div class="field">
+              <label class="lbl">片尾时长<span class="hint">0 = 不加片尾</span></label>
+              <div class="with-unit">
+                <input type="text" data-key="OUTRO_DURATION" placeholder="0" data-num="0,15" data-unit="秒" />
+              </div>
+            </div>
+            <div class="field">
+              <label class="lbl">片尾标题</label>
+              <div class="with-unit">
+                <input type="text" data-key="OUTRO_TITLE" placeholder="关注我，下期见" data-text="1" />
+              </div>
+            </div>
+            <div class="field">
+              <label class="lbl">片尾账号<span class="hint">留空不显示</span></label>
+              <div class="with-unit">
+                <input type="text" data-key="OUTRO_HANDLE" placeholder="@你的账号" data-text="1" />
+              </div>
+            </div>
+            <label class="check"><input type="checkbox" data-key="CHAPTER_CARD" /> 段落之间插入过场卡（需要 remotion/ 依赖）</label>
+            <div class="field">
+              <label class="lbl">过场卡时长<span class="hint">太短会被转场吃掉</span></label>
+              <div class="with-unit">
+                <input type="text" data-key="CHAPTER_DURATION" placeholder="2" data-num="0.5,10" data-unit="秒" />
+              </div>
+            </div>
             <div class="field">
               <label class="lbl">相邻台词间隔<span class="hint">0 = 紧接</span></label>
               <div class="with-unit">
@@ -540,6 +586,12 @@
               <label class="lbl">段落转场<span class="hint">0 = 关闭</span></label>
               <div class="with-unit">
                 <input type="text" data-key="TRANSITION_DURATION" placeholder="0.5" data-num="0,10" data-unit="秒" />
+              </div>
+            </div>
+            <div class="field">
+              <label class="lbl">转场风格<span class="hint">fade 或 mixed</span></label>
+              <div class="with-unit">
+                <input type="text" data-key="TRANSITION_STYLE" placeholder="mixed" data-text="1" />
               </div>
             </div>
           </div>
@@ -565,6 +617,13 @@
               <label class="lbl">BGM 淡出<span class="hint">0 = 关闭</span></label>
               <div class="with-unit">
                 <input type="text" data-key="AUDIO_FADE_OUT" placeholder="1.2" data-num="0,30" data-unit="秒" />
+              </div>
+            </div>
+            <label class="check"><input type="checkbox" data-key="SFX_ENABLED" /> 转场与片头音效</label>
+            <div class="field">
+              <label class="lbl">音效音量<span class="hint">1 = 原音量</span></label>
+              <div class="with-unit">
+                <input type="text" data-key="SFX_VOLUME" placeholder="0.2" data-num="0,2" data-unit="倍" />
               </div>
             </div>
           </div>
