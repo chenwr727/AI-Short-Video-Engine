@@ -4,7 +4,7 @@ English | [简体中文](README.md)
 
 <p align="center"><b>Drop in a link, get a vertical short video ready to post.</b></p>
 
-<p align="center">Fetch article → AI script → per-line dubbing → footage matching → subtitled final cut<br />Fully automatic, pausing only twice for your approval</p>
+<p align="center">Fetch article → AI script → per-line dubbing → footage matching → title cards → subtitled final cut<br />Fully automatic, pausing only at the moments that matter</p>
 
 <p align="center">
   <a href="https://github.com/chenwr727/AI-Short-Video-Engine/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/chenwr727/AI-Short-Video-Engine?color=2f6fed"></a>
@@ -57,10 +57,11 @@ One 36kr article, one script style swap, a completely different video. Samples a
 
 The hard part of "one-click AI video" was never generation — it is discovering, after the render, that the tone is off or the footage does not fit, and having to run the whole thing again.
 
-So this pipeline inserts a human checkpoint at **the two most expensive moments**:
+So this pipeline inserts a human checkpoint at **the most expensive moments**:
 
 - **Script review**: the AI drafts and stops. Edit the title and any line, then confirm to proceed to dubbing — no waiting three minutes to hear that the opening is wrong.
 - **Footage review**: preview each clip, hit **Replace** to search for another candidate, and the pick swaps in immediately.
+- **Card review** (optional, `CARDS_ENABLED=1`): once the footage is locked in, the AI picks a template and writes copy for the intro, chapter and outro cards. Preview each card and confirm only when it reads right.
 
 Everything else stays out of your way:
 
@@ -147,17 +148,19 @@ flowchart LR
     E --> F[Split and TTS]
     F --> G[Footage search]
     G --> H{{Footage review}}
-    H --> I[Subtitles transitions BGM]
+    H --> HC{{Card review (optional)}}
+    HC --> I[Subtitles transitions BGM]
     I --> J([Final mp4])
 ```
 
-The UI mirrors this in five steps; the step bar at the top lets you revisit completed steps at any time:
+The UI mirrors this in six steps (card review only appears with `CARDS_ENABLED=1`); the step bar at the top lets you revisit completed steps at any time:
 
 1. **Script input**: paste a URL or article text, pick a script style, click **Start**
 2. **Script generation**: the AI fetches and drafts, then pauses for review; the title and every line are editable
 3. **Voice synthesis**: choose a voice per role, plus the TTS engine and speed (default 1.1×, configurable via `TTS_SPEED`)
 4. **Material review**: choose a footage source and output resolution, click **Match materials**; preview each clip and use **Replace** for another candidate. Confirming moves on (it does **not** auto-render)
-5. **Final preview**: set subtitle size, BGM on/off and volume, click **Render video**; tweak and click **Regenerate** afterwards
+5. **Card review**: preview the generated intro, chapter and outro cards; edit copy and duration, switch templates, delete cards, or regenerate the whole set. Confirm as-is and the final cut keeps the body segments only
+6. **Final preview**: set subtitle size, BGM on/off and volume, click **Render video**; tweak and click **Regenerate** afterwards
 
 On desktop, **Show in folder** opens the file location (in a browser it downloads the file).
 
@@ -175,6 +178,8 @@ Each task keeps a full set of intermediate files under `<data dir>/workspaces/<t
   _durations.json    # audio durations
   _videos.json       # footage manifest
   clips/ subs/       # segment videos and ASS subtitles
+  cards/             # card videos and stills, fingerprinted by their parameters
+  _task.json         # task state snapshot (includes the card manifest) for resuming
   _bgm.wav           # mixed background music
   _output.mp4        # final video
 ```
@@ -200,14 +205,26 @@ Field reference (environment variables take precedence over the file, which is h
 | TTS (Doubao) | `SEED_TTS_API_KEY` / `TTS_SEED_RESOURCE_ID` / `TTS_SEED_MODEL` | The Doubao engine appears once a key is set |
 | Footage | `PIXABAY_API_KEY` / `PEXELS_API_KEY` | **At least one is required**, otherwise footage search is unavailable |
 | Footage | `MATERIAL_MIN_DURATION` | Minimum candidate clip length in seconds, default 10 |
+| Footage | `VISION_SELECT` | Let the model pick clips from thumbnails, default 1; falls back to text-only selection when the model cannot take images |
+| Footage | `SHOTS_PER_PARAGRAPH` | Shots per segment, 1–3, default 2; cuts land on sentence boundaries, 1 = one clip for the whole segment |
+| Footage | `QUOTE_FALLBACK` | 1 = fall back to a quote card when a segment has no usable footage (default); 0 = fail the task instead |
 | Video | `VIDEO_WIDTH` / `VIDEO_HEIGHT` / `FPS` / `TTS_SPEED` | Defaults: 1080×1920 / 24 fps / 1.1× speed |
+| Video | `CAMERA_MOTION` | Camera move strength 0–10, default 6; push-in / pull-out / pan rotate per segment, 0 = static frame |
+| Video | `COLOR_GRADE` | Grade strength 0–10, default 5; unifies contrast / saturation / vignette / grain, 0 = no grading |
 | Video | `TRANSITION_DURATION` | Transition length in seconds, default 0.5; set 0 to disable |
+| Video | `TRANSITION_STYLE` | `mixed` (default) rotates styles per segment, `fade` uses crossfade everywhere |
 | Subtitles | `SUBTITLE_FONT_SIZE` | Font size in px, default 0 = computed from video width (~72px at 1080, ~48px at 720); titles are 1.4× larger |
 | Video | `VIDEO_FADE_IN` / `VIDEO_FADE_OUT` | Fade in/out at the start/end, default 0.5; set 0 to disable |
 | BGM | `BGM_ENABLED` | Mix in background music, default 1; set 0 to keep narration only |
 | BGM | `BGM_VOLUME` | BGM volume, default 0.1 (1 = original level) |
 | BGM | `AUDIO_FADE_IN` / `AUDIO_FADE_OUT` | BGM fade in/out in seconds, defaults 0.8 / 1.2; set 0 to disable |
 | BGM | `AISV_MUSIC_DIR` | Custom music directory, default `<data dir>/music`; bare filenames on the preview page resolve here |
+| SFX | `SFX_ENABLED` / `SFX_VOLUME` | Transition and intro sound effects, default on / 0.2; the files are synthesized by ffmpeg, drop `whoosh.wav` / `impact.wav` into `AISV_SFX_DIR` to replace them |
+| Intro | `INTRO_ENABLED` | 1 = render the intro with the Remotion template (needs `remotion/` dependencies), default 0; falls back to the subtitle title on failure |
+| Outro | `OUTRO_DURATION` / `OUTRO_TITLE` / `OUTRO_HANDLE` | Outro card length in seconds (0 = no outro), title copy, account name (hidden when empty) |
+| Chapters | `CHAPTER_CARD` / `CHAPTER_DURATION` | 1 = insert a Remotion chapter card between segments, default off; card length defaults to 2s |
+| Cards | `CARDS_ENABLED` | 1 = add a **Card review** step after footage confirmation, where the AI picks templates and writes copy for intro / chapter / outro cards, default off; needs `remotion/` dependencies |
+| Cards | `CARD_ACCENT` | Primary card color, default `#ff5a3c`; the AI may only pick from this palette (primary + 5 presets) |
 
 These are global defaults. The **Final Preview** page also lets you override subtitle size, BGM on/off, BGM volume, and custom music per task: the size field shows the concrete px value computed for the current resolution (never 0), and mp3/wav/m4a/aac/ogg/flac files are accepted (absolute path, or a filename inside `AISV_MUSIC_DIR`). If the file is missing, the app falls back to generated music and logs a warning. Changing the subtitle size additionally re-renders the segments with burned-in subtitles.
 
@@ -221,15 +238,51 @@ desktop/          Electron shell (window and custom menu, backend launcher, sett
   src/preload.ts    Minimal bridge exposed to the renderer (window menu / settings I/O)
   assets/settings.html  Graphical config panel
 server/           Fastify + TypeScript backend
-  src/pipeline/     Fetch & draft / split / TTS / footage / composition
-  src/services/     LLM, TTS (edge / cosyvoice / seed), footage sites, ffmpeg, subtitles
-  src/task/         Task state machine and pipeline orchestration (two human checkpoints)
+  src/pipeline/     Fetch & draft / split / TTS / footage / cards / composition
+  src/services/     LLM, TTS (edge / cosyvoice / seed), footage sites, ffmpeg, subtitles, Remotion, SFX
+  src/card-templates.ts  Card template catalog (intro / chapter / outro / fallback quote card)
+  src/task/         Task state machine and pipeline orchestration (three human checkpoints, cards optional)
   assets/prompts/   Prompt templates (podcast / crosstalk / stand-up)
   data/             Runtime artifacts: workspaces/, cache/, out/ (not committed)
 web/              React + Vite frontend (served by the backend in packaged builds)
+remotion/         Optional Remotion project: intro / outro / layout cards (separate dependencies, not bundled)
 ```
 
 For desktop development and packaging details, see [desktop/README_EN.md](desktop/README_EN.md).
+
+## Remotion Cards: Intro / Outro / Layout (Optional)
+
+`remotion/` is a standalone Remotion project that renders every card in the video: the intro (dark gradient background, big title popping in line by line, accent rule, bottom progress bar), the outro (follow prompt, account pill), chapter cards, and the fallback quote card. The backend shells out to it and **never installs Remotion into `server/`**.
+
+```bash
+cd remotion
+npm install   # the first render also downloads Chrome Headless Shell (~131 MB)
+npm run studio   # open Studio to tweak titles, colors and pacing live
+```
+
+Once installed, tick **Render intro with the Remotion template** in settings (or set `INTRO_ENABLED=1`). Composition renders the intro first, adds a silent audio track and normalizes encoding, then joins it with the body segments through the usual transitions. Intro length comes from `TITLE_DURATION`.
+
+The outro has its own switch: set `OUTRO_DURATION` above 0 (e.g. 3) and a follow prompt card is appended after the body, with its copy and account name controlled by `OUTRO_TITLE` and `OUTRO_HANDLE`.
+
+The same templates also render the **fallback quote card**: when a segment has no usable footage, the task no longer fails — a card with quote mark, key sentence and takeaway is rendered instead (`QUOTE_FALLBACK=1`, on by default). If Remotion itself is unavailable, a plain gradient card is used so a video always ships.
+
+When you want breathing room between segments, turn on `CHAPTER_CARD=1`: each segment gets a chapter card in front of it (big index number, the segment's first line, progress dots at the bottom). It is a pure insertion — body clips shift right, audio and subtitles stay inside their own clips, so the timeline model does not change.
+
+### Card Review and Templates (Optional)
+
+With `CARDS_ENABLED=1` a **Card review** step appears after footage confirmation: one model call produces the whole manifest — intro (`TitleCard` / `TitleHero`), chapter cards (`ChapterCard` / `ChapterSplit`, from segment 2 on, at most 6) and outro (`OutroCard` / `OutroMinimal`). A vision model picks the primary color from the palette (`CARD_ACCENT` plus 5 presets).
+
+The step is WYSIWYG: every card is rendered with the same components as the final video, both as a still and as a frame-accurate preview, so editing title, label, duration or color redraws immediately. Switch template, rewrite copy or change color per card, batch **Switch all templates**, or regenerate the whole set. Only cards whose parameters changed are re-rendered; the rest reuse the files under `cards/`.
+
+If the model is unavailable or returns something invalid, the built-in templates take over (intro from the title, chapter cards from each segment's first line, outro from the follow prompt) and the pipeline keeps going.
+
+Worth knowing:
+
+- Cards always crossfade into and out of their neighbours (`fade`), while body-to-body transitions still rotate per `TRANSITION_STYLE`, so chapter cards never break the rhythm of the cut.
+- **Any failure falls back** to the plain ASS title card instead of blocking the render; the log states the reason.
+- To restyle a card, edit the matching component under `remotion/src/` (`TitleCard` / `TitleHero` / `ChapterCard` / `ChapterSplit` / `OutroCard` / `OutroMinimal` / `QuoteCard`); see [remotion/README.md](remotion/README.md).
+- The desktop build **does not bundle** this directory by default (`node_modules` + Chrome Shell is several hundred MB). To use it, drop the whole `remotion/` folder next to the app or point `AISV_REMOTION_DIR` at it.
+- A single render takes about 5–8 seconds (1080×1920, 1.6s intro); retries reuse an already rendered card.
 
 ## Common Commands
 
@@ -266,6 +319,9 @@ Usually unnecessary; useful for troubleshooting or custom deployments:
 | `AISV_OUT_DIR` | Final video output directory |
 | `AISV_ASSETS_DIR` | Static assets such as prompts |
 | `AISV_BIN_DIR` | Directory of the bundled ffmpeg / ffprobe |
+| `AISV_MUSIC_DIR` | Custom music directory, default `<data dir>/music` |
+| `AISV_SFX_DIR` | Custom SFX directory (`whoosh.wav` / `impact.wav`), default is the synthesized set |
+| `AISV_REMOTION_DIR` | Point at the `remotion/` project, used by packaged builds |
 | `PORT` / `HOST` | Backend listen address, defaults `4000` / `127.0.0.1` |
 | `AISV_OPEN_SETTINGS=1` | Open the settings page on startup |
 | `AISV_OPEN_DEVTOOLS=1` | Auto-open DevTools in dev mode |
@@ -301,6 +357,7 @@ Make sure `web/dist` has been built (`pnpm build:web`). Backend logs appear in t
 - Subtitles are rendered with system fonts: Microsoft YaHei on Windows, libass fallback on macOS / Linux, so glyphs may differ
 - CosyVoice and Doubao need keys from their respective platforms; the engines are hidden in the UI until configured
 - Login walls and aggressive anti-bot pages are not scraped; the app asks you to paste the article body instead
+- Intro / outro / layout cards depend on the `remotion/` project plus Chrome Headless Shell; without them card rendering is skipped and the intro falls back to the subtitle title
 
 ## Acknowledgements
 

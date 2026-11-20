@@ -8,6 +8,27 @@ export interface ChatOptions {
   timeoutMs?: number;
   /** 覆盖磁盘配置，供「测试连接」用未保存的值 */
   config?: AppConfig;
+  /** 随消息一起发送的图片 URL，按数组顺序编号（第 1 张 = 1） */
+  images?: string[];
+}
+
+interface TextPart {
+  type: "text";
+  text: string;
+}
+
+interface ImagePart {
+  type: "image_url";
+  image_url: { url: string };
+}
+
+/** 有图片时走多模态内容数组，否则保持纯字符串 */
+function userContent(user: string, images?: string[]): string | (TextPart | ImagePart)[] {
+  if (!images || images.length === 0) return user;
+  return [
+    { type: "text", text: user },
+    ...images.map((url): ImagePart => ({ type: "image_url", image_url: { url } })),
+  ];
 }
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
@@ -37,7 +58,7 @@ async function callOnce(cfg: AppConfig, system: string, user: string, opts: Chat
     model: cfg.LLM_MODEL,
     messages: [
       { role: "system", content: system },
-      { role: "user", content: user },
+      { role: "user", content: userContent(user, opts.images) },
     ],
   };
   if (opts.json) body.response_format = { type: "json_object" };

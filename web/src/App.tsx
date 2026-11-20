@@ -1,11 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  batchCards,
   cancelTask,
+  confirmCards,
   confirmMaterial,
   confirmScript,
   getHealth,
   matchMaterial,
+  regenerateCards,
+  removeCard,
   retryTask,
+  rewriteCard,
+  updateCard,
   getMeta,
   getTask,
   regenerateScript,
@@ -20,11 +26,12 @@ import {
   COMPOSE_STAGE_IDS,
   derivePhase,
   doneThrough,
+  hasCards,
+  indexOf,
   reachedIndex,
   RENDER_STAGE_IDS,
   stalledPhase,
-  STEPS,
-  STEP_INDEX,
+  stepsFor,
   type Phase,
 } from "./phases";
 import { AppMenu } from "./components/AppMenu";
@@ -35,6 +42,7 @@ import { InputStep } from "./components/InputStep";
 import { ScriptStep } from "./components/ScriptStep";
 import { RenderSetupStep } from "./components/RenderSetupStep";
 import { MaterialStep } from "./components/MaterialStep";
+import { CardStep, type CardDraft } from "./components/CardStep";
 import { RenderStep } from "./components/RenderStep";
 import { ResultStep } from "./components/ResultStep";
 import type { FormState, RenderFormState } from "./components/stepTypes";
@@ -48,6 +56,8 @@ const STATUS_TEXT: Record<TaskState["status"], string> = {
   tts_ready: "配音完成",
   material_ready: "素材就绪",
   awaiting_material: "等待确认素材",
+  awaiting_cards: "等待确认版式",
+  cards_ready: "版式已确认",
   completed: "已完成",
   failed: "失败",
   cancelled: "已取消",
@@ -61,6 +71,8 @@ const STATUS_TONE: Record<TaskState["status"], string> = {
   tts_ready: "info",
   material_ready: "info",
   awaiting_material: "info",
+  awaiting_cards: "info",
+  cards_ready: "info",
   completed: "ok",
   failed: "bad",
   cancelled: "",
@@ -291,11 +303,14 @@ export default function App() {
 
   const target = derivePhase(task);
 
+  // 没建任务时看配置开关
+  const cardsMode = task ? hasCards(task) : Boolean(health?.config.cards.enabled);
+
   // 只向前推进；用户回看时暂停跟随
   useEffect(() => {
     if (!following || !target) return;
-    setPhase((prev) => (STEP_INDEX[target] > STEP_INDEX[prev] ? target : prev));
-  }, [target, following]);
+    setPhase((prev) => (indexOf(target, cardsMode) > indexOf(prev, cardsMode) ? target : prev));
+  }, [target, following, cardsMode]);
 
   // 换步骤滚回顶部
   useEffect(() => {
@@ -304,8 +319,8 @@ export default function App() {
 
   // 记录走过的最远位置
   useEffect(() => {
-    setMaxStep((prev) => Math.max(prev, STEP_INDEX[phase]));
-  }, [phase]);
+    setMaxStep((prev) => Math.max(prev, indexOf(phase, cardsMode)));
+  }, [phase, cardsMode]);
 
   const running = task?.status === "running";
   const awaiting = task?.status === "awaiting_script";
@@ -401,12 +416,66 @@ export default function App() {
       setTask(state);
       setMaterialPicks({});
       setFollowing(true);
-      setPhase("result");
+      // 开了版式阶段就先去确认卡片，否则直达成片预览
+      setPhase(hasCards(state) ? "cards" : "result");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
+  }
+
+  /** 统一 busy 与报错；失败返回 undefined，调用方自己判断 */
+  async function withBusy<T>(job: () => Promise<T>): Promise<T | undefined> {
+    setBusy(true);
+    setError("");
+    try {
+      return await job();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      return undefined;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onConfirmCards() {
+    const state = await withBusy(confirmCards);
+    if (!state) return;
+    setTask(state);
+    setFollowing(true);
+    setPhase("result");
+  }
+
+  async function onRegenerateCards() {
+    const state = await withBusy(regenerateCards);
+    if (!state) return;
+    setTask(state);
+    setFollowing(true);
+    setPhase("cards");
+  }
+
+  async function onRewriteCard(id: string, mode: "text" | "accent") {
+    const state = await withBusy(() => rewriteCard(id, mode));
+    if (state) setTask(state);
+  }
+
+  /** 保存失败要回 false，卡片表单才知道别关 */
+  async function onUpdateCard(id: string, patch: CardDraft): Promise<boolean> {
+    const state = await withBusy(() => updateCard(id, patch));
+    if (!state) return false;
+    setTask(state);
+    return true;
+  }
+
+  async function onBatchCards(patch: { accent?: string; chapterDurationSec?: number; cycleTemplate?: boolean }) {
+    const state = await withBusy(() => batchCards(patch));
+    if (state) setTask(state);
+  }
+
+  async function onRemoveCard(id: string) {
+    const state = await withBusy(() => removeCard(id));
+    if (state) setTask(state);
   }
 
   function confirmDiscard(message: string): boolean {
@@ -547,7 +616,14 @@ export default function App() {
     // 前端状态可能滞后，以服务端为准
     const current = task ?? (await getTask().catch(() => null));
     const status = current?.status;
-    if (status !== "running" && status !== "awaiting_script" && status !== "awaiting_material") return true;
+    if (
+      status !== "running" &&
+      status !== "awaiting_script" &&
+      status !== "awaiting_material" &&
+      status !== "awaiting_cards"
+    ) {
+      return true;
+    }
     try {
       await cancelTask();
       return true;
@@ -680,13 +756,20 @@ export default function App() {
           </div>
         </header>
 
-        <StepBar current={phase} reached={reached} doneThrough={done} onSelect={onSelect} />
+        <StepBar
+          current={phase}
+          reached={reached}
+          doneThrough={done}
+          withCards={cardsMode}
+          onSelect={onSelect}
+        />
 
         {resumed && (
           <div className="resume-bar">
             <span className="resume-text">
               已恢复上次的任务（{new Date(resumed.createdAt).toLocaleString("zh-CN", { hour12: false })} ·{" "}
-              {STATUS_TEXT[resumed.status]}），停在「{STEPS[STEP_INDEX[phase]]?.label}」
+              {STATUS_TEXT[resumed.status]}），停在「
+              {stepsFor(cardsMode)[indexOf(phase, cardsMode)]?.label}」
             </span>
             <button type="button" className="resume-btn" onClick={onRestart}>
               新建一条
@@ -791,17 +874,39 @@ export default function App() {
             meta={meta}
             form={renderForm}
             onFormChange={onRenderFormChange}
+            nextLabel={cardsMode ? "下一步：版式确认" : undefined}
+          />
+        )}
+
+        {phase === "cards" && task && (
+          <CardStep
+            task={task}
+            busy={busy}
+            error={error}
+            meta={meta}
+            onRegenerate={() => void onRegenerateCards()}
+            onRewrite={(id, mode) => void onRewriteCard(id, mode)}
+            onUpdate={onUpdateCard}
+            onBatch={(patch) => void onBatchCards(patch)}
+            onRemove={(id) => void onRemoveCard(id)}
+            onConfirm={() => void onConfirmCards()}
+            onRetry={onRetry}
+            onCancel={() => void onCancel()}
+            onBack={() => goBack("material")}
           />
         )}
 
         {phase === "result" &&
-          (task?.status === "completed" || task?.status === "material_ready" || !task ? (
+          (task?.status === "completed" ||
+          task?.status === "material_ready" ||
+          task?.status === "cards_ready" ||
+          !task ? (
             <ResultStep
               task={task}
               busy={busy}
               error={error}
               meta={meta}
-              onBack={() => goBack("material")}
+              onBack={() => goBack(cardsMode ? "cards" : "material")}
               onRestart={onRestart}
               onRender={(patch) => void onRender(patch)}
               onPickMusic={bridge()?.pickMusic ? onPickMusic : undefined}
@@ -813,11 +918,11 @@ export default function App() {
               busy={busy}
               error={error}
               stageIds={COMPOSE_STAGE_IDS}
-              onBack={() => goBack("material")}
+              onBack={() => goBack(cardsMode ? "cards" : "material")}
               onRestart={onRestart}
               onRetry={onRetry}
               onCancel={() => void onCancel()}
-              onNext={() => goNext("material")}
+              onNext={() => goNext(cardsMode ? "cards" : "material")}
               title="合成视频"
               desc="分段渲染 → 拼接 → 混音，完成后自动切到成片。"
             />

@@ -1,21 +1,24 @@
 import type { Phase } from "../phases";
-import { STEPS, STEP_INDEX } from "../phases";
+import { indexOf, stepsFor } from "../phases";
 
 interface Props {
   current: Phase;
   reached: number;
   doneThrough: number;
+  /** 任务是否开了版式阶段，决定要不要显示这一步 */
+  withCards: boolean;
   onSelect: (phase: Phase) => void;
 }
 
 /** 顶部步骤条：已完成打勾，已到达可点回 */
-export function StepBar({ current, reached, doneThrough, onSelect }: Props) {
-  const cur = STEP_INDEX[current];
+export function StepBar({ current, reached, doneThrough, withCards, onSelect }: Props) {
+  const steps = stepsFor(withCards);
+  const cur = indexOf(current, withCards);
 
   return (
     <div className="stepper-wrap">
       <ol className="stepper">
-        {STEPS.map((step, index) => {
+        {steps.map((step, index) => {
           const active = index === cur;
           const done = index < doneThrough;
           const clickable = index <= reached && !active;

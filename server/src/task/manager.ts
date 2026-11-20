@@ -1,16 +1,28 @@
 import fs from "node:fs";
 import path from "node:path";
-import { autoSubtitleFontSize } from "../config.js";
+import { autoSubtitleFontSize, cardAccentPalette, loadConfig } from "../config.js";
 import { newWorkspace } from "../paths.js";
 import { persistConfirmed, runScriptStages, sentenceCount } from "../pipeline/script.js";
 import { runTtsStage, transcriptFingerprint } from "../pipeline/tts.js";
 import { runMaterialStage, saveMaterialManifest, searchCandidates } from "../pipeline/material.js";
+import { CARD_TEMPLATES, isTemplateFor } from "../card-templates.js";
+import {
+  cardsEnabled,
+  cleanCardText,
+  ensureCardStill,
+  nextAccent,
+  normalizeCard,
+  rewriteCardTitle,
+  runCardsStage,
+} from "../pipeline/cards.js";
 import { runComposeStage } from "../pipeline/compose.js";
 import { resolveMusicFile } from "../services/bgm.js";
 import { downloadMaterial } from "../services/material.js";
 import { loadLatestTask, saveTaskState } from "./store.js";
 import type {
   AudioManifest,
+  CardManifest,
+  CardSpec,
   GenerateOptions,
   LogLine,
   MaterialInfo,
@@ -34,6 +46,7 @@ export const STAGE_DEFS: { id: string; label: string }[] = [
   { id: "split", label: "拆分台词" },
   { id: "tts", label: "合成配音" },
   { id: "material", label: "匹配素材" },
+  { id: "cards", label: "生成版式" },
   { id: "compose", label: "合成视频" },
 ];
 
@@ -55,6 +68,25 @@ type Listener = (event: TaskEvent) => void;
 
 export interface MaterialReplacement extends MaterialInfo {
   paragraph: number;
+}
+
+export interface CardPatch {
+  title?: string;
+  label?: string;
+  accent?: string;
+  durationSec?: number;
+  handle?: string;
+  /** 换模板，必须是该卡片类型白名单里的 composition */
+  compositionId?: string;
+}
+
+export interface CardsBatchPatch {
+  /** 统一主色 */
+  accent?: string;
+  /** 只改章节卡的时长 */
+  chapterDurationSec?: number;
+  /** 每种卡片切到自己的下一个模板 */
+  cycleTemplate?: boolean;
 }
 
 class TaskManager {
@@ -85,7 +117,10 @@ class TaskManager {
     if (
       !force &&
       current &&
-      (current.status === "running" || current.status === "awaiting_script" || current.status === "awaiting_material")
+      (current.status === "running" ||
+        current.status === "awaiting_script" ||
+        current.status === "awaiting_material" ||
+        current.status === "awaiting_cards")
     ) {
       throw new TaskError("已有任务未结束，请等待完成或先取消", 409);
     }
@@ -99,11 +134,15 @@ class TaskManager {
       options,
       workspace,
       status: "running",
-      stages: STAGE_DEFS.map((d) => ({ ...d, status: "pending" as StageStatus })),
+      stages: STAGE_DEFS.filter((d) => d.id !== "cards" || cardsEnabled()).map((d) => ({
+        ...d,
+        status: "pending" as StageStatus,
+      })),
       logs: [],
       transcript: null,
       audio: null,
       material: null,
+      cards: null,
       result: null,
       error: null,
       createdAt: now,
@@ -311,10 +350,285 @@ class TaskManager {
     }
 
     state.result = null;
+    state.cards = null;
+    this.emit();
+
+    // 开了版式阶段就紧接着让 AI 出卡片清单，否则维持原来的直达预览
+    if (cardsEnabled()) {
+      const cardController = new AbortController();
+      this.controller = cardController;
+      this.setStatus("running");
+      this.log("素材已确认，开始生成版式…", "info", "cards");
+      this.emit();
+      void this.executeCards(cardController, true);
+      return state;
+    }
+
     this.setStatus("material_ready");
     this.log("素材已确认，去「成片预览」设置字幕与 BGM 后生成成片", "info", "compose");
     this.emit();
     return state;
+  }
+
+  confirmCards(): TaskState {
+    const state = this.requireState();
+    if (state.status !== "awaiting_cards") {
+      throw new TaskError("当前任务不在等待版式确认状态", 400);
+    }
+    if (!state.cards) {
+      throw new TaskError("版式清单是空的，先点「重新生成」", 400);
+    }
+
+    this.controller?.abort();
+    this.controller = null;
+
+    this.setStatus("cards_ready");
+    // 允许空清单：只有正文的成片
+    this.log(
+      state.cards.items.length > 0 ? `版式已确认：${state.cards.items.length} 张卡` : "版式已确认：本次不加任何卡片",
+      "info",
+      "cards",
+    );
+    this.log("去「成片预览」设置字幕与 BGM 后生成成片", "info", "compose");
+    this.emit();
+    return state;
+  }
+
+  regenerateCards(): TaskState {
+    const state = this.requireState();
+    // material_ready = 老任务补做版式；completed = 成片已出，想换一批版式
+    const allowed: TaskState["status"][] = ["awaiting_cards", "cards_ready", "material_ready", "completed"];
+    if (!allowed.includes(state.status)) {
+      throw new TaskError("当前任务不在等待版式确认状态", 400);
+    }
+    if (!state.transcript) throw new TaskError("还没有剧本，无法生成版式", 400);
+
+    this.controller?.abort();
+    this.controller = null;
+
+    this.clearLogsFrom(state, "cards");
+    state.result = null;
+    // 清空清单，否则页面会凭旧清单判成"已出片"而跳到成片预览
+    state.cards = null;
+    fs.rmSync(path.join(state.workspace, "_output.mp4"), { force: true });
+
+    const controller = new AbortController();
+    this.controller = controller;
+    this.setStatus("running");
+    this.log("重新生成版式…", "info", "cards");
+    this.emit();
+    void this.executeCards(controller, true);
+    return state;
+  }
+
+  /** 换文案或换配色；不占用主 controller，避免打断合成 */
+  async rewriteCard(id: string, mode: "text" | "accent" = "text"): Promise<TaskState> {
+    const state = this.requireState();
+    if (!this.canEditCards(state)) {
+      throw new TaskError("当前任务不在可编辑版式的状态", 400);
+    }
+    const manifest = state.cards;
+    if (!manifest || !state.transcript) throw new TaskError("版式清单为空", 400);
+
+    const index = manifest.items.findIndex((item) => item.id === id);
+    const spec = manifest.items[index];
+    if (!spec) throw new TaskError(`没有这张卡：${id}`, 400);
+
+    const controller = new AbortController();
+    const ctx = this.makeCtx(controller);
+    if (!ctx) throw new TaskError("任务状态异常", 500);
+
+    const cfg = loadConfig();
+    const used = manifest.items
+      .filter((item) => item.kind === spec.kind && item.id !== spec.id)
+      .map((item) => item.title)
+      .concat(spec.title);
+
+    const next: CardSpec = { ...spec };
+    let changed = false;
+
+    if (mode === "text") {
+      const title = await rewriteCardTitle(ctx, state.transcript, spec, used);
+      if (title) {
+        next.title = title;
+        changed = true;
+      }
+    }
+
+    // 没拿到新文案就换配色兜底
+    if (!changed) {
+      next.accent = nextAccent(spec, cfg);
+      this.log(`配色换成 ${next.accent}`, "info", "cards");
+    }
+
+    delete next.videoPath;
+    delete next.stillPath;
+    manifest.items[index] = normalizeCard(next, cfg, state.options.width, state.options.height, state.options.fps);
+
+    state.result = null;
+    fs.rmSync(path.join(state.workspace, "_output.mp4"), { force: true });
+    this.reopenCards(state);
+    this.log(`「${manifest.items[index]?.title ?? spec.title}」已更新`, "info", "cards");
+    this.emit();
+    return state;
+  }
+
+  removeCard(id: string): TaskState {
+    const state = this.requireState();
+    if (!this.canEditCards(state)) {
+      throw new TaskError("当前任务不在可编辑版式的状态", 400);
+    }
+    const manifest = state.cards;
+    if (!manifest) throw new TaskError("版式清单为空", 400);
+
+    const spec = manifest.items.find((item) => item.id === id);
+    if (!spec) throw new TaskError(`没有这张卡：${id}`, 400);
+
+    manifest.items = manifest.items.filter((item) => item.id !== id);
+    state.result = null;
+    fs.rmSync(path.join(state.workspace, "_output.mp4"), { force: true });
+    this.reopenCards(state);
+    this.log(`已删除${spec.kind === "intro" ? "片头" : spec.kind === "outro" ? "片尾" : `第 ${spec.paragraph} 段过场卡`}`, "info", "cards");
+    this.emit();
+    return state;
+  }
+
+  updateCard(id: string, patch: CardPatch = {}): TaskState {
+    const state = this.requireState();
+    if (!this.canEditCards(state)) {
+      throw new TaskError("当前任务不在可编辑版式的状态", 400);
+    }
+    const manifest = state.cards;
+    if (!manifest) throw new TaskError("版式清单为空", 400);
+
+    const index = manifest.items.findIndex((item) => item.id === id);
+    const spec = manifest.items[index];
+    if (!spec) throw new TaskError(`没有这张卡：${id}`, 400);
+
+    const cfg = loadConfig();
+    const next: CardSpec = { ...spec };
+
+    if (typeof patch.title === "string") {
+      const title = cleanCardText(patch.title, spec.kind === "chapter" ? 12 : 14);
+      if (!title) throw new TaskError("标题不能为空", 400);
+      next.title = title;
+    }
+    if (typeof patch.label === "string") {
+      next.label = cleanCardText(patch.label, 10) || spec.label;
+    }
+    if (typeof patch.handle === "string") {
+      next.handle = patch.handle.trim().slice(0, 24) || undefined;
+    }
+    if (typeof patch.accent === "string") {
+      const wanted = patch.accent.trim().toLowerCase();
+      const hit = cardAccentPalette(cfg).find((color) => color.toLowerCase() === wanted);
+      if (!hit) throw new TaskError("配色不在允许的色板里", 400);
+      next.accent = hit;
+    }
+    if (patch.durationSec !== undefined) {
+      const value = Number(patch.durationSec);
+      if (!Number.isFinite(value) || value < 0.5 || value > 15) {
+        throw new TaskError("时长要在 0.5–15 秒之间", 400);
+      }
+      next.durationSec = Math.round(value * 10) / 10;
+    }
+    if (typeof patch.compositionId === "string") {
+      if (!isTemplateFor(spec.kind, patch.compositionId)) {
+        throw new TaskError("这个模板不适用于当前卡片类型", 400);
+      }
+      next.compositionId = patch.compositionId;
+    }
+
+    delete next.videoPath;
+    delete next.stillPath;
+    manifest.items[index] = normalizeCard(next, cfg, state.options.width, state.options.height, state.options.fps);
+
+    state.result = null;
+    fs.rmSync(path.join(state.workspace, "_output.mp4"), { force: true });
+    this.reopenCards(state);
+    this.log(`「${next.title}」已更新：${next.durationSec}s · ${next.accent}`, "info", "cards");
+    this.emit();
+    return state;
+  }
+
+  applyCardsPatch(patch: CardsBatchPatch): TaskState {
+    const state = this.requireState();
+    if (!this.canEditCards(state)) {
+      throw new TaskError("当前任务不在可编辑版式的状态", 400);
+    }
+    const manifest = state.cards;
+    if (!manifest) throw new TaskError("版式清单为空", 400);
+
+    const cfg = loadConfig();
+    const palette = cardAccentPalette(cfg);
+    const notes: string[] = [];
+    let accent: string | null = null;
+
+    if (typeof patch.accent === "string") {
+      const wanted = patch.accent.trim().toLowerCase();
+      accent = palette.find((color) => color.toLowerCase() === wanted) ?? null;
+      if (!accent) throw new TaskError("配色不在允许的色板里", 400);
+      notes.push(`配色 ${accent}`);
+    }
+
+    let chapterSec: number | null = null;
+    if (patch.chapterDurationSec !== undefined) {
+      const value = Number(patch.chapterDurationSec);
+      if (!Number.isFinite(value) || value < 0.5 || value > 15) {
+        throw new TaskError("时长要在 0.5–15 秒之间", 400);
+      }
+      chapterSec = Math.round(value * 10) / 10;
+      notes.push(`章节 ${chapterSec}s`);
+    }
+
+    if (patch.cycleTemplate) notes.push("全部换模板");
+    if (notes.length === 0) throw new TaskError("没有要应用的改动", 400);
+
+    manifest.items = manifest.items.map((spec) => {
+      const next: CardSpec = { ...spec };
+      if (accent) next.accent = accent;
+      if (chapterSec !== null && spec.kind === "chapter") next.durationSec = chapterSec;
+      if (patch.cycleTemplate) {
+        const list = CARD_TEMPLATES[spec.kind];
+        if (list.length > 1) {
+          const at = list.findIndex((template) => template.id === spec.compositionId);
+          next.compositionId = list[(at + 1) % list.length]?.id ?? spec.compositionId;
+        }
+      }
+      delete next.videoPath;
+      delete next.stillPath;
+      return normalizeCard(next, cfg, state.options.width, state.options.height, state.options.fps);
+    });
+
+    state.result = null;
+    fs.rmSync(path.join(state.workspace, "_output.mp4"), { force: true });
+    this.reopenCards(state);
+    this.log(`已批量应用：${notes.join(" · ")}`, "info", "cards");
+    this.emit();
+    return state;
+  }
+
+  async cardStill(id: string): Promise<string> {
+    const state = this.requireState();
+    const spec = state.cards?.items.find((item) => item.id === id);
+    if (!spec) throw new TaskError(`没有这张卡：${id}`, 400);
+
+    const ctx = this.makeCtx(new AbortController());
+    if (!ctx) throw new TaskError("任务状态异常", 500);
+
+    const still = await ensureCardStill(ctx, spec, state.transcript?.paragraphs.length ?? 1);
+    if (!still) throw new TaskError("卡片预览渲染失败，检查 remotion 依赖是否装好", 500);
+    this.emit();
+    return still;
+  }
+
+  cardVideo(id: string): string {
+    const state = this.requireState();
+    const spec = state.cards?.items.find((item) => item.id === id);
+    if (!spec?.videoPath || !fs.existsSync(spec.videoPath)) {
+      throw new TaskError("这张卡还没渲染", 404);
+    }
+    return spec.videoPath;
   }
 
   /** 按当前渲染参数合成 */
@@ -325,6 +639,13 @@ class TaskManager {
     }
     if (state.status === "running") {
       throw new TaskError("正在合成，等这一版出来再改参数", 409);
+    }
+    if (state.status === "awaiting_cards") {
+      throw new TaskError("先确认版式，再生成成片", 400);
+    }
+    // 只有这条任务真的带 cards 阶段时才要求先确认版式
+    if (this.cardStagePresent(state) && !state.cards) {
+      throw new TaskError("还没有生成版式，先跑完「版式确认」", 400);
     }
 
     const before = state.options;
@@ -418,7 +739,9 @@ class TaskManager {
     this.log("继续未完成的步骤（已完成的阶段会命中缓存）");
     this.emit();
 
-    if (state.material) void this.executeCompose(controller);
+    if (state.cards) void this.executeCompose(controller);
+    else if (state.material && this.cardStagePresent(state)) void this.executeCards(controller);
+    else if (state.material) void this.executeCompose(controller);
     else if (state.transcript && state.audio) void this.executeMatch(controller, state.transcript, state.audio);
     else if (state.transcript) void this.executeTts(controller, state.transcript);
     else void this.execute(controller);
@@ -428,7 +751,12 @@ class TaskManager {
 
   cancel(): TaskState {
     const state = this.requireState();
-    if (state.status !== "running" && state.status !== "awaiting_script" && state.status !== "awaiting_material") {
+    if (
+      state.status !== "running" &&
+      state.status !== "awaiting_script" &&
+      state.status !== "awaiting_material" &&
+      state.status !== "awaiting_cards"
+    ) {
       throw new TaskError("任务已结束，无需取消", 400);
     }
 
@@ -458,6 +786,7 @@ class TaskManager {
     fs.rmSync(path.join(ws, "_bgm.wav"), { force: true });
     fs.rmSync(path.join(ws, "clips"), { recursive: true, force: true });
     fs.rmSync(path.join(ws, "subs"), { recursive: true, force: true });
+    fs.rmSync(path.join(ws, "cards"), { recursive: true, force: true });
 
     // 逐句音频同名复用，需一并清掉
     try {
@@ -470,10 +799,11 @@ class TaskManager {
 
     state.audio = null;
     state.material = null;
+    state.cards = null;
     state.result = null;
     this.clearLogsFrom(state, "tts");
     for (const stage of state.stages) {
-      if (stage.id === "tts" || stage.id === "material" || stage.id === "compose") {
+      if (stage.id === "tts" || stage.id === "material" || stage.id === "cards" || stage.id === "compose") {
         stage.status = "pending";
         stage.message = "";
         stage.startedAt = undefined;
@@ -505,6 +835,17 @@ class TaskManager {
   private restore(): void {
     const state = loadLatestTask();
     if (!state) return;
+
+    // 老快照没有 cards 字段
+    state.cards = state.cards ?? null;
+
+    // 开关打开后，旧任务补一个版式阶段，可以在已有素材上补做
+    if (cardsEnabled() && state.material && !state.stages.some((stage) => stage.id === "cards")) {
+      const def = STAGE_DEFS.find((entry) => entry.id === "cards");
+      const at = state.stages.findIndex((stage) => stage.id === "compose");
+      if (def) state.stages.splice(at < 0 ? state.stages.length : at, 0, { ...def, status: "pending" });
+      if (state.status === "completed" || state.status === "material_ready") state.status = "awaiting_cards";
+    }
 
     if (state.status === "running") {
       for (const stage of state.stages) {
@@ -676,15 +1017,64 @@ class TaskManager {
     this.emit();
   }
 
+    private cardStagePresent(state: TaskState): boolean {
+    return state.stages.some((stage) => stage.id === "cards");
+  }
+
+  /** 已确认、已出片也允许改，改完自动回到待确认 */
+  private canEditCards(state: TaskState): boolean {
+    if (!state.cards) return false;
+    return (
+      state.status === "awaiting_cards" || state.status === "cards_ready" || state.status === "completed"
+    );
+  }
+
+  private reopenCards(state: TaskState): void {
+    if (state.status === "awaiting_cards") return;
+    this.setStatus("awaiting_cards");
+    this.log("版式有改动，需要重新确认后再合成", "warn", "cards");
+  }
+
+  private async executeCards(controller: AbortController, resetStage = false): Promise<void> {
+    const ctx = this.makeCtx(controller);
+    const state = this.state;
+    if (!ctx || !state?.transcript) return;
+
+    try {
+      if (resetStage) {
+        for (const stage of state.stages) {
+          if (stage.id === "cards") {
+            stage.status = "pending";
+            stage.message = "";
+            stage.startedAt = undefined;
+            stage.endedAt = undefined;
+          }
+        }
+      }
+
+      const manifest = await runCardsStage(ctx, state.transcript, state.audio, state.material);
+      if (!this.state || !this.owns(controller)) return;
+      this.state.cards = manifest;
+      this.setStatus("awaiting_cards");
+      this.markStage("cards", "done", `${manifest.items.length} 张`);
+      this.log("版式已就绪：可以预览、换一个或删掉不要的卡，确认后进入合成");
+      this.emit();
+    } catch (error) {
+      this.fail(error, controller);
+    } finally {
+      if (this.controller === controller) this.controller = null;
+    }
+  }
+
   private async executeCompose(controller: AbortController): Promise<void> {
     const ctx = this.makeCtx(controller);
     const state = this.state;
     if (!ctx || !state) return;
 
-    const { transcript, audio, material } = state;
+    const { transcript, audio, material, cards } = state;
     try {
       if (!transcript || !audio || !material) throw new Error("缺少剧本、配音或素材，无法合成");
-      const output = await runComposeStage(ctx, transcript, audio, material);
+      const output = await runComposeStage(ctx, transcript, audio, material, cards);
       if (!this.state || !this.owns(controller)) return;
       this.state.result = output;
       this.setStatus("completed");

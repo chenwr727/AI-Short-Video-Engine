@@ -1,4 +1,14 @@
-import { autoSubtitleFontSize, bool, loadConfig, num, numberOrZero, speakerNames, type AppConfig } from "./config.js";
+import { CARD_TEMPLATES } from "./card-templates.js";
+import {
+  autoSubtitleFontSize,
+  bool,
+  cardAccentPalette,
+  loadConfig,
+  num,
+  numberOrZero,
+  speakerNames,
+  type AppConfig,
+} from "./config.js";
 import { COSY_VOICES, EDGE_VOICES, SEED_VOICES } from "./voices.js";
 
 export interface Option {
@@ -80,5 +90,8 @@ export function metaPayload(cfg: AppConfig = loadConfig()) {
     },
     materialSources: MATERIAL_SOURCES,
     resolutions: RESOLUTIONS,
+    /** 版式确认页的配色与模板选项 */
+    cardAccents: cardAccentPalette(cfg),
+    cardTemplates: CARD_TEMPLATES,
   };
 }

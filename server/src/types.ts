@@ -85,6 +85,8 @@ export type TaskStatus =
   | "tts_ready"
   | "material_ready"
   | "awaiting_material"
+  | "awaiting_cards"
+  | "cards_ready"
   | "completed"
   | "failed"
   | "cancelled";
@@ -134,6 +136,10 @@ export interface MaterialInfo {
 export interface MaterialItem extends MaterialInfo {
   paragraph: number;
   searchTerms: string[];
+  /** 同段落内的补充画面，合成时按句子边界切镜；缺省表示整段只用主素材 */
+  shots?: MaterialInfo[];
+  /** 没检索到可用素材，合成时改用设计卡，不再中断流程 */
+  fallback?: boolean;
 }
 
 export interface MaterialManifest {
@@ -141,6 +147,48 @@ export interface MaterialManifest {
   /** 来源 + 画幅 + 时长门槛，变了清单不可复用 */
   signature?: string;
   items: MaterialItem[];
+}
+
+export type CardKind = "intro" | "chapter" | "outro" | "quote";
+
+/** 模板白名单：AI 只能在这些 composition 里选，避免生成不可控版式 */
+export type CardComposition =
+  | "TitleCard"
+  | "TitleHero"
+  | "ChapterCard"
+  | "ChapterSplit"
+  | "OutroCard"
+  | "OutroMinimal"
+  | "QuoteCard";
+
+export interface CardSpec {
+  /** 稳定标识：intro / chapter-2 / outro */
+  id: string;
+  kind: CardKind;
+  compositionId: CardComposition;
+  /** 章节卡关联的段号，1 起 */
+  paragraph?: number;
+  title: string;
+  /** 角标文案，如 AI 摘要 / PART 02 */
+  label: string;
+  /** 片尾账号，留空不显示 */
+  handle?: string;
+  accent: string;
+  durationSec: number;
+  /** 参数指纹，变了就要重渲 */
+  fingerprint?: string;
+  /** 渲染产物，交给合成阶段直接拼接 */
+  videoPath?: string;
+  /** 静帧预览图 */
+  stillPath?: string;
+}
+
+export interface CardManifest {
+  items: CardSpec[];
+  /** 剧本指纹 + 画幅，变了清单不可复用 */
+  signature?: string;
+  /** AI 给的风格说明，仅用于展示 */
+  style?: string;
 }
 
 export interface LogLine {
@@ -162,6 +210,8 @@ export interface TaskState {
   transcript: Transcript | null;
   audio: AudioManifest | null;
   material: MaterialManifest | null;
+  /** 片头/章节/片尾的版式清单，关闭开关时为 null */
+  cards: CardManifest | null;
   result: string | null;
   error: string | null;
   createdAt: string;

@@ -22,6 +22,8 @@ interface MaterialStepProps {
   meta: Meta | null;
   form: RenderFormState;
   onFormChange: (patch: Partial<RenderFormState>) => void;
+  /** 启用版式阶段时，确认按钮指向「版式确认」 */
+  nextLabel?: string;
 }
 
 /** 第四步：选来源与分辨率 → 匹配素材 → 逐段确认 */
@@ -40,6 +42,7 @@ export function MaterialStep(props: MaterialStepProps) {
     meta,
     form,
     onFormChange,
+    nextLabel,
   } = props;
   const manifest = task.material;
   const awaiting = task.status === "awaiting_material" || task.status === "material_ready";
@@ -265,7 +268,10 @@ export function MaterialStep(props: MaterialStepProps) {
         )}
         {awaiting && manifest && (
           <button className="primary" type="button" disabled={busy} onClick={() => onConfirm(replacements)}>
-            {replacements.length > 0 ? `下一步：成片预览（已换 ${replacements.length} 段）` : "下一步：成片预览"}
+            {(() => {
+              const next = nextLabel ?? "下一步：成片预览";
+              return replacements.length > 0 ? `${next}（已换 ${replacements.length} 段）` : next;
+            })()}
           </button>
         )}
         {task.status === "completed" && (

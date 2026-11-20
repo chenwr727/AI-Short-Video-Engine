@@ -39,6 +39,7 @@ function normalize(raw: unknown, name: string): TaskState | null {
     transcript: obj.transcript ?? null,
     audio: obj.audio ?? null,
     material: obj.material ?? null,
+    cards: obj.cards ?? null,
     result: typeof obj.result === "string" ? obj.result : null,
     error: typeof obj.error === "string" ? obj.error : null,
     createdAt: typeof obj.createdAt === "string" ? obj.createdAt : now,

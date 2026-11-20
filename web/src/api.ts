@@ -141,6 +141,93 @@ export function materialPreviewUrl(paragraph: number, version?: string): string 
   return `${BASE}/material/${paragraph}${version ? `?v=${encodeURIComponent(version)}` : ""}`;
 }
 
+/** 卡片静帧；指纹变了 URL 也变，避免浏览器吃旧图 */
+export function cardStillUrl(id: string, fingerprint?: string): string {
+  return `${BASE}/card/${encodeURIComponent(id)}/still${fingerprint ? `?v=${fingerprint}` : ""}`;
+}
+
+/** 整份版式重做 */
+export async function regenerateCards(): Promise<TaskState> {
+  const data = await request<{ state: TaskState }>("/task/cards/regenerate", { method: "POST" }, "生成版式失败");
+  return data.state;
+}
+
+/** 换一张：text = AI 重写文案，accent = 换配色 */
+export async function rewriteCard(id: string, mode: "text" | "accent"): Promise<TaskState> {
+  const data = await request<{ state: TaskState }>(
+    "/task/cards/rewrite",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, mode }),
+    },
+    "换版式失败",
+  );
+  return data.state;
+}
+
+/** 手动改一张卡：文案、角标、时长、配色 */
+export async function updateCard(
+  id: string,
+  patch: {
+    title?: string;
+    label?: string;
+    accent?: string;
+    durationSec?: number;
+    handle?: string;
+    compositionId?: string;
+  },
+): Promise<TaskState> {
+  const data = await request<{ state: TaskState }>(
+    "/task/cards/update",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, ...patch }),
+    },
+    "保存卡片失败",
+  );
+  return data.state;
+}
+
+/** 批量应用：统一配色 / 章节时长 / 换模板 */
+export async function batchCards(patch: {
+  accent?: string;
+  chapterDurationSec?: number;
+  cycleTemplate?: boolean;
+}): Promise<TaskState> {
+  const data = await request<{ state: TaskState }>(
+    "/task/cards/batch",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    },
+    "批量修改失败",
+  );
+  return data.state;
+}
+
+/** 删掉一张卡 */
+export async function removeCard(id: string): Promise<TaskState> {
+  const data = await request<{ state: TaskState }>(
+    "/task/cards/remove",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    },
+    "删除卡片失败",
+  );
+  return data.state;
+}
+
+/** 确认版式，进入成片预览 */
+export async function confirmCards(): Promise<TaskState> {
+  const data = await request<{ state: TaskState }>("/task/cards", { method: "POST" }, "确认版式失败");
+  return data.state;
+}
+
 /** 分辨率一起传，检索才按新画幅筛选 */
 export async function matchMaterial(
   patch: { materialSource?: string; resolution?: string; force?: boolean } = {},
