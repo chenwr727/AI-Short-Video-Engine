@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 /** 步骤页统一外壳 */
 export function Panel({
@@ -33,29 +33,36 @@ export function Panel({
 export function ConfigSection({
   title,
   summary,
-  defaultOpen = true,
+  open = true,
   children,
 }: {
   title: string;
   /** 收起时显示的一行摘要 */
   summary?: string;
-  /** 已有产物时传 false */
-  defaultOpen?: boolean;
+  /** 由页面按阶段控制展开，用户点标题可临时覆盖 */
+  open?: boolean;
   children: ReactNode;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
+  // null = 跟随 open，非 null = 用户手动覆盖
+  const [manual, setManual] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    setManual(null);
+  }, [open]);
+
+  const shown = manual ?? open;
 
   return (
-    <div className={`panel-config${open ? "" : " is-collapsed"}`}>
-      <button className="config-toggle" type="button" aria-expanded={open} onClick={() => setOpen(!open)}>
+    <div className={`panel-config${shown ? "" : " is-collapsed"}`}>
+      <button className="config-toggle" type="button" aria-expanded={shown} onClick={() => setManual(!shown)}>
         <span className="config-caret" aria-hidden="true">
           ▾
         </span>
         <span className="config-name">{title}</span>
-        {!open && summary && <span className="config-summary">{summary}</span>}
-        <span className="config-action">{open ? "收起" : "展开"}</span>
+        {!shown && summary && <span className="config-summary">{summary}</span>}
+        <span className="config-action">{shown ? "收起" : "展开"}</span>
       </button>
-      {open && <div className="config-body">{children}</div>}
+      {shown && <div className="config-body">{children}</div>}
     </div>
   );
 }

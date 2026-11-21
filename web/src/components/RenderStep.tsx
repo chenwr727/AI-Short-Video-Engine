@@ -4,6 +4,7 @@ import type { AudioManifest, Meta, TaskState, TtsEngineOption } from "../types";
 import { ConfigSection, Panel } from "./Panel";
 import { VoiceOptions } from "./RenderSetupStep";
 import { LogPanel, StageList } from "./StageList";
+import { stepLayout, type StepStage } from "./stepLayout";
 import type { RenderFormState } from "./stepTypes";
 
 interface RenderStepProps {
@@ -163,6 +164,9 @@ export function RenderStep(props: RenderStepProps) {
   const showAudio = stageIds.includes("tts");
   // 还没有配音清单时要给出开跑入口
   const needsTts = showAudio && !task.audio && !failed && !running;
+
+  const stepStage: StepStage = needsTts ? "setup" : running ? "running" : failed ? "failed" : "ready";
+  const layout = stepLayout(stepStage, Boolean(task.audio));
   const desc =
     props.desc ??
     (needsTts
@@ -177,7 +181,7 @@ export function RenderStep(props: RenderStepProps) {
           summary={`${props.engine?.label ?? "默认引擎"} · ${props.voices.ttsSpeed || 1} 倍速 · ${
             (props.speakers ?? []).length
           } 个角色`}
-          defaultOpen={!task.audio}
+          open={layout.configOpen}
         >
           <VoiceOptions
             speakers={props.speakers ?? []}
@@ -199,9 +203,9 @@ export function RenderStep(props: RenderStepProps) {
       <div className="panel-scroll">
         <StageList stages={stages} />
 
-        {showAudio && task.audio && <AudioBoard manifest={task.audio} />}
+        <LogPanel logs={task.logs} stages={stageIds} collapsible expanded={layout.logOpen} tall={layout.logOpen} />
 
-        <LogPanel logs={task.logs} tall stages={stageIds} collapsible />
+        {showAudio && layout.showResult && task.audio && <AudioBoard manifest={task.audio} />}
 
         {failed && (
           <div className="alert">

@@ -47,23 +47,26 @@ export function LogPanel({
   tall,
   stages,
   collapsible,
+  expanded,
   label,
 }: {
   logs: LogLine[];
   tall?: boolean;
   stages?: string[];
   collapsible?: boolean;
+  /** 由页面控制展开：生成中展开，跑完收起 */
+  expanded?: boolean;
   label?: string;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const shown = stages ? logs.filter((line) => !line.stage || stages.includes(line.stage)) : logs;
   const hasError = shown.some((line) => line.level === "error");
 
-  // 出错时只自动展开一次，绑 hasError 会在收起后又被撑开
-  const [open, setOpen] = useState(false);
+  // 展开由阶段决定，但有报错时始终撑开
+  const [open, setOpen] = useState(Boolean(expanded) || hasError);
   useEffect(() => {
-    if (hasError) setOpen(true);
-  }, [hasError]);
+    setOpen(Boolean(expanded) || hasError);
+  }, [expanded, hasError]);
 
   useEffect(() => {
     if (ref.current) ref.current.scrollTop = ref.current.scrollHeight;

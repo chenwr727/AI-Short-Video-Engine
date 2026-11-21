@@ -41,8 +41,7 @@ interface Props {
 export function CardPlayer({ spec, width, height, fps, total, durationSec }: Props) {
   const seconds = durationSec ?? spec.durationSec;
   const durationInFrames = Math.max(1, Math.round(seconds * fps));
-  const Component =
-    COMPONENTS[spec.compositionId] ?? COMPONENTS[FALLBACK_BY_KIND[spec.kind]] ?? COMPONENTS.TitleCard;
+  const Component = COMPONENTS[spec.compositionId] ?? COMPONENTS[FALLBACK_BY_KIND[spec.kind]] ?? COMPONENTS.TitleCard;
 
   return (
     <Player

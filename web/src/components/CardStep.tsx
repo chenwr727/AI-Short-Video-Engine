@@ -5,6 +5,7 @@ import type { CardPrefs, CardSpec, Meta, TaskState } from "../types";
 import { CardPlayer } from "./CardPlayer";
 import { ConfigSection, Panel } from "./Panel";
 import { LogPanel, StageList } from "./StageList";
+import { stepLayout, type StepStage } from "./stepLayout";
 
 interface CardStepProps {
   task: TaskState;
@@ -79,6 +80,9 @@ export function CardStep(props: CardStepProps) {
   // 改完后端会自动回到待确认
   const editable = Boolean(manifest) && (awaiting || task.status === "cards_ready" || task.status === "completed");
   const items = manifest?.items ?? [];
+
+  const stepStage: StepStage = failed ? "failed" : generating ? "running" : manifest ? "ready" : "setup";
+  const layout = stepLayout(stepStage, Boolean(manifest));
 
   /** 全部卡片取值一致时返回该值，用来给批量按钮加选中态 */
   function shared<T>(values: T[]): T | null {
@@ -169,7 +173,7 @@ export function CardStep(props: CardStepProps) {
       }
       fill
     >
-      <ConfigSection title="批量设置" summary="统一配色 · 章节卡时长" defaultOpen={!manifest}>
+      <ConfigSection title="批量设置" summary="统一配色 · 章节卡时长" open={layout.configOpen}>
         <div className="row">
           <div className="field">
             <label>统一配色</label>
@@ -218,13 +222,21 @@ export function CardStep(props: CardStepProps) {
       <div className="panel-scroll">
         <StageList stages={task.stages.filter((stage) => CARD_STAGE_IDS.includes(stage.id))} />
 
-        {!manifest && !generating && !failed && <p className="hint">版式还没生成：点右下角「开始生成版式」。</p>}
+        <LogPanel
+          logs={task.logs}
+          stages={CARD_STAGE_IDS}
+          collapsible
+          expanded={layout.logOpen}
+          tall={layout.logOpen}
+        />
+
+        {!manifest && stepStage === "setup" && <p className="hint">版式还没生成：点右下角「开始生成版式」。</p>}
 
         {manifest && items.length === 0 && (
           <p className="hint">卡片都删了：成片只保留正文段落。可以点「换一批」再要一版。</p>
         )}
 
-        {items.length > 0 && (
+        {layout.showResult && items.length > 0 && (
           <div className="card-list">
             {items.map((item) => {
               const live = editing === item.id && draft ? { ...item, ...draft } : item;
@@ -413,9 +425,7 @@ export function CardStep(props: CardStepProps) {
           </div>
         )}
 
-        {manifest?.style && <p className="hint">风格：{manifest.style}</p>}
-
-        <LogPanel logs={task.logs} tall stages={CARD_STAGE_IDS} collapsible />
+        {layout.showResult && manifest?.style && <p className="hint">风格：{manifest.style}</p>}
 
         {failed && (
           <div className="alert">

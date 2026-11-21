@@ -1024,6 +1024,16 @@ body.electron.mac .tb-inner {
   height: 100%;
 }
 
+/* 配置与结果之间的日志条 */
+.panel-logbar {
+  flex: none;
+  min-width: 0;
+}
+
+.panel-logbar .log-details {
+  margin-bottom: 10px;
+}
+
 .panel-stage {
   /* basis 0：高度只由剩余空间决定 */
   flex: 1 1 0;
