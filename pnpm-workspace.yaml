@@ -2,6 +2,15 @@ packages:
   - server
   - web
 
+# web 的类型检查会连同 remotion/src 一起编译，这些包要能从仓库根解析到（CI 里没有 remotion/node_modules）
+publicHoistPattern:
+  - remotion
+  - "@remotion/*"
+  - react
+  - react-dom
+  - "@types/react"
+  - "@types/react-dom"
+
 # pnpm 12 用 allowBuilds 白名单放行依赖的构建脚本（esbuild 由 vite / tsx 引入）
 allowBuilds:
   esbuild: true
