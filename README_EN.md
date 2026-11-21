@@ -159,7 +159,7 @@ The UI mirrors this in six steps (card review only appears with `CARDS_ENABLED=1
 2. **Script generation**: the AI fetches and drafts, then pauses for review; the title and every line are editable
 3. **Voice synthesis**: choose a voice per role, plus the TTS engine and speed (default 1.1×, configurable via `TTS_SPEED`)
 4. **Material review**: choose a footage source and output resolution, click **Match materials**; preview each clip and use **Replace** for another candidate. Confirming moves on (it does **not** auto-render)
-5. **Card review**: preview the generated intro, chapter and outro cards; edit copy and duration, switch templates, delete cards, or regenerate the whole set. Confirm as-is and the final cut keeps the body segments only
+5. **Card review**: nothing runs until you press **Generate cards**; then preview the intro, chapter and outro cards, edit copy and duration, switch templates per card, delete cards, or regenerate everything. Confirm as-is and the final cut keeps the body segments only
 6. **Final preview**: set subtitle size, BGM on/off and volume, click **Render video**; tweak and click **Regenerate** afterwards
 
 On desktop, **Show in folder** opens the file location (in a browser it downloads the file).
@@ -223,7 +223,7 @@ Field reference (environment variables take precedence over the file, which is h
 | Intro | `INTRO_ENABLED` | 1 = render the intro with the Remotion template (needs `remotion/` dependencies), default 0; falls back to the subtitle title on failure |
 | Outro | `OUTRO_DURATION` / `OUTRO_TITLE` / `OUTRO_HANDLE` | Outro card length in seconds (0 = no outro), title copy, account name (hidden when empty) |
 | Chapters | `CHAPTER_CARD` / `CHAPTER_DURATION` | 1 = insert a Remotion chapter card between segments, default off; card length defaults to 2s |
-| Cards | `CARDS_ENABLED` | 1 = add a **Card review** step after footage confirmation, where the AI picks templates and writes copy for intro / chapter / outro cards, default off; needs `remotion/` dependencies |
+| Cards | `CARDS_ENABLED` | 1 = add a **Card review** step after footage confirmation, where the AI picks templates and writes copy for intro / chapter / outro cards, default off; needs `remotion/` dependencies. If none of the intro / chapter / outro switches is on, it defaults to intro + chapter cards |
 | Cards | `CARD_ACCENT` | Primary card color, default `#ff5a3c`; the AI may only pick from this palette (primary + 5 presets) |
 
 These are global defaults. The **Final Preview** page also lets you override subtitle size, BGM on/off, BGM volume, and custom music per task: the size field shows the concrete px value computed for the current resolution (never 0), and mp3/wav/m4a/aac/ogg/flac files are accepted (absolute path, or a filename inside `AISV_MUSIC_DIR`). If the file is missing, the app falls back to generated music and logs a warning. Changing the subtitle size additionally re-renders the segments with burned-in subtitles.
@@ -270,9 +270,9 @@ When you want breathing room between segments, turn on `CHAPTER_CARD=1`: each se
 
 ### Card Review and Templates (Optional)
 
-With `CARDS_ENABLED=1` a **Card review** step appears after footage confirmation: one model call produces the whole manifest — intro (`TitleCard` / `TitleHero`), chapter cards (`ChapterCard` / `ChapterSplit`, from segment 2 on, at most 6) and outro (`OutroCard` / `OutroMinimal`). A vision model picks the primary color from the palette (`CARD_ACCENT` plus 5 presets).
+With `CARDS_ENABLED=1` a **Card review** step appears after footage confirmation: one model call produces the whole manifest — intro (`TitleCard` / `TitleHero`), chapter cards (`ChapterCard` / `ChapterSplit`, from segment 2 on, at most 6) and outro (`OutroCard` / `OutroMinimal`). A vision model picks the primary color from the palette (`CARD_ACCENT` plus 5 presets); you can also pick the primary color and chapter card duration up front — once you pick, that choice wins, otherwise the model and config decide.
 
-The step is WYSIWYG: every card is rendered with the same components as the final video, both as a still and as a frame-accurate preview, so editing title, label, duration or color redraws immediately. Switch template, rewrite copy or change color per card, batch **Switch all templates**, or regenerate the whole set. Only cards whose parameters changed are re-rendered; the rest reuse the files under `cards/`.
+The step is WYSIWYG: every card is rendered with the same components as the final video, both as a still and as a frame-accurate preview, so editing title, label, duration or color redraws immediately. Switch template, rewrite copy or change color per card, or regenerate the whole set. Only cards whose parameters changed are re-rendered; the rest reuse the files under `cards/`.
 
 If the model is unavailable or returns something invalid, the built-in templates take over (intro from the title, chapter cards from each segment's first line, outro from the follow prompt) and the pipeline keeps going.
 
@@ -281,7 +281,7 @@ Worth knowing:
 - Cards always crossfade into and out of their neighbours (`fade`), while body-to-body transitions still rotate per `TRANSITION_STYLE`, so chapter cards never break the rhythm of the cut.
 - **Any failure falls back** to the plain ASS title card instead of blocking the render; the log states the reason.
 - To restyle a card, edit the matching component under `remotion/src/` (`TitleCard` / `TitleHero` / `ChapterCard` / `ChapterSplit` / `OutroCard` / `OutroMinimal` / `QuoteCard`); see [remotion/README.md](remotion/README.md).
-- The desktop build **does not bundle** this directory by default (`node_modules` + Chrome Shell is several hundred MB). To use it, drop the whole `remotion/` folder next to the app or point `AISV_REMOTION_DIR` at it.
+- The desktop build **does not bundle** this directory by default (`node_modules` + Chrome Shell is several hundred MB). Use the cards packaging command instead (see [Packaging](#packaging)), or drop the whole `remotion/` folder next to the app, or point `AISV_REMOTION_DIR` at it.
 - A single render takes about 5–8 seconds (1080×1920, 1.6s intro); retries reuse an already rendered card.
 
 ## Common Commands
@@ -297,6 +297,8 @@ Worth knowing:
 | `pnpm lint` / `pnpm format` | ESLint check / Prettier formatting |
 | `pnpm dist:win` | Build the Windows portable zip |
 | `pnpm dist:mac` / `pnpm dist:linux` | Build dmg / AppImage |
+| `pnpm dist:win:remotion` | Same as above but bundles the Remotion card runtime (~200 MB more, Chrome included) |
+| `pnpm dist:win:remotion-slim` | Same, using the system Edge / Chrome as the card runtime (~100 MB more) |
 
 ## Packaging
 
@@ -306,7 +308,19 @@ pnpm dist:win     # output: desktop/release/AI Short Video-<version>-win-portabl
 
 The archive is about 200 MB (ffmpeg/ffprobe included). `compression: maximum` makes the zip step slow, so switch to `normal` for day-to-day iteration.
 
-Build flow: frontend build → icon generation → copy ffmpeg/ffprobe → stage the backend and install production dependencies → compile the main process → electron-builder → artifact self-check.
+To ship the Remotion cards (intro / chapters / layout) inside the package there are two variants:
+
+| Command | Card runtime | Size |
+| --- | --- | --- |
+| `pnpm dist:win` | not included, card rendering is skipped | ~200 MB |
+| `pnpm dist:win:remotion` | bundles Chrome Headless Shell, works offline | ~400 MB |
+| `pnpm dist:win:remotion-slim` | borrows the system Edge / Chrome (Edge ships with Windows 10+) | ~300 MB |
+
+Only the render path is staged: the prebuilt bundle, `@remotion/renderer` and the compositor (plus Chrome Headless Shell in the full variant). The 266 MB webpack cache inside `remotion/node_modules`, typescript, rspack / babel, mediabunny, react and the bundle's sourcemaps (23 MB) are all dropped while staging.
+
+The slim variant needs Edge or Chrome on the machine; without either, card rendering fails and falls back the usual way (the intro becomes the subtitle title, other cards are skipped) rather than blocking the render. `REMOTION_BROWSER` can point at a specific executable. A normal build actively clears the previous staging directory so the card runtime never leaks into the light package.
+
+Build flow: frontend build → icon generation → copy ffmpeg/ffprobe → stage the backend and install production dependencies → (optional) stage Remotion → compile the main process → electron-builder → artifact self-check.
 
 ## Environment Variables
 

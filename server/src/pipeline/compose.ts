@@ -822,6 +822,28 @@ async function mergeByConcat(options: MergeOptions): Promise<void> {
   await runFfmpeg(args, { cwd: ctx.workspace, signal: ctx.signal, totalMs: totalDurationMs });
 }
 
+/** 成片旁边写一份「完成标记」：只有正常合完才算数，中途被杀的残留文件不能复用 */
+function outputMarker(output: string): string {
+  return `${output}.ok`;
+}
+
+function outputStamp(output: string): string {
+  const stat = fs.statSync(output);
+  return `${stat.size}:${Math.round(stat.mtimeMs)}`;
+}
+
+/** 文件存在且标记与它的大小/时间戳对得上，才认为是上一版完整成片 */
+export function isComposedOutput(output: string): boolean {
+  try {
+    if (!fs.existsSync(output) || fs.statSync(output).size === 0) return false;
+    const marker = outputMarker(output);
+    if (!fs.existsSync(marker)) return false;
+    return fs.readFileSync(marker, "utf-8").trim() === outputStamp(output);
+  } catch {
+    return false;
+  }
+}
+
 /** 分段渲染 → 合并 → 混入 BGM */
 export async function runComposeStage(
   ctx: TaskContext,
@@ -831,11 +853,18 @@ export async function runComposeStage(
   cards?: CardManifest | null,
 ): Promise<string> {
   const output = path.join(ctx.workspace, "_output.mp4");
-  if (fs.existsSync(output) && fs.statSync(output).size > 0) {
+  const marker = outputMarker(output);
+  if (isComposedOutput(output)) {
     ctx.log("复用已生成的成片（_output.mp4）");
     ctx.markStage("compose", "skipped", "命中缓存");
     return output;
   }
+  // 上次合成没跑完留下的半成品：直接丢掉，否则会当成完整成片复用，看起来就是「成片里没有版式」
+  if (fs.existsSync(output) && fs.statSync(output).size > 0) {
+    ctx.log("上次合成没跑完，丢弃不完整的成片重新合成", "warn");
+    fs.rmSync(output, { force: true });
+  }
+  fs.rmSync(marker, { force: true });
 
   ctx.markStage("compose", "running");
   const clipsDir = ensureDir(path.join(ctx.workspace, "clips"));
@@ -859,6 +888,8 @@ export async function runComposeStage(
   /** 实际产物时长，BGM 与总时长都按它算 */
   let introSec = 0;
   let outroActualSec = 0;
+  /** 已确认的版式卡渲染失败数：成片会缺这些卡，末尾要明确告诉用户 */
+  let missingCards = 0;
 
   // 清单里已定好片头/章节/片尾，这里只负责渲染与拼接
   const cardChapters = new Map<number, CardSpec>();
@@ -879,7 +910,8 @@ export async function runComposeStage(
         titleDuration = 0;
         ctx.log(`片头：${introSpec.title}`);
       } else {
-        ctx.log("片头渲染失败，回退到字幕标题", "warn");
+        missingCards++;
+        ctx.log("片头卡没渲染出来，本次成片不含片头（原因见上一条渲染日志）", "error");
       }
     }
 
@@ -892,7 +924,8 @@ export async function runComposeStage(
         outroActualSec = await clipSeconds(file, outroSpec.durationSec);
         ctx.log(`片尾：${outroSpec.title}`);
       } else {
-        ctx.log("片尾渲染失败，本次不加片尾", "warn");
+        missingCards++;
+        ctx.log("片尾卡没渲染出来，本次成片不含片尾（原因见上一条渲染日志）", "error");
       }
     }
   } else {
@@ -1023,7 +1056,8 @@ export async function runComposeStage(
           chapterCount++;
           chapterMs += (await clipSeconds(file, chapterSpec.durationSec)) * 1000;
         } else {
-          ctx.log(`第 ${i + 1} 段过场卡渲染失败，本次跳过`, "warn");
+          missingCards++;
+          ctx.log(`第 ${i + 1} 段过场卡「${chapterSpec.title}」没渲染出来，成片缺这张卡`, "error");
         }
       }
     } else if (useChapters && i > 0) {
@@ -1163,6 +1197,13 @@ export async function runComposeStage(
   if (withTransitions) await mergeWithTransitions(mergeOptions);
   else await mergeByConcat(mergeOptions);
 
-  ctx.markStage("compose", "done", `${clips.length} 段 / ${(totalDurationMs / 1000).toFixed(1)}s`);
+  if (missingCards > 0) {
+    ctx.log(`注意：本次成片缺少 ${missingCards} 张已确认的版式卡`, "error");
+  }
+  // 合完才写完成标记，下次复用前会先对一遍
+  fs.writeFileSync(marker, outputStamp(output), "utf-8");
+
+  const missingNote = missingCards > 0 ? ` / 缺 ${missingCards} 张版式卡` : "";
+  ctx.markStage("compose", "done", `${clips.length} 段 / ${(totalDurationMs / 1000).toFixed(1)}s${missingNote}`);
   return output;
 }

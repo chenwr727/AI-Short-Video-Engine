@@ -7,7 +7,7 @@
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/pipeline/split.test.ts src/pipeline/compose.test.ts src/pipeline/script.test.ts src/services/fetcher.test.ts"
+    "test": "tsx --test src/pipeline/split.test.ts src/pipeline/compose.test.ts src/pipeline/script.test.ts src/pipeline/cards.test.ts src/services/fetcher.test.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.3.0",

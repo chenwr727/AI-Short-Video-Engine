@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { workspacesDir } from "../paths.js";
-import type { GenerateOptions, LogLine, StageState, TaskState, TaskStatus } from "../types.js";
+import type { CardPrefs, GenerateOptions, LogLine, StageState, TaskState, TaskStatus } from "../types.js";
 
 /** 快照写在工作目录下，重启后取最新的一个 */
 const TASK_FILE = "_task.json";
@@ -18,6 +18,16 @@ export function saveTaskState(state: TaskState): void {
   } catch (error) {
     console.error(`[task] 状态落盘失败：${error instanceof Error ? error.message : String(error)}`);
   }
+}
+
+/** 老快照没有这个字段，缺失或脏值都当作「没选过」 */
+function normalizePrefs(raw: unknown): CardPrefs | null {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as { accent?: unknown; chapterDurationSec?: unknown };
+  const accent = typeof obj.accent === "string" && obj.accent.trim() ? obj.accent.trim().toLowerCase() : undefined;
+  const sec = Number(obj.chapterDurationSec);
+  const chapterDurationSec = Number.isFinite(sec) && sec >= 0.5 && sec <= 15 ? Math.round(sec * 10) / 10 : undefined;
+  return accent || chapterDurationSec ? { accent, chapterDurationSec } : null;
 }
 
 function normalize(raw: unknown, name: string): TaskState | null {
@@ -40,6 +50,7 @@ function normalize(raw: unknown, name: string): TaskState | null {
     audio: obj.audio ?? null,
     material: obj.material ?? null,
     cards: obj.cards ?? null,
+    cardPrefs: normalizePrefs(obj.cardPrefs),
     result: typeof obj.result === "string" ? obj.result : null,
     error: typeof obj.error === "string" ? obj.error : null,
     createdAt: typeof obj.createdAt === "string" ? obj.createdAt : now,

@@ -159,7 +159,7 @@ flowchart LR
 2. **剧本生成**：AI 抓取并写稿，完成后停下等你确认；标题与每句台词都能直接改
 3. **配音生成**：为每个角色选音色、配音引擎与语速（默认 1.1 倍，可用 `TTS_SPEED` 改默认值）
 4. **素材确认**：选素材来源与成片分辨率，点「开始匹配素材」；逐段预览，不满意点「换一个」，确认后进下一步（此时**不会**自动合成）
-5. **版式确认**：AI 产出的片头、章节、片尾卡逐张预览，可改文案与时长、换模板、删卡或整份重来；没有想要的就直接确认，成片只留正文
+5. **版式确认**：进这一步不会自动跑，点「开始生成版式」才让 AI 挑模板写文案；产出的片头、章节、片尾卡逐张预览，可改文案与时长、单张换模板、删卡或整份重来，确认后进成片
 6. **成片预览**：设置字幕字号、BGM 开关与音量，点「生成成片」；之后可改参数再点「重新生成」
 
 桌面端点「在文件夹中显示」直接定位成片文件（浏览器里是下载）。
@@ -223,7 +223,7 @@ flowchart LR
 | 片头 | `INTRO_ENABLED` | 1 = 用 Remotion 模板渲染片头（需先安装 `remotion/` 依赖），默认 0；渲染失败自动回退到字幕标题 |
 | 片尾 | `OUTRO_DURATION` / `OUTRO_TITLE` / `OUTRO_HANDLE` | 片尾卡片秒数（0 = 不加）、标题文案、账号名（留空不显示） |
 | 过场 | `CHAPTER_CARD` / `CHAPTER_DURATION` | 1 = 段落之间插入 Remotion 过场卡，默认关；单张时长默认 2 秒 |
-| 版式 | `CARDS_ENABLED` | 1 = 素材确认后多一步「版式确认」，AI 为片头 / 章节 / 片尾选模板写文案，默认关；需要 `remotion/` 依赖 |
+| 版式 | `CARDS_ENABLED` | 1 = 素材确认后多一步「版式确认」，AI 为片头 / 章节 / 片尾选模板写文案，默认关；需要 `remotion/` 依赖。片头 / 章节卡 / 片尾三个开关都没开时，默认出片头 + 章节卡 |
 | 版式 | `CARD_ACCENT` | 卡片主色，默认 `#ff5a3c`；AI 只能在这个色板（主色 + 5 个预设）里挑 |
 
 以上是全局默认值。**成片预览** 页还能按任务单独改字幕字号、是否插入 BGM、BGM 音量与自定义音乐：字号框里显示的是按当前分辨率算好的具体 px（不显示 0），支持 mp3/wav/m4a/aac/ogg/flac（绝对路径，或 `AISV_MUSIC_DIR` 目录下的文件名），文件找不到时自动退回程序合成并在日志里提示。改字号会额外重渲染烧了字幕的分段片段。
@@ -270,9 +270,9 @@ npm run studio   # 打开 Studio 实时调标题、配色与节奏
 
 ### 版式确认与卡片模板（可选）
 
-`CARDS_ENABLED=1` 时，素材确认后会多出一步「版式确认」：一次模型调用产出整份清单——片头（`TitleCard` / `TitleHero`）、章节卡（`ChapterCard` / `ChapterSplit`，从第 2 段起，最多 6 张）、片尾（`OutroCard` / `OutroMinimal`）。主色由视觉模型在色板里挑（`CARD_ACCENT` + 5 个预设）。
+`CARDS_ENABLED=1` 时，素材确认后会多出一步「版式确认」：一次模型调用产出整份清单——片头（`TitleCard` / `TitleHero`）、章节卡（`ChapterCard` / `ChapterSplit`，从第 2 段起，最多 6 张）、片尾（`OutroCard` / `OutroMinimal`）。主色由视觉模型在色板里挑（`CARD_ACCENT` + 5 个预设）；生成前也可以先手动指定主色与章节卡时长，手动选过就以选择为准，没选才跟随模型与配置。
 
-这一步是所见即所得：每张卡都用最终渲染的同一套组件出静帧和逐帧预览，改标题、角标、时长、配色立刻重绘；可以单张换模板 / 换文案 / 换配色，也可以「全部换模板」，不满意就整份「换一批」。改过的卡按参数指纹重渲，没动的复用 `cards/` 里的旧文件。
+这一步是所见即所得：每张卡都用最终渲染的同一套组件出静帧和逐帧预览，改标题、角标、时长、配色立刻重绘；可以单张换模板 / 换文案 / 换配色，不满意就整份「换一批」。改过的卡按参数指纹重渲，没动的复用 `cards/` 里的旧文件。
 
 模型不可用或返回不合法时回退到内置模板（片头取标题、章节卡取每段首句、片尾取关注引导），不阻塞流水线。
 
@@ -281,7 +281,7 @@ npm run studio   # 打开 Studio 实时调标题、配色与节奏
 - 卡片与前后片段之间固定走 `fade`，正片之间的转场仍按 `TRANSITION_STYLE` 轮换，观感不会被章节卡打断。
 - **任一步失败都会回退**到原来的 ASS 大字标题，不会中断出片；日志里会写明原因。
 - 想改样式直接编辑 `remotion/src/` 下对应的组件（`TitleCard` / `TitleHero` / `ChapterCard` / `ChapterSplit` / `OutroCard` / `OutroMinimal` / `QuoteCard`），详见 [remotion/README.md](remotion/README.md)。
-- 桌面版**默认不打包**这个目录（`node_modules` + Chrome Shell 约几百 MB）。要用的话把整个 `remotion/` 放到应用根目录，或设置 `AISV_REMOTION_DIR` 指向它。
+- 桌面版**默认不打包**这个目录（`node_modules` + Chrome Shell 约几百 MB）。要用的话改用带卡片的打包命令（见[打包](#打包)），或把整个 `remotion/` 放到应用根目录、或设置 `AISV_REMOTION_DIR` 指向它。
 - 单次渲染约 5~8 秒（1080×1920，1.6 秒片头）；同一任务重试会复用已渲染的 `intro.mp4`。
 
 ## 常用命令
@@ -297,6 +297,8 @@ npm run studio   # 打开 Studio 实时调标题、配色与节奏
 | `pnpm lint` / `pnpm format` | ESLint 检查 / Prettier 格式化 |
 | `pnpm dist:win` | 打包 Windows 免安装 zip |
 | `pnpm dist:mac` / `pnpm dist:linux` | 打包 dmg / AppImage |
+| `pnpm dist:win:remotion` | 同上，但把 Remotion 卡片运行时一起打进包（约多 200 MB，自带 Chrome） |
+| `pnpm dist:win:remotion-slim` | 同上，卡片运行时改用系统 Edge / Chrome（约多 100 MB） |
 
 ## 打包
 
@@ -306,7 +308,19 @@ pnpm dist:win     # 产物：desktop/release/AI Short Video-<version>-win-portab
 
 体积约 200 MB（含 ffmpeg / ffprobe）。`compression: maximum` 会让 zip 阶段跑较久，日常迭代可临时改成 `normal`。
 
-构建流程：前端构建 → 生成图标 → 复制 ffmpeg/ffprobe → 暂存后端并安装生产依赖 → 编译主进程 → electron-builder → 产物自检。
+带 Remotion 卡片（片头 / 过场 / 版式卡）的包有两种打法：
+
+| 命令 | 卡片运行时 | 体积 |
+| --- | --- | --- |
+| `pnpm dist:win` | 不带，卡片渲染自动跳过 | 约 200 MB |
+| `pnpm dist:win:remotion` | 自带 Chrome Headless Shell，离线可用 | 约 400 MB |
+| `pnpm dist:win:remotion-slim` | 借用系统 Edge / Chrome（Windows 10+ 自带 Edge） | 约 300 MB |
+
+打包时只带渲染链路：预构建 bundle、`@remotion/renderer`、compositor（瘦身版再加 Chrome Headless Shell）。`remotion/node_modules` 里 266 MB 的 webpack 缓存、typescript、rspack / babel、mediabunny、react 等一概不进包，bundle 的 sourcemap（23 MB）也会在暂存时剔掉。
+
+瘦身版要求机器上有 Edge 或 Chrome；都没有时卡片渲染失败并按原逻辑回退（片头用字幕标题，其余卡片跳过），不会中断出片。想指定浏览器可用 `REMOTION_BROWSER` 指向可执行文件。普通包会主动清掉上次的暂存，避免把卡片运行时误打进轻量包。
+
+构建流程：前端构建 → 生成图标 → 复制 ffmpeg/ffprobe → 暂存后端并安装生产依赖 →（可选）暂存 Remotion → 编译主进程 → electron-builder → 产物自检。
 
 ## 环境变量
 

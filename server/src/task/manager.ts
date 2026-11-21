@@ -5,7 +5,7 @@ import { newWorkspace } from "../paths.js";
 import { persistConfirmed, runScriptStages, sentenceCount } from "../pipeline/script.js";
 import { runTtsStage, transcriptFingerprint } from "../pipeline/tts.js";
 import { runMaterialStage, saveMaterialManifest, searchCandidates } from "../pipeline/material.js";
-import { CARD_TEMPLATES, isTemplateFor } from "../card-templates.js";
+import { isTemplateFor } from "../card-templates.js";
 import {
   cardsEnabled,
   cleanCardText,
@@ -18,10 +18,12 @@ import {
 import { runComposeStage } from "../pipeline/compose.js";
 import { resolveMusicFile } from "../services/bgm.js";
 import { downloadMaterial } from "../services/material.js";
+import { lastRenderErrorMessage } from "../services/remotion.js";
 import { loadLatestTask, saveTaskState } from "./store.js";
 import type {
   AudioManifest,
   CardManifest,
+  CardPrefs,
   CardSpec,
   GenerateOptions,
   LogLine,
@@ -85,8 +87,6 @@ export interface CardsBatchPatch {
   accent?: string;
   /** 只改章节卡的时长 */
   chapterDurationSec?: number;
-  /** 每种卡片切到自己的下一个模板 */
-  cycleTemplate?: boolean;
 }
 
 class TaskManager {
@@ -143,6 +143,7 @@ class TaskManager {
       audio: null,
       material: null,
       cards: null,
+      cardPrefs: null,
       result: null,
       error: null,
       createdAt: now,
@@ -353,14 +354,13 @@ class TaskManager {
     state.cards = null;
     this.emit();
 
-    // 开了版式阶段就紧接着让 AI 出卡片清单，否则维持原来的直达预览
-    if (cardsEnabled()) {
-      const cardController = new AbortController();
-      this.controller = cardController;
-      this.setStatus("running");
-      this.log("素材已确认，开始生成版式…", "info", "cards");
+    // 有版式阶段就停在这一步，等用户自己点「开始生成版式」
+    if (this.cardStagePresent(state) || cardsEnabled()) {
+      // 老任务中途才打开版式时，阶段清单里还没有 cards，补上后前端才会出现这一步
+      this.ensureCardsStage(state);
+      this.setStatus("awaiting_cards");
+      this.log("素材已确认，去「版式确认」点「开始生成版式」", "info", "cards");
       this.emit();
-      void this.executeCards(cardController, true);
       return state;
     }
 
@@ -370,13 +370,34 @@ class TaskManager {
     return state;
   }
 
+  /** 版式步骤进入后手动触发，跟素材匹配一样由用户发起 */
+  generateCards(prefs: CardPrefs = {}): TaskState {
+    const state = this.requireState();
+    if (!this.cardStagePresent(state)) throw new TaskError("这个任务没有版式步骤", 400);
+    if (state.status !== "awaiting_cards") throw new TaskError("当前任务不在等待版式确认状态", 400);
+    if (state.cards) throw new TaskError("版式已经生成过了，用「换一批」重新生成", 400);
+    if (!state.transcript) throw new TaskError("还没有剧本，无法生成版式", 400);
+
+    this.mergeCardPrefs(state, prefs);
+    this.controller?.abort();
+    this.controller = null;
+
+    const controller = new AbortController();
+    this.controller = controller;
+    this.setStatus("running");
+    this.log("开始生成版式…", "info", "cards");
+    this.emit();
+    void this.executeCards(controller, true);
+    return state;
+  }
+
   confirmCards(): TaskState {
     const state = this.requireState();
     if (state.status !== "awaiting_cards") {
       throw new TaskError("当前任务不在等待版式确认状态", 400);
     }
     if (!state.cards) {
-      throw new TaskError("版式清单是空的，先点「重新生成」", 400);
+      throw new TaskError("版式还没生成，先点「开始生成版式」", 400);
     }
 
     this.controller?.abort();
@@ -394,7 +415,7 @@ class TaskManager {
     return state;
   }
 
-  regenerateCards(): TaskState {
+  regenerateCards(prefs: CardPrefs = {}): TaskState {
     const state = this.requireState();
     // material_ready = 老任务补做版式；completed = 成片已出，想换一批版式
     const allowed: TaskState["status"][] = ["awaiting_cards", "cards_ready", "material_ready", "completed"];
@@ -403,9 +424,11 @@ class TaskManager {
     }
     if (!state.transcript) throw new TaskError("还没有剧本，无法生成版式", 400);
 
+    this.mergeCardPrefs(state, prefs);
     this.controller?.abort();
     this.controller = null;
 
+    this.ensureCardsStage(state);
     this.clearLogsFrom(state, "cards");
     state.result = null;
     // 清空清单，否则页面会凭旧清单判成"已出片"而跳到成片预览
@@ -488,7 +511,11 @@ class TaskManager {
     state.result = null;
     fs.rmSync(path.join(state.workspace, "_output.mp4"), { force: true });
     this.reopenCards(state);
-    this.log(`已删除${spec.kind === "intro" ? "片头" : spec.kind === "outro" ? "片尾" : `第 ${spec.paragraph} 段过场卡`}`, "info", "cards");
+    this.log(
+      `已删除${spec.kind === "intro" ? "片头" : spec.kind === "outro" ? "片尾" : `第 ${spec.paragraph} 段过场卡`}`,
+      "info",
+      "cards",
+    );
     this.emit();
     return state;
   }
@@ -581,24 +608,22 @@ class TaskManager {
       notes.push(`章节 ${chapterSec}s`);
     }
 
-    if (patch.cycleTemplate) notes.push("全部换模板");
     if (notes.length === 0) throw new TaskError("没有要应用的改动", 400);
 
     manifest.items = manifest.items.map((spec) => {
       const next: CardSpec = { ...spec };
       if (accent) next.accent = accent;
       if (chapterSec !== null && spec.kind === "chapter") next.durationSec = chapterSec;
-      if (patch.cycleTemplate) {
-        const list = CARD_TEMPLATES[spec.kind];
-        if (list.length > 1) {
-          const at = list.findIndex((template) => template.id === spec.compositionId);
-          next.compositionId = list[(at + 1) % list.length]?.id ?? spec.compositionId;
-        }
-      }
       delete next.videoPath;
       delete next.stillPath;
       return normalizeCard(next, cfg, state.options.width, state.options.height, state.options.fps);
     });
+
+    // 手动选过的值记下来，后面「换一批」也按这个来
+    const prefs: CardPrefs = { ...(state.cardPrefs ?? {}) };
+    if (accent) prefs.accent = accent;
+    if (chapterSec !== null) prefs.chapterDurationSec = chapterSec;
+    state.cardPrefs = prefs.accent || prefs.chapterDurationSec ? prefs : null;
 
     state.result = null;
     fs.rmSync(path.join(state.workspace, "_output.mp4"), { force: true });
@@ -617,7 +642,9 @@ class TaskManager {
     if (!ctx) throw new TaskError("任务状态异常", 500);
 
     const still = await ensureCardStill(ctx, spec, state.transcript?.paragraphs.length ?? 1);
-    if (!still) throw new TaskError("卡片预览渲染失败，检查 remotion 依赖是否装好", 500);
+    if (!still) {
+      throw new TaskError(`卡片预览渲染失败：${lastRenderErrorMessage() || "未知原因"}`, 500);
+    }
     this.emit();
     return still;
   }
@@ -1017,16 +1044,44 @@ class TaskManager {
     this.emit();
   }
 
-    private cardStagePresent(state: TaskState): boolean {
+  private cardStagePresent(state: TaskState): boolean {
     return state.stages.some((stage) => stage.id === "cards");
+  }
+
+  /** 按 STAGE_DEFS 的顺序补进 cards 阶段，已存在则不动 */
+  private ensureCardsStage(state: TaskState): void {
+    if (this.cardStagePresent(state)) return;
+    const def = STAGE_DEFS.find((stage) => stage.id === "cards");
+    if (!def) return;
+    const order = STAGE_DEFS.findIndex((stage) => stage.id === "cards");
+    const before = state.stages.filter((stage) => STAGE_DEFS.findIndex((d) => d.id === stage.id) < order).length;
+    state.stages.splice(before, 0, { ...def, status: "pending" });
   }
 
   /** 已确认、已出片也允许改，改完自动回到待确认 */
   private canEditCards(state: TaskState): boolean {
     if (!state.cards) return false;
-    return (
-      state.status === "awaiting_cards" || state.status === "cards_ready" || state.status === "completed"
-    );
+    return state.status === "awaiting_cards" || state.status === "cards_ready" || state.status === "completed";
+  }
+
+  /** 合并用户点选的配色与章节时长；没选的继续跟随 AI 与配置 */
+  private mergeCardPrefs(state: TaskState, patch: CardPrefs = {}): void {
+    const current = state.cardPrefs ?? {};
+    const wanted = typeof patch.accent === "string" ? patch.accent.trim().toLowerCase() : "";
+    const accent = wanted ? cardAccentPalette(loadConfig()).find((c) => c.toLowerCase() === wanted) : undefined;
+    if (wanted && !accent) throw new TaskError("配色不在允许的色板里", 400);
+
+    const rawSec = patch.chapterDurationSec === undefined ? undefined : Number(patch.chapterDurationSec);
+    if (rawSec !== undefined && (!Number.isFinite(rawSec) || rawSec < 0.5 || rawSec > 15)) {
+      throw new TaskError("时长要在 0.5–15 秒之间", 400);
+    }
+
+    const next: CardPrefs = {};
+    const finalAccent = accent ?? current.accent;
+    const finalSec = rawSec === undefined ? current.chapterDurationSec : Math.round(rawSec * 10) / 10;
+    if (finalAccent) next.accent = finalAccent;
+    if (finalSec) next.chapterDurationSec = finalSec;
+    state.cardPrefs = next.accent || next.chapterDurationSec ? next : null;
   }
 
   private reopenCards(state: TaskState): void {
@@ -1052,7 +1107,7 @@ class TaskManager {
         }
       }
 
-      const manifest = await runCardsStage(ctx, state.transcript, state.audio, state.material);
+      const manifest = await runCardsStage(ctx, state.transcript, state.audio, state.material, state.cardPrefs);
       if (!this.state || !this.owns(controller)) return;
       this.state.cards = manifest;
       this.setStatus("awaiting_cards");

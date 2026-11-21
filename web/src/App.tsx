@@ -7,6 +7,7 @@ import {
   confirmScript,
   getHealth,
   matchMaterial,
+  generateCards,
   regenerateCards,
   removeCard,
   retryTask,
@@ -46,7 +47,7 @@ import { CardStep, type CardDraft } from "./components/CardStep";
 import { RenderStep } from "./components/RenderStep";
 import { ResultStep } from "./components/ResultStep";
 import type { FormState, RenderFormState } from "./components/stepTypes";
-import type { Health, MaterialInfo, Meta, RawTranscript, TaskState, Transcript } from "./types";
+import type { CardPrefs, Health, MaterialInfo, Meta, RawTranscript, TaskState, Transcript } from "./types";
 
 const STATUS_TEXT: Record<TaskState["status"], string> = {
   idle: "空闲",
@@ -447,6 +448,14 @@ export default function App() {
     setPhase("result");
   }
 
+  async function onGenerateCards(prefs: CardPrefs = {}) {
+    const state = await withBusy(() => generateCards(prefs));
+    if (!state) return;
+    setTask(state);
+    setFollowing(true);
+    setPhase("cards");
+  }
+
   async function onRegenerateCards() {
     const state = await withBusy(regenerateCards);
     if (!state) return;
@@ -468,7 +477,7 @@ export default function App() {
     return true;
   }
 
-  async function onBatchCards(patch: { accent?: string; chapterDurationSec?: number; cycleTemplate?: boolean }) {
+  async function onBatchCards(patch: { accent?: string; chapterDurationSec?: number }) {
     const state = await withBusy(() => batchCards(patch));
     if (state) setTask(state);
   }
@@ -756,13 +765,7 @@ export default function App() {
           </div>
         </header>
 
-        <StepBar
-          current={phase}
-          reached={reached}
-          doneThrough={done}
-          withCards={cardsMode}
-          onSelect={onSelect}
-        />
+        <StepBar current={phase} reached={reached} doneThrough={done} withCards={cardsMode} onSelect={onSelect} />
 
         {resumed && (
           <div className="resume-bar">
@@ -884,6 +887,7 @@ export default function App() {
             busy={busy}
             error={error}
             meta={meta}
+            onGenerate={(prefs) => void onGenerateCards(prefs)}
             onRegenerate={() => void onRegenerateCards()}
             onRewrite={(id, mode) => void onRewriteCard(id, mode)}
             onUpdate={onUpdateCard}

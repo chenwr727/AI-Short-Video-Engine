@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { cardStillUrl } from "../api";
 import { CARD_STAGE_IDS } from "../phases";
-import type { CardSpec, Meta, TaskState } from "../types";
+import type { CardPrefs, CardSpec, Meta, TaskState } from "../types";
 import { CardPlayer } from "./CardPlayer";
 import { ConfigSection, Panel } from "./Panel";
 import { LogPanel, StageList } from "./StageList";
@@ -11,11 +11,13 @@ interface CardStepProps {
   busy: boolean;
   error: string;
   meta: Meta | null;
+  /** 还没生成时先选好的配色 / 时长随请求带给后端 */
+  onGenerate: (prefs: CardPrefs) => void;
   onRegenerate: () => void;
   onRewrite: (id: string, mode: "text" | "accent") => void;
   /** 保存成功返回 true；失败由调用方提示，返回 false */
   onUpdate: (id: string, patch: CardDraft) => Promise<boolean>;
-  onBatch: (patch: { accent?: string; chapterDurationSec?: number; cycleTemplate?: boolean }) => void;
+  onBatch: (patch: { accent?: string; chapterDurationSec?: number }) => void;
   onRemove: (id: string) => void;
   onConfirm: () => void;
   onRetry: () => void;
@@ -58,6 +60,7 @@ export function CardStep(props: CardStepProps) {
     busy,
     error,
     meta,
+    onGenerate,
     onRegenerate,
     onRewrite,
     onUpdate,
@@ -74,10 +77,39 @@ export function CardStep(props: CardStepProps) {
   const generating = task.status === "running";
   const failed = task.status === "failed" || task.status === "cancelled";
   // 改完后端会自动回到待确认
-  const editable =
-    Boolean(manifest) &&
-    (awaiting || task.status === "cards_ready" || task.status === "completed");
+  const editable = Boolean(manifest) && (awaiting || task.status === "cards_ready" || task.status === "completed");
   const items = manifest?.items ?? [];
+
+  /** 全部卡片取值一致时返回该值，用来给批量按钮加选中态 */
+  function shared<T>(values: T[]): T | null {
+    if (values.length === 0) return null;
+    return values.every((value) => value === values[0]) ? (values[0] as T) : null;
+  }
+  const sharedAccent = shared(items.map((item) => item.accent.toLowerCase()));
+  const sharedChapterSec = shared(items.filter((item) => item.kind === "chapter").map((item) => item.durationSec));
+
+  // 还没生成版式时，批量控件当「生成参数」用：点选只记在本地，点「开始生成版式」一起提交
+  const [preset, setPreset] = useState<CardPrefs>({});
+  const canPreset = !busy && (editable || (awaiting && !manifest));
+  const accentPick = sharedAccent ?? (manifest ? null : (preset.accent ?? task.cardPrefs?.accent ?? null));
+  const chapterPick =
+    sharedChapterSec ?? (manifest ? null : (preset.chapterDurationSec ?? task.cardPrefs?.chapterDurationSec ?? null));
+
+  function pickAccent(color: string) {
+    if (manifest) {
+      onBatch({ accent: color });
+      return;
+    }
+    setPreset((prev) => ({ ...prev, accent: color.toLowerCase() }));
+  }
+
+  function pickChapterSec(seconds: number) {
+    if (manifest) {
+      onBatch({ chapterDurationSec: seconds });
+      return;
+    }
+    setPreset((prev) => ({ ...prev, chapterDurationSec: seconds }));
+  }
 
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState<CardDraft | null>(null);
@@ -123,20 +155,22 @@ export function CardStep(props: CardStepProps) {
     <Panel
       title="版式确认"
       desc={
-        awaiting
-          ? "预览就是最终渲染的同一套组件：改标题、时长、配色都会立刻重绘。满意后确认，确认完再合成。"
-          : generating
-            ? "正在让 AI 设计版式，完成后会在这里逐张列出来。"
-            : failed
-              ? (task.error ?? "版式生成没成功，可以重试。")
-              : editable
-                ? "这份版式已经确认过。改动任意一张卡都会自动回到待确认状态，改完再点「下一步：成片预览」重新合成。"
-                : "版式还没生成，先在上一步把素材确认完。"
+        awaiting && !manifest
+          ? "素材已确认。点右下角「开始生成版式」，AI 会按当前配置挑模板并写文案；生成后每张卡都能改文案、时长和配色。"
+          : awaiting
+            ? "预览就是最终渲染的同一套组件：改标题、时长、配色都会立刻重绘。满意后确认，确认完再合成。"
+            : generating
+              ? "正在让 AI 设计版式，完成后会在这里逐张列出来。"
+              : failed
+                ? (task.error ?? "版式生成没成功，可以重试。")
+                : editable
+                  ? "这份版式已经确认过。改动任意一张卡都会自动回到待确认状态，改完再点「下一步：成片预览」重新合成。"
+                  : "版式还没生成，先在上一步把素材确认完。"
       }
       fill
     >
-      <ConfigSection title="批量设置" summary="统一配色 · 章节卡时长 · 换模板" defaultOpen={!manifest}>
-        <div className="row row-3">
+      <ConfigSection title="批量设置" summary="统一配色 · 章节卡时长" defaultOpen={!manifest}>
+        <div className="row">
           <div className="field">
             <label>统一配色</label>
             <div className="card-swatches">
@@ -144,12 +178,13 @@ export function CardStep(props: CardStepProps) {
                 <button
                   key={color}
                   type="button"
-                  className="swatch"
+                  className={`swatch${accentPick === color.toLowerCase() ? " on" : ""}`}
                   style={{ background: color }}
-                  title={`全部卡片用 ${color}`}
+                  title={manifest ? `全部卡片用 ${color}` : `生成时用 ${color}`}
                   aria-label={color}
-                  disabled={busy || !editable}
-                  onClick={() => onBatch({ accent: color })}
+                  aria-pressed={accentPick === color.toLowerCase()}
+                  disabled={!canPreset}
+                  onClick={() => pickAccent(color)}
                 />
               ))}
             </div>
@@ -162,38 +197,28 @@ export function CardStep(props: CardStepProps) {
                 <button
                   key={seconds}
                   type="button"
-                  className="chip"
-                  disabled={busy || !editable}
-                  onClick={() => onBatch({ chapterDurationSec: seconds })}
+                  className={`chip${chapterPick === seconds ? " on" : ""}`}
+                  aria-pressed={chapterPick === seconds}
+                  disabled={!canPreset}
+                  onClick={() => pickChapterSec(seconds)}
                 >
                   {seconds}s
                 </button>
               ))}
             </div>
           </div>
-
-          <div className="field">
-            <label>版式</label>
-            <div>
-              <button
-                className="secondary"
-                type="button"
-                disabled={busy || !editable}
-                onClick={() => onBatch({ cycleTemplate: true })}
-                title="每种卡片切到它的下一个模板"
-              >
-                全部换模板
-              </button>
-            </div>
-          </div>
         </div>
-        <p className="hint">批量操作作用于全部卡片；只想改一张，用卡片上的「编辑」。</p>
+        <p className="hint">
+          {manifest
+            ? "批量操作作用于全部卡片，选中态表示当前所有卡取值一致；只想改一张，用卡片上的「编辑」。想换模板，用卡片上的「换模板」。"
+            : "还没生成版式：这里选的值会作为生成参数，不选则跟随 AI 与配置（主色由 AI 按画面挑，时长取配置）。生成后这里变成批量修改。"}
+        </p>
       </ConfigSection>
 
       <div className="panel-scroll">
         <StageList stages={task.stages.filter((stage) => CARD_STAGE_IDS.includes(stage.id))} />
 
-        {!manifest && !generating && !failed && <p className="hint">版式还没生成出来。</p>}
+        {!manifest && !generating && !failed && <p className="hint">版式还没生成：点右下角「开始生成版式」。</p>}
 
         {manifest && items.length === 0 && (
           <p className="hint">卡片都删了：成片只保留正文段落。可以点「换一批」再要一版。</p>
@@ -338,12 +363,7 @@ export function CardStep(props: CardStepProps) {
                         {live.handle && <div className="card-handle">{live.handle}</div>}
                         {editable && (
                           <div className="card-actions">
-                            <button
-                              className="secondary"
-                              type="button"
-                              disabled={busy}
-                              onClick={() => startEdit(item)}
-                            >
+                            <button className="secondary" type="button" disabled={busy} onClick={() => startEdit(item)}>
                               编辑
                             </button>
                             {templatesOf(item.kind).length > 1 && (
@@ -419,7 +439,12 @@ export function CardStep(props: CardStepProps) {
             换一批（重新生成）
           </button>
         )}
-        {awaiting && (
+        {awaiting && !manifest && (
+          <button className="primary" type="button" disabled={busy} onClick={() => onGenerate(preset)}>
+            开始生成版式
+          </button>
+        )}
+        {awaiting && manifest && (
           <button className="primary" type="button" disabled={busy} onClick={onConfirm}>
             下一步：成片预览
           </button>

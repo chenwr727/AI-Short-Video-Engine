@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import type { AudioManifest, Transcript } from "../types.js";
-import { clipSignature, planParagraphs, shotDurations } from "./compose.js";
+import { clipSignature, isComposedOutput, planParagraphs, shotDurations } from "./compose.js";
 
 const TIMELINE = { titleDuration: 1.6, interval: 0.2, padLead: 0, padTail: 0 };
 
@@ -110,4 +112,28 @@ test("段内切镜按句子边界切，总时长不变", () => {
   assert.equal(three.length, 3);
   near(three.reduce((sum, d) => sum + d, 0), 4);
   near(three[0] ?? 0, 1);
+});
+
+test("没写完的成片不算完整产物，不能当缓存复用", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aisv-compose-"));
+  const output = path.join(dir, "_output.mp4");
+  const marker = `${output}.ok`;
+  const stamp = () => {
+    const stat = fs.statSync(output);
+    return `${stat.size}:${Math.round(stat.mtimeMs)}`;
+  };
+
+  // 合成中途被杀的残留文件：没有完成标记
+  fs.writeFileSync(output, "partial");
+  assert.equal(isComposedOutput(output), false);
+
+  // 正常合完：标记与文件对得上
+  fs.writeFileSync(marker, stamp(), "utf-8");
+  assert.equal(isComposedOutput(output), true);
+
+  // 标记之后文件又被改过（截断/续写），同样不可复用
+  fs.appendFileSync(output, "more");
+  assert.equal(isComposedOutput(output), false);
+
+  fs.rmSync(dir, { recursive: true, force: true });
 });

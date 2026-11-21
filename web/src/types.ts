@@ -156,6 +156,12 @@ export interface CardManifest {
   style?: string;
 }
 
+/** 版式生成偏好：手动点选过才写；null / 缺省表示跟随 AI 与配置 */
+export interface CardPrefs {
+  accent?: string;
+  chapterDurationSec?: number;
+}
+
 export interface AudioFileInfo {
   file: string;
   duration: number;
@@ -219,6 +225,8 @@ export interface TaskState {
   material: MaterialManifest | null;
   /** 关闭版式阶段时为 null */
   cards: CardManifest | null;
+  /** 手动指定的配色与章节时长；null 表示没选过 */
+  cardPrefs: CardPrefs | null;
   result: string | null;
   error: string | null;
   createdAt: string;

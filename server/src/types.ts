@@ -191,6 +191,14 @@ export interface CardManifest {
   style?: string;
 }
 
+/** 版式生成偏好：用户手动点选过才写；null 表示全部跟随 AI 与配置 */
+export interface CardPrefs {
+  /** 指定主色，须在色板内 */
+  accent?: string;
+  /** 指定章节卡时长（秒），0.5–15 */
+  chapterDurationSec?: number;
+}
+
 export interface LogLine {
   time: string;
   level: "info" | "warn" | "error";
@@ -212,6 +220,8 @@ export interface TaskState {
   material: MaterialManifest | null;
   /** 片头/章节/片尾的版式清单，关闭开关时为 null */
   cards: CardManifest | null;
+  /** 手动指定的配色与章节时长；null 表示没选过，跟随 AI 与配置 */
+  cardPrefs: CardPrefs | null;
   result: string | null;
   error: string | null;
   createdAt: string;
