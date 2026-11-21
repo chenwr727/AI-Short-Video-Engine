@@ -8,6 +8,8 @@ out/
 
 # 桌面端打包产物
 desktop/build/
+# Remotion 预构建 bundle（打包时现生成）
+remotion/build/
 desktop/release/
 desktop/dist/
 

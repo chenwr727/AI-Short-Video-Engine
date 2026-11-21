@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "studio": "remotion studio src/index.ts",
-    "render": "node render-intro.mjs",
+    "bundle": "remotion bundle src/index.ts --out-dir build/bundle",
+    "render": "node render.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -27,6 +27,7 @@ const softChecks = [
   ["打包内 ffmpeg", path.join(unpacked, "resources", "bin", "ffmpeg" + exe)],
   ["打包内后端", path.join(unpacked, "resources", "server", "src", "index.ts")],
   ["打包内前端", path.join(unpacked, "resources", "web", "index.html")],
+  ["打包内 Remotion", path.join(unpacked, "resources", "remotion", "render.mjs")],
 ];
 
 /** 不该进包的文件，防止误分发本地凭据 */
@@ -35,6 +36,8 @@ const forbidden = [
   ["打包暂存配置", path.join(desktop, "build", "resources", "payload", "server", "data", "config.json")],
   ["免安装用户数据", path.join(unpacked, "UserData")],
   ["用户数据 config", path.join(unpacked, "UserData", "config.json")],
+  ["Remotion 构建缓存", path.join(unpacked, "resources", "remotion", "node_modules", ".cache")],
+  ["Remotion 的 typescript", path.join(unpacked, "resources", "remotion", "node_modules", "typescript")],
 ];
 
 let failed = 0;
@@ -59,6 +62,29 @@ for (const [label, file] of forbidden) {
   } else {
     console.log(`  ✓ ${label} 未入包`);
   }
+}
+
+// 带卡片版：暂存里有 render.mjs，包里就必须有，否则说明 extraResources 没生效
+const stagedRemotion = path.join(desktop, "build", "resources", "remotion-payload", "remotion", "render.mjs");
+if (fs.existsSync(stagedRemotion) && !fs.existsSync(path.join(unpacked, "resources", "remotion", "render.mjs"))) {
+  console.error("  ✗ 本次带卡片构建，包里却没有 resources/remotion/render.mjs");
+  failed++;
+}
+
+// 瘦身构建不带 Chrome Shell，包里也不该有
+const stagedShell = path.join(
+  desktop,
+  "build",
+  "resources",
+  "remotion-payload",
+  "remotion",
+  "node_modules",
+  ".remotion",
+);
+const packagedShell = path.join(unpacked, "resources", "remotion", "node_modules", ".remotion");
+if (fs.existsSync(stagedRemotion) && !fs.existsSync(stagedShell) && fs.existsSync(packagedShell)) {
+  console.error("  ✗ 瘦身构建不该带 Chrome Headless Shell");
+  failed++;
 }
 
 if (failed) {

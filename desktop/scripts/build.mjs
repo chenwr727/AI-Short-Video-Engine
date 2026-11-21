@@ -1,11 +1,16 @@
 // 按顺序执行构建步骤，失败时报告步骤与退出码
 import { spawnSync } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const desktop = path.resolve(here, "..");
 const isWin = process.platform === "win32";
+
+/** 带 Remotion 卡片（片头 / 过场 / 版式）的包体积会多 ~460 MB；--slim 时改用系统浏览器，只多 ~160 MB */
+const withRemotion = process.argv.includes("--with-remotion") || process.env.AISV_WITH_REMOTION === "1";
+const slimRemotion = process.argv.includes("--slim") || process.env.AISV_REMOTION_SLIM === "1";
 
 /** 直接用 node 跑 tsc，避免 Windows 下的 .cmd */
 const tscCli = path.join(desktop, "node_modules", "typescript", "bin", "tsc");
@@ -20,8 +25,26 @@ const steps = [
   { name: "icon", cmd: process.execPath, args: ["scripts/make-icon.mjs"] },
   { name: "ffmpeg", cmd: process.execPath, args: ["scripts/copy-ffmpeg.mjs"] },
   { name: "stage", cmd: process.execPath, args: ["scripts/stage-server.mjs"] },
+  ...(withRemotion
+    ? [
+        {
+          name: "remotion",
+          cmd: process.execPath,
+          args: ["scripts/stage-remotion.mjs", ...(slimRemotion ? ["--slim"] : [])],
+        },
+      ]
+    : []),
   { name: "tsc", cmd: process.execPath, args: [tscCli, "-p", "tsconfig.json"] },
 ];
+
+// 上一轮带卡片构建的暂存目录必须清掉，否则会静默打进本次的轻量包
+const remotionStage = path.join(desktop, "build", "resources", "remotion-payload");
+if (!withRemotion) {
+  fs.rmSync(remotionStage, { recursive: true, force: true });
+  // 留空目录：electron-builder 的 extraResources 指向不存在路径会报错
+  fs.mkdirSync(remotionStage, { recursive: true });
+  console.log("[build] 跳过 Remotion，已清理上次的暂存目录");
+}
 
 /** NTSTATUS 退出码 → 可读原因 */
 const HINTS = {

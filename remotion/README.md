@@ -19,6 +19,16 @@ npm run studio
 
 打开 Studio 后可以实时改标题、配色、时长，确认效果再回到主程序出片。
 
+## 预构建
+
+```bash
+npm run bundle   # 产物：build/bundle
+```
+
+`render.mjs` 的取舍规则：目录里还有 `src/index.ts`（开发态）就每次现打包，改模板立刻生效；没有源码（打进安装包里的副本）就只用 `build/bundle`，所以改完模板要重新 `npm run bundle`，否则包里还是旧界面。
+
+暂存进包时会顺手删掉 bundle 的 sourcemap（约 23 MB）和末尾的 `sourceMappingURL` 注释——只删 map 不删注释会让渲染直接报 ENOENT。
+
 ## 被后端调用
 
 主程序设置页打开「用 Remotion 模板渲染片头」后（配置项 `INTRO_ENABLED=1`），合成阶段会执行：
@@ -35,6 +45,8 @@ node render.mjs @props.json
 | `OutroCard` | 片尾关注引导 | `OUTRO_DURATION > 0` |
 | `QuoteCard` | 兜底设计卡，没检索到素材时顶替实拍 | `QUOTE_FALLBACK=1` |
 | `ChapterCard` | 段落过场卡，大序号 + 本段主题 | `CHAPTER_CARD=1` |
+
+版式阶段（`CARDS_ENABLED=1`）会按每张卡自己的 `compositionId` 渲染，备用模板为 `TitleHero`、`ChapterSplit`、`OutroMinimal`，清单在 `server/src/card-templates.ts`，新增模板要同时注册到 `src/Root.tsx`。
 
 渲染完成后后端会用 ffmpeg 补一条静音轨并统一编码参数，让卡片能和正文片段一起走转场拼接。
 
@@ -57,5 +69,6 @@ node render.mjs @props.json
 ## 注意
 
 - 所有 `@remotion/*` 包必须**版本完全一致**，升级时四个包一起改。
-- 桌面版默认不打包本目录（`node_modules` + Chrome Shell 约几百 MB）。需要时把整个 `remotion/`（含 `node_modules`）放到应用根目录，或设置环境变量 `AISV_REMOTION_DIR` 指向它。
+- 桌面版普通包不带本目录。要么用 `pnpm dist:win:remotion` 打带卡片的包（约 400 MB，自带 Chrome Headless Shell），要么用 `pnpm dist:win:remotion-slim`（约 300 MB，借用系统 Edge / Chrome），也可以把整个 `remotion/` 放到应用根目录、或设置 `AISV_REMOTION_DIR` 指向它。
+- 想指定浏览器：`REMOTION_BROWSER="C:\路径\chrome.exe"`（没设且目录里没有 Chrome Shell 时，会自动在系统里找 Edge / Chrome）。
 - 动画必须由 `useCurrentFrame()` 驱动，不能用 CSS transition、`Date.now()` 或无种子随机数，否则并发渲染会出现帧错乱。
