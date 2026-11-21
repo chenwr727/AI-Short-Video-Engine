@@ -22,7 +22,6 @@ import { lastRenderErrorMessage } from "../services/remotion.js";
 import { loadLatestTask, saveTaskState } from "./store.js";
 import type {
   AudioManifest,
-  CardManifest,
   CardPrefs,
   CardSpec,
   GenerateOptions,

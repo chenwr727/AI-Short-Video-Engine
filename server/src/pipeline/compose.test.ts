@@ -105,12 +105,18 @@ test("段内切镜按句子边界切，总时长不变", () => {
 
   const two = shotDurations(plan, 2);
   assert.equal(two.length, 2);
-  near(two.reduce((sum, d) => sum + d, 0), 4);
+  near(
+    two.reduce((sum, d) => sum + d, 0),
+    4,
+  );
   near(two[0] ?? 0, 2);
 
   const three = shotDurations(plan, 3);
   assert.equal(three.length, 3);
-  near(three.reduce((sum, d) => sum + d, 0), 4);
+  near(
+    three.reduce((sum, d) => sum + d, 0),
+    4,
+  );
   near(three[0] ?? 0, 1);
 });
 

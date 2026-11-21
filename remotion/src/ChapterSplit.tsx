@@ -113,7 +113,9 @@ export const ChapterSplit: React.FC<ChapterCardProps> = ({ title, index, total, 
             ))}
           </div>
 
-          <div style={{ marginTop: Math.round(width * 0.01), color: `${accent}cc`, fontSize: Math.round(width * 0.022) }}>
+          <div
+            style={{ marginTop: Math.round(width * 0.01), color: `${accent}cc`, fontSize: Math.round(width * 0.022) }}
+          >
             {(progress * 100).toFixed(0)}%
           </div>
         </div>
