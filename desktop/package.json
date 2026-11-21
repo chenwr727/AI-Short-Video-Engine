@@ -8,13 +8,20 @@
     "icon": "node scripts/make-icon.mjs",
     "ffmpeg": "node scripts/copy-ffmpeg.mjs",
     "stage": "node scripts/stage-server.mjs",
+    "stage:remotion": "node scripts/stage-remotion.mjs",
     "web": "pnpm -C ../web run build",
     "build": "node scripts/build.mjs",
+    "build:remotion": "node scripts/build.mjs --with-remotion",
+    "build:remotion:slim": "node scripts/build.mjs --with-remotion --slim",
     "dev": "node scripts/build.mjs && electron .",
     "verify": "node scripts/verify-pack.mjs",
     "dist:win": "npm run build && electron-builder --win && npm run verify",
     "dist:mac": "npm run build && electron-builder --mac",
-    "dist:linux": "npm run build && electron-builder --linux"
+    "dist:linux": "npm run build && electron-builder --linux",
+    "dist:win:remotion": "npm run build:remotion && electron-builder --win && npm run verify",
+    "dist:win:remotion-slim": "npm run build:remotion:slim && electron-builder --win && npm run verify",
+    "dist:mac:remotion": "npm run build:remotion && electron-builder --mac",
+    "dist:linux:remotion": "npm run build:remotion && electron-builder --linux"
   },
   "devDependencies": {
     "@types/node": "^26.4.0",

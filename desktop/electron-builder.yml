@@ -58,6 +58,10 @@ extraResources:
   # 前端产物，由后端托管
   - from: ../web/dist
     to: web
+  # 可选：带卡片版才存在的 Remotion 运行环境（预构建 bundle + renderer + Chrome Shell）。
+  # 同样多套一层：直接映射顶层目录时它里面的 node_modules 会被默认排除规则丢掉。
+  - from: build/resources/remotion-payload
+    to: .
 
 extraFiles:
   - from: portable.txt
