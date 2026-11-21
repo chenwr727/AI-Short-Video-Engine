@@ -1,4 +1,4 @@
-import type { Health, MaterialInfo, Meta, RawTranscript, TaskState } from "./types";
+import type { CardPrefs, Health, MaterialInfo, Meta, RawTranscript, TaskState } from "./types";
 
 const BASE = "/api";
 
@@ -146,9 +146,31 @@ export function cardStillUrl(id: string, fingerprint?: string): string {
   return `${BASE}/card/${encodeURIComponent(id)}/still${fingerprint ? `?v=${fingerprint}` : ""}`;
 }
 
-/** 整份版式重做 */
-export async function regenerateCards(): Promise<TaskState> {
-  const data = await request<{ state: TaskState }>("/task/cards/regenerate", { method: "POST" }, "生成版式失败");
+/** 首次生成版式；prefs 为页面上先选好的配色与章节时长，缺省则跟随 AI 与配置 */
+export async function generateCards(prefs: CardPrefs = {}): Promise<TaskState> {
+  const data = await request<{ state: TaskState }>(
+    "/task/cards/generate",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(prefs),
+    },
+    "生成版式失败",
+  );
+  return data.state;
+}
+
+/** 整份版式重做；prefs 缺省时沿用服务端记住的选择 */
+export async function regenerateCards(prefs: CardPrefs = {}): Promise<TaskState> {
+  const data = await request<{ state: TaskState }>(
+    "/task/cards/regenerate",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(prefs),
+    },
+    "生成版式失败",
+  );
   return data.state;
 }
 
@@ -190,12 +212,8 @@ export async function updateCard(
   return data.state;
 }
 
-/** 批量应用：统一配色 / 章节时长 / 换模板 */
-export async function batchCards(patch: {
-  accent?: string;
-  chapterDurationSec?: number;
-  cycleTemplate?: boolean;
-}): Promise<TaskState> {
+/** 批量应用：统一配色 / 章节时长 */
+export async function batchCards(patch: { accent?: string; chapterDurationSec?: number }): Promise<TaskState> {
   const data = await request<{ state: TaskState }>(
     "/task/cards/batch",
     {

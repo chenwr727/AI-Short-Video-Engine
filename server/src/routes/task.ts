@@ -275,14 +275,31 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
     return sendFileWithRange(reply, item.videoPath, req.headers.range, { contentType: "video/mp4" });
   });
 
+  /** 进入版式步骤后由用户手动触发首次生成；可带上先选好的配色与章节时长 */
+  app.post<{ Body: { accent?: string; chapterDurationSec?: number } }>(
+    "/api/task/cards/generate",
+    async (req, reply) => {
+      try {
+        const { accent, chapterDurationSec } = req.body ?? {};
+        return { state: taskManager.generateCards({ accent, chapterDurationSec }) };
+      } catch (error) {
+        return fail(reply, error);
+      }
+    },
+  );
+
   /** 整份版式重做 */
-  app.post("/api/task/cards/regenerate", async (_req, reply) => {
-    try {
-      return { state: taskManager.regenerateCards() };
-    } catch (error) {
-      return fail(reply, error);
-    }
-  });
+  app.post<{ Body: { accent?: string; chapterDurationSec?: number } }>(
+    "/api/task/cards/regenerate",
+    async (req, reply) => {
+      try {
+        const { accent, chapterDurationSec } = req.body ?? {};
+        return { state: taskManager.regenerateCards({ accent, chapterDurationSec }) };
+      } catch (error) {
+        return fail(reply, error);
+      }
+    },
+  );
 
   /** 换一张卡：重写文案或换配色 */
   app.post<{ Body: { id?: string; mode?: string } }>("/api/task/cards/rewrite", async (req, reply) => {
@@ -318,18 +335,15 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  /** 批量应用：统一配色 / 章节时长 / 换模板 */
-  app.post<{ Body: { accent?: string; chapterDurationSec?: number; cycleTemplate?: boolean } }>(
-    "/api/task/cards/batch",
-    async (req, reply) => {
-      try {
-        const { accent, chapterDurationSec, cycleTemplate } = req.body ?? {};
-        return { state: taskManager.applyCardsPatch({ accent, chapterDurationSec, cycleTemplate }) };
-      } catch (error) {
-        return fail(reply, error);
-      }
-    },
-  );
+  /** 批量应用：统一配色 / 章节时长 */
+  app.post<{ Body: { accent?: string; chapterDurationSec?: number } }>("/api/task/cards/batch", async (req, reply) => {
+    try {
+      const { accent, chapterDurationSec } = req.body ?? {};
+      return { state: taskManager.applyCardsPatch({ accent, chapterDurationSec }) };
+    } catch (error) {
+      return fail(reply, error);
+    }
+  });
 
   /** 删掉一张卡 */
   app.post<{ Body: { id?: string } }>("/api/task/cards/remove", async (req, reply) => {

@@ -5,12 +5,13 @@ import { bool, cardAccentPalette, loadConfig, numberOrZero, type AppConfig } fro
 import { CARD_TEMPLATES, defaultTemplate, isTemplateFor } from "../card-templates.js";
 import { ensureDir } from "../paths.js";
 import { chat, extractJsonObject } from "../services/llm.js";
-import { renderCard, renderCardStill } from "../services/remotion.js";
+import { lastRenderErrorMessage, renderCard, renderCardStill } from "../services/remotion.js";
 import { transcriptFingerprint } from "./tts.js";
 import type {
   AudioManifest,
   CardKind,
   CardManifest,
+  CardPrefs,
   CardSpec,
   MaterialManifest,
   TaskContext,
@@ -31,10 +32,59 @@ export function cardsEnabled(cfg: AppConfig = loadConfig()): boolean {
   return bool(cfg.CARDS_ENABLED, false);
 }
 
+interface CardPlan {
+  introSec: number;
+  chapterSec: number;
+  outroSec: number;
+  /** 只开了版式步骤、三个卡片开关全关：按默认出片头与章节卡 */
+  auto: boolean;
+}
+
+const DEFAULT_INTRO_SEC = 1.6;
+const DEFAULT_CHAPTER_SEC = 2;
+
+/** 各类卡片的实际时长。版式步骤开着但细项全关时给一份默认，否则这一步永远是 0 张 */
+export function cardPlan(
+  cfg: AppConfig,
+  paragraphs: number,
+  overrides: { chapterDurationSec?: number } = {},
+): CardPlan {
+  const chapterLimit = Math.max(0, Math.min(paragraphs - 1, 6));
+  const titleSec = Math.max(0, numberOrZero(cfg.TITLE_DURATION, 0));
+  const introOn = bool(cfg.INTRO_ENABLED, false);
+  const chapterOn = bool(cfg.CHAPTER_CARD, false);
+  const outroSec = Math.max(0, numberOrZero(cfg.OUTRO_DURATION, 0));
+  const introSec = introOn ? titleSec : 0;
+  const chapterSec =
+    chapterOn && chapterLimit > 0 ? Math.max(0, numberOrZero(cfg.CHAPTER_DURATION, DEFAULT_CHAPTER_SEC)) : 0;
+
+  const plan: CardPlan =
+    introOn || chapterOn || outroSec > 0
+      ? { introSec, chapterSec, outroSec, auto: false }
+      : {
+          introSec: titleSec > 0 ? titleSec : DEFAULT_INTRO_SEC,
+          chapterSec: chapterLimit > 0 ? DEFAULT_CHAPTER_SEC : 0,
+          outroSec: 0,
+          auto: true,
+        };
+
+  // 手动点过时长就以它为准，但只作用于本来就会出的章节卡
+  const manual = overrides.chapterDurationSec ?? 0;
+  if (manual > 0 && plan.chapterSec > 0) plan.chapterSec = manual;
+  return plan;
+}
+
 function pickAccent(value: unknown, palette: string[]): string {
   const raw = typeof value === "string" ? value.trim().toLowerCase() : "";
   const hit = palette.find((color) => color.toLowerCase() === raw);
   return hit ?? palette[0] ?? "#ff5a3c";
+}
+
+/** 用户手动点过的配色；没选或不在色板里返回 null，交给 AI/配置决定 */
+function manualAccent(prefs: CardPrefs | null | undefined, palette: string[]): string | null {
+  const raw = (prefs?.accent ?? "").trim().toLowerCase();
+  if (!raw) return null;
+  return palette.find((color) => color.toLowerCase() === raw) ?? null;
 }
 
 export function cleanCardText(value: unknown, max: number): string {
@@ -61,13 +111,7 @@ export function cardSignature(transcript: Transcript, width: number, height: num
   return `${transcriptFingerprint(transcript)}|${width}x${height}`;
 }
 
-function normalizeSpec(
-  spec: CardSpec,
-  cfg: AppConfig,
-  width: number,
-  height: number,
-  fps: number,
-): CardSpec {
+function normalizeSpec(spec: CardSpec, cfg: AppConfig, width: number, height: number, fps: number): CardSpec {
   const normalized: CardSpec = {
     ...spec,
     title: cleanCardText(spec.title, spec.kind === "chapter" ? MAX_CHAPTER : MAX_TITLE),
@@ -162,13 +206,14 @@ function fallbackManifest(
   width: number,
   height: number,
   fps: number,
+  prefs?: CardPrefs | null,
 ): CardManifest {
   const items: CardSpec[] = [];
   const palette = cardAccentPalette(cfg);
-  const accent = palette[0] ?? "#ff5a3c";
+  const accent = manualAccent(prefs, palette) ?? palette[0] ?? "#ff5a3c";
+  const plan = cardPlan(cfg, transcript.paragraphs.length, { chapterDurationSec: prefs?.chapterDurationSec });
 
-  const titleDuration = numberOrZero(cfg.TITLE_DURATION, 0);
-  if (bool(cfg.INTRO_ENABLED, false) && titleDuration > 0) {
+  if (plan.introSec > 0) {
     items.push(
       normalizeSpec(
         {
@@ -178,7 +223,7 @@ function fallbackManifest(
           title: transcript.title,
           label: DEFAULT_LABEL.intro,
           accent,
-          durationSec: titleDuration,
+          durationSec: plan.introSec,
         },
         cfg,
         width,
@@ -188,35 +233,32 @@ function fallbackManifest(
     );
   }
 
-  if (bool(cfg.CHAPTER_CARD, false)) {
-    const chapterSec = Math.max(0, numberOrZero(cfg.CHAPTER_DURATION, 2));
-    if (chapterSec > 0) {
-      transcript.paragraphs.forEach((paragraph, index) => {
-        if (index === 0) return;
-        const first = paragraph.dialogues[0]?.contents[0] ?? paragraph.description ?? "";
-        items.push(
-          normalizeSpec(
-            {
-              id: `chapter-${index + 1}`,
-              kind: "chapter",
-              compositionId: defaultTemplate("chapter"),
-              paragraph: index + 1,
-              title: first,
-              label: `${DEFAULT_LABEL.chapter}`,
-              accent,
-              durationSec: chapterSec,
-            },
-            cfg,
-            width,
-            height,
-            fps,
-          ),
-        );
-      });
-    }
+  if (plan.chapterSec > 0) {
+    transcript.paragraphs.forEach((paragraph, index) => {
+      if (index === 0) return;
+      const first = paragraph.dialogues[0]?.contents[0] ?? paragraph.description ?? "";
+      items.push(
+        normalizeSpec(
+          {
+            id: `chapter-${index + 1}`,
+            kind: "chapter",
+            compositionId: defaultTemplate("chapter"),
+            paragraph: index + 1,
+            title: first,
+            label: `${DEFAULT_LABEL.chapter}`,
+            accent,
+            durationSec: plan.chapterSec,
+          },
+          cfg,
+          width,
+          height,
+          fps,
+        ),
+      );
+    });
   }
 
-  const outroSec = numberOrZero(cfg.OUTRO_DURATION, 0);
+  const outroSec = plan.outroSec;
   if (outroSec > 0) {
     items.push(
       normalizeSpec(
@@ -247,6 +289,7 @@ export async function runCardsStage(
   transcript: Transcript,
   _audio: AudioManifest | null,
   material: MaterialManifest | null,
+  prefs?: CardPrefs | null,
 ): Promise<CardManifest> {
   const cfg = loadConfig();
   const { width, height, fps } = ctx.options;
@@ -254,20 +297,25 @@ export async function runCardsStage(
   const paragraphs = transcript.paragraphs.length;
   const chapterLimit = Math.max(0, Math.min(paragraphs - 1, 6));
 
-  const fallback = fallbackManifest(cfg, transcript, width, height, fps);
-  if (chapterLimit === 0 && !bool(cfg.INTRO_ENABLED, false) && numberOrZero(cfg.OUTRO_DURATION, 0) === 0) {
-    ctx.log("没有需要生成的卡片，跳过", "warn");
+  const plan = cardPlan(cfg, paragraphs, { chapterDurationSec: prefs?.chapterDurationSec });
+  const fallback = fallbackManifest(cfg, transcript, width, height, fps, prefs);
+  if (plan.introSec === 0 && plan.chapterSec === 0 && plan.outroSec === 0) {
+    ctx.log("没有可用的卡片类型，跳过版式", "warn");
     return fallback;
   }
 
   ctx.markStage("cards", "running", "AI 设计版式");
+  if (plan.auto) {
+    ctx.log("片头 / 章节卡 / 片尾三个开关都没开，先按默认出片头与章节卡；不需要就在设置里关掉版式步骤", "warn");
+  }
   ctx.log("正在让 AI 为片头 / 章节 / 片尾写文案并选模板…");
 
-  // 配色由视觉模型决定，文案模型只管文案和模板
-  const accent = (await pickAccentByVision(ctx, material, palette, cfg)) ?? palette[0] ?? "#ff5a3c";
+  // 手动点过配色就用它，否则交给视觉模型，再不行用色板第一个
+  const manual = manualAccent(prefs, palette);
+  if (manual) ctx.log(`按你的选择用主色：${manual}`);
+  const accent = manual ?? (await pickAccentByVision(ctx, material, palette, cfg)) ?? palette[0] ?? "#ff5a3c";
 
-  const system =
-    "你是短视频内容编辑，擅长把长文提炼成封面钩子和章节标题。只输出 JSON，不要 markdown，不要解释。";
+  const system = "你是短视频内容编辑，擅长把长文提炼成封面钩子和章节标题。只输出 JSON，不要 markdown，不要解释。";
 
   let draft: DraftChapters | null = null;
   try {
@@ -286,8 +334,8 @@ export async function runCardsStage(
   if (!draft) return fallback;
 
   const items: CardSpec[] = [];
-  const introSec = numberOrZero(cfg.TITLE_DURATION, 0);
-  if (bool(cfg.INTRO_ENABLED, false) && introSec > 0) {
+  const introSec = plan.introSec;
+  if (introSec > 0) {
     items.push(
       normalizeSpec(
         {
@@ -309,8 +357,8 @@ export async function runCardsStage(
     );
   }
 
-  const chapterSec = Math.max(0, numberOrZero(cfg.CHAPTER_DURATION, 2));
-  if (bool(cfg.CHAPTER_CARD, false) && chapterSec > 0) {
+  const chapterSec = plan.chapterSec;
+  if (chapterSec > 0) {
     const seen = new Set<number>();
     const drafts = (draft.chapters ?? []).slice(0, chapterLimit);
     for (const entry of drafts) {
@@ -325,9 +373,7 @@ export async function runCardsStage(
           {
             id: `chapter-${paragraph}`,
             kind: "chapter",
-            compositionId: isTemplateFor("chapter", entry?.template)
-              ? entry.template
-              : defaultTemplate("chapter"),
+            compositionId: isTemplateFor("chapter", entry?.template) ? entry.template : defaultTemplate("chapter"),
             paragraph,
             title,
             label: DEFAULT_LABEL.chapter,
@@ -350,7 +396,7 @@ export async function runCardsStage(
     }
   }
 
-  const outroSec = numberOrZero(cfg.OUTRO_DURATION, 0);
+  const outroSec = plan.outroSec;
   if (outroSec > 0) {
     items.push(
       normalizeSpec(
@@ -435,13 +481,7 @@ export function nextAccent(spec: CardSpec, cfg: AppConfig = loadConfig()): strin
   return palette[(index + 1) % palette.length] ?? palette[0] ?? "#ff5a3c";
 }
 
-export function normalizeCard(
-  spec: CardSpec,
-  cfg: AppConfig,
-  width: number,
-  height: number,
-  fps: number,
-): CardSpec {
+export function normalizeCard(spec: CardSpec, cfg: AppConfig, width: number, height: number, fps: number): CardSpec {
   return normalizeSpec(spec, cfg, width, height, fps);
 }
 
@@ -480,7 +520,10 @@ export async function ensureCardVideo(ctx: TaskContext, spec: CardSpec, total: n
     signal: ctx.signal,
   });
 
-  if (!ok) return null;
+  if (!ok) {
+    ctx.log(`「${spec.title}」卡片渲染失败：${lastRenderErrorMessage() || "未知原因"}`, "error");
+    return null;
+  }
   spec.videoPath = video;
   return video;
 }
@@ -509,7 +552,10 @@ export async function ensureCardStill(ctx: TaskContext, spec: CardSpec, total: n
     signal: ctx.signal,
   });
 
-  if (!ok) return null;
+  if (!ok) {
+    ctx.log(`卡片静帧渲染失败：${lastRenderErrorMessage() || "未知原因"}`, "warn");
+    return null;
+  }
   spec.stillPath = still;
   return still;
 }

@@ -38,14 +38,26 @@ interface ClipOptions {
   signal?: AbortSignal;
 }
 
+/** 最近一次渲染失败的原因，调用方拿去写进任务日志 */
+let lastRenderError = "";
+
+export function lastRenderErrorMessage(): string {
+  return lastRenderError;
+}
+
 /** 渲染脚本是纯 Node 进程，避免把 Remotion 的依赖装进 server */
 function spawnRender(dir: string, propsFile: string, signal?: AbortSignal): Promise<boolean> {
   return new Promise((resolve) => {
+    // 不能把父进程的 loader 注入（NODE_OPTIONS 里的 --require/--import）带下去，
+    // 渲染脚本是纯 JS，带了反而会在启动阶段就挂掉
+    const env: NodeJS.ProcessEnv = { ...process.env, ELECTRON_RUN_AS_NODE: "1" };
+    delete env.NODE_OPTIONS;
+
     const child = spawn(process.execPath, ["render.mjs", `@${propsFile}`], {
       cwd: dir,
       stdio: ["ignore", "pipe", "pipe"],
-      // Electron 里 execPath 是 Electron 本体，需要切到 Node 模式
-      env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
+      windowsHide: true,
+      env,
     });
 
     let stderr = "";
@@ -57,15 +69,16 @@ function spawnRender(dir: string, propsFile: string, signal?: AbortSignal): Prom
     const onAbort = () => child.kill();
     signal?.addEventListener("abort", onAbort, { once: true });
 
-    const finish = (ok: boolean) => {
+    const finish = (ok: boolean, detail = "") => {
       clearTimeout(timer);
       signal?.removeEventListener("abort", onAbort);
-      if (!ok && stderr) console.error("[remotion]", stderr.slice(-800));
+      lastRenderError = ok ? "" : (stderr.trim() || detail).slice(-600);
+      if (!ok) console.error("[remotion]", lastRenderError);
       resolve(ok);
     };
 
-    child.on("error", () => finish(false));
-    child.on("close", (code) => finish(code === 0));
+    child.on("error", (error) => finish(false, `启动渲染进程失败：${error.message}`));
+    child.on("close", (code) => finish(code === 0, `渲染进程退出码 ${code}`));
   });
 }
 
@@ -94,7 +107,10 @@ function clipProps(options: ClipOptions, durationInFrames: number): Record<strin
 
 async function renderClip(options: ClipOptions): Promise<boolean> {
   const dir = remotionDir();
-  if (!dir) return false;
+  if (!dir) {
+    lastRenderError = "没找到 remotion 运行环境：resources/remotion 下缺 render.mjs 或 node_modules";
+    return false;
+  }
 
   const raw = `${options.output}.raw.mp4`;
   const propsFile = `${options.output}.props.json`;
@@ -233,7 +249,10 @@ export function renderCard(options: SpecCardOptions): Promise<boolean> {
  */
 export async function renderCardStill(options: SpecCardOptions & { frame?: number }): Promise<boolean> {
   const dir = remotionDir();
-  if (!dir) return false;
+  if (!dir) {
+    lastRenderError = "没找到 remotion 运行环境：resources/remotion 下缺 render.mjs 或 node_modules";
+    return false;
+  }
 
   const propsFile = `${options.output}.props.json`;
   const durationInFrames = Math.max(1, Math.round(options.durationSec * options.fps));
