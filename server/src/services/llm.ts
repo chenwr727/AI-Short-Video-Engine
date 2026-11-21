@@ -25,10 +25,7 @@ interface ImagePart {
 /** 有图片时走多模态内容数组，否则保持纯字符串 */
 function userContent(user: string, images?: string[]): string | (TextPart | ImagePart)[] {
   if (!images || images.length === 0) return user;
-  return [
-    { type: "text", text: user },
-    ...images.map((url): ImagePart => ({ type: "image_url", image_url: { url } })),
-  ];
+  return [{ type: "text", text: user }, ...images.map((url): ImagePart => ({ type: "image_url", image_url: { url } }))];
 }
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {

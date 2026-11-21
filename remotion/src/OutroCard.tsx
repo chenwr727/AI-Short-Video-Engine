@@ -58,7 +58,9 @@ export const OutroCard: React.FC<OutroCardProps> = ({
           backgroundSize: `100% ${Math.round(height * 0.058)}px`,
         }}
       />
-      <AbsoluteFill style={{ boxShadow: `inset 0 0 ${Math.round(width * 0.3)}px ${Math.round(width * 0.12)}px rgba(0,0,0,0.82)` }} />
+      <AbsoluteFill
+        style={{ boxShadow: `inset 0 0 ${Math.round(width * 0.3)}px ${Math.round(width * 0.12)}px rgba(0,0,0,0.82)` }}
+      />
 
       <AbsoluteFill
         style={{

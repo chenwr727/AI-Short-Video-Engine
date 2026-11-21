@@ -153,13 +153,7 @@ export type CardKind = "intro" | "chapter" | "outro" | "quote";
 
 /** 模板白名单：AI 只能在这些 composition 里选，避免生成不可控版式 */
 export type CardComposition =
-  | "TitleCard"
-  | "TitleHero"
-  | "ChapterCard"
-  | "ChapterSplit"
-  | "OutroCard"
-  | "OutroMinimal"
-  | "QuoteCard";
+  "TitleCard" | "TitleHero" | "ChapterCard" | "ChapterSplit" | "OutroCard" | "OutroMinimal" | "QuoteCard";
 
 export interface CardSpec {
   /** 稳定标识：intro / chapter-2 / outro */

@@ -47,7 +47,16 @@ const MOTION_PAD = 1.15;
 /** 转场强度上限，超出的部分 ffmpeg 会吃穿片段 */
 const MAX_MOTION_LEVEL = 10;
 /** mixed 模式按顺序轮换，第 1 个转场仍是柔和的淡入淡出 */
-const XFADE_MIXED = ["fade", "smoothleft", "slideup", "circleopen", "dissolve", "wipeleft", "zoomin", "slideleft"] as const;
+const XFADE_MIXED = [
+  "fade",
+  "smoothleft",
+  "slideup",
+  "circleopen",
+  "dissolve",
+  "wipeleft",
+  "zoomin",
+  "slideleft",
+] as const;
 
 type TransitionMode = "fade" | "mixed";
 
@@ -1038,9 +1047,7 @@ export async function runComposeStage(
     } else {
       materialPaths.push(
         materialItem.videoPath,
-        ...(materialItem.shots ?? [])
-          .map((shot) => shot.videoPath)
-          .filter((file) => fs.existsSync(file)),
+        ...(materialItem.shots ?? []).map((shot) => shot.videoPath).filter((file) => fs.existsSync(file)),
       );
     }
 

@@ -495,10 +495,7 @@ export async function runMaterialStage(
     const fresh = candidates.filter((c) => !used.has(c.url));
     const pool = fresh.length >= MIN_FRESH_CANDIDATES ? fresh : candidates;
     if (fresh.length < MIN_FRESH_CANDIDATES) {
-      ctx.log(
-        `第 ${pi + 1} 段新素材只有 ${fresh.length} 个，放宽到已用过的候选（共 ${candidates.length} 个）`,
-        "warn",
-      );
+      ctx.log(`第 ${pi + 1} 段新素材只有 ${fresh.length} 个，放宽到已用过的候选（共 ${candidates.length} 个）`, "warn");
     }
 
     const content = paragraph.dialogues.map((d) => `${d.speaker}：${d.contents.join("")}`).join("\n");
@@ -542,8 +539,7 @@ export async function runMaterialStage(
           "warn",
         );
         picked =
-          chooseMaterial(preferred, pool, audioLength, used) ??
-          chooseMaterial(preferred, pool, audioLength, new Set());
+          chooseMaterial(preferred, pool, audioLength, used) ?? chooseMaterial(preferred, pool, audioLength, new Set());
       }
     }
 

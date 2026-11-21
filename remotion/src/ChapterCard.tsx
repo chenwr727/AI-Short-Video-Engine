@@ -41,9 +41,7 @@ export const ChapterCard: React.FC<ChapterCardProps> = ({
   return (
     <AbsoluteFill style={{ backgroundColor: "#080b12", fontFamily: FONT }}>
       <AbsoluteFill style={{ background: "linear-gradient(135deg, #0a0f1a 0%, #131b2c 55%, #080b12 100%)" }} />
-      <AbsoluteFill
-        style={{ background: `radial-gradient(circle at 70% 30%, ${accent}26 0%, transparent 55%)` }}
-      />
+      <AbsoluteFill style={{ background: `radial-gradient(circle at 70% 30%, ${accent}26 0%, transparent 55%)` }} />
       <AbsoluteFill
         style={{
           opacity: 0.05,
@@ -51,7 +49,9 @@ export const ChapterCard: React.FC<ChapterCardProps> = ({
           backgroundSize: `100% ${Math.round(height * 0.06)}px`,
         }}
       />
-      <AbsoluteFill style={{ boxShadow: `inset 0 0 ${Math.round(width * 0.3)}px ${Math.round(width * 0.12)}px rgba(0,0,0,0.82)` }} />
+      <AbsoluteFill
+        style={{ boxShadow: `inset 0 0 ${Math.round(width * 0.3)}px ${Math.round(width * 0.12)}px rgba(0,0,0,0.82)` }}
+      />
 
       {/* 背景水印数字 */}
       <div

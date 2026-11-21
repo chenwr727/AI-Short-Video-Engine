@@ -38,12 +38,8 @@ export const TitleCard: React.FC<TitleCardProps> = ({ title, subtitle, label, ac
 
   return (
     <AbsoluteFill style={{ backgroundColor: "#080b12", fontFamily: FONT }}>
-      <AbsoluteFill
-        style={{ background: "linear-gradient(165deg, #080b12 0%, #101828 55%, #080b12 100%)" }}
-      />
-      <AbsoluteFill
-        style={{ background: `radial-gradient(circle at 50% 36%, ${accent}26 0%, transparent 58%)` }}
-      />
+      <AbsoluteFill style={{ background: "linear-gradient(165deg, #080b12 0%, #101828 55%, #080b12 100%)" }} />
+      <AbsoluteFill style={{ background: `radial-gradient(circle at 50% 36%, ${accent}26 0%, transparent 58%)` }} />
       <AbsoluteFill
         style={{
           opacity: 0.05,
@@ -51,7 +47,9 @@ export const TitleCard: React.FC<TitleCardProps> = ({ title, subtitle, label, ac
           backgroundSize: `100% ${Math.round(height * 0.062)}px`,
         }}
       />
-      <AbsoluteFill style={{ boxShadow: `inset 0 0 ${Math.round(width * 0.28)}px ${Math.round(width * 0.1)}px rgba(0,0,0,0.8)` }} />
+      <AbsoluteFill
+        style={{ boxShadow: `inset 0 0 ${Math.round(width * 0.28)}px ${Math.round(width * 0.1)}px rgba(0,0,0,0.8)` }}
+      />
 
       <AbsoluteFill
         style={{
@@ -72,7 +70,9 @@ export const TitleCard: React.FC<TitleCardProps> = ({ title, subtitle, label, ac
                 marginBottom: Math.round(width * 0.038),
               }}
             >
-              <div style={{ width: Math.round(width * 0.012), height: Math.round(width * 0.012), backgroundColor: accent }} />
+              <div
+                style={{ width: Math.round(width * 0.012), height: Math.round(width * 0.012), backgroundColor: accent }}
+              />
               <span
                 style={{
                   color: "rgba(255,255,255,0.62)",
