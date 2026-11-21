@@ -4,6 +4,7 @@ import { MATERIAL_STAGE_IDS } from "../phases";
 import type { MaterialInfo, MaterialItem, Meta, TaskState } from "../types";
 import { ConfigSection, Panel } from "./Panel";
 import { LogPanel, StageList } from "./StageList";
+import { stepLayout, type StepStage } from "./stepLayout";
 import type { RenderFormState } from "./stepTypes";
 
 interface MaterialStepProps {
@@ -55,6 +56,15 @@ export function MaterialStep(props: MaterialStepProps) {
   const cancelled = task.status === "cancelled";
   // 失败或停止且无素材时，允许换来源重来
   const canMatchAgain = failed && !manifest && Boolean(task.audio);
+
+  const stepStage: StepStage = failed
+    ? "failed"
+    : matching || (pending && !manifest)
+      ? "running"
+      : manifest
+        ? "ready"
+        : "setup";
+  const layout = stepLayout(stepStage, Boolean(manifest));
 
   const sourceHint = meta?.materialSources.find((option) => option.id === form.materialSource)?.description;
   const sourceLabel =
@@ -114,7 +124,7 @@ export function MaterialStep(props: MaterialStepProps) {
       }
       fill
     >
-      <ConfigSection title="素材来源与分辨率" summary={`${sourceLabel} · ${resolutionLabel}`} defaultOpen={!manifest}>
+      <ConfigSection title="素材来源与分辨率" summary={`${sourceLabel} · ${resolutionLabel}`} open={layout.configOpen}>
         <div className="row">
           <div className="field">
             <label htmlFor="material-source">素材来源</label>
@@ -162,7 +172,15 @@ export function MaterialStep(props: MaterialStepProps) {
       <div className="panel-scroll">
         <StageList stages={task.stages.filter((stage) => MATERIAL_STAGE_IDS.includes(stage.id))} />
 
-        {manifest ? (
+        <LogPanel
+          logs={task.logs}
+          stages={MATERIAL_STAGE_IDS}
+          collapsible
+          expanded={layout.logOpen}
+          tall={layout.logOpen}
+        />
+
+        {layout.showResult && manifest ? (
           <div className="material-list">
             {manifest.items.map((item) => {
               const candidate = picked[item.paragraph];
@@ -232,11 +250,9 @@ export function MaterialStep(props: MaterialStepProps) {
               );
             })}
           </div>
-        ) : (
-          <p className="hint">{matching ? "正在匹配素材，进度见上面的阶段列表。" : "素材还没匹配出来。"}</p>
-        )}
-
-        <LogPanel logs={task.logs} tall stages={MATERIAL_STAGE_IDS} collapsible />
+        ) : stepStage === "setup" ? (
+          <p className="hint">素材还没匹配出来。</p>
+        ) : null}
 
         {note && <p className={`hint${note.bad ? " hint-warn" : ""}`}>{note.text}</p>}
         {failed && (

@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import type { RenderPatch } from "../api";
+import { COMPOSE_STAGE_IDS } from "../phases";
 import type { Meta, TaskState } from "../types";
 import { ConfigSection, Panel } from "./Panel";
+import { LogPanel, StageList } from "./StageList";
+import { stepLayout, type StepStage } from "./stepLayout";
 
 interface ResultStepProps {
   task: TaskState | null;
@@ -23,6 +26,9 @@ export function ResultStep(props: ResultStepProps) {
   const defaults = meta?.render;
   const hasVideo = task?.status === "completed" && Boolean(task.result);
   const rendering = task?.status === "running";
+
+  const stepStage: StepStage = rendering ? "running" : hasVideo ? "ready" : "setup";
+  const layout = stepLayout(stepStage, hasVideo);
 
   // 自动字号，须与后端比例一致
   const width = task?.options.width ?? 1080;
@@ -99,8 +105,8 @@ export function ResultStep(props: ResultStepProps) {
       }
       fill
     >
-      {/* 有片子时默认收起，把高度留给预览 */}
-      <ConfigSection title="渲染参数" summary={configSummary} defaultOpen={!hasVideo}>
+      {/* 有片子时收起配置与日志，把高度留给预览 */}
+      <ConfigSection title="渲染参数" summary={configSummary} open={layout.configOpen}>
         <div className="row">
           <div className="field">
             <label htmlFor="subtitle-size">字幕字号（px）</label>
@@ -171,6 +177,19 @@ export function ResultStep(props: ResultStepProps) {
           改字号会重新渲染分段片段，只改 BGM 则复用片段、仅重跑合并与混音。
         </p>
       </ConfigSection>
+
+      {task && (
+        <div className="panel-logbar">
+          <StageList stages={task.stages.filter((stage) => COMPOSE_STAGE_IDS.includes(stage.id))} />
+          <LogPanel
+            logs={task.logs}
+            stages={COMPOSE_STAGE_IDS}
+            collapsible
+            expanded={layout.logOpen}
+            tall={layout.logOpen}
+          />
+        </div>
+      )}
 
       {/* 预览占满剩余高度 */}
       <div className="panel-stage">

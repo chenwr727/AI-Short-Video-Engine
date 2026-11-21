@@ -2,6 +2,7 @@ import { SCRIPT_STAGE_IDS } from "../phases";
 import type { Meta, RawTranscript, TaskState } from "../types";
 import { ConfigSection, Panel } from "./Panel";
 import { LogPanel, StageList } from "./StageList";
+import { stepLayout, type StepStage } from "./stepLayout";
 import { ScriptOptions } from "./ScriptOptions";
 import type { FormState } from "./stepTypes";
 
@@ -62,6 +63,9 @@ export function ScriptStep(props: ScriptStepProps) {
   const stages = task ? task.stages.filter((stage) => SCRIPT_STAGE_IDS.includes(stage.id)) : [];
   // 已确认时展示只读版本
   const transcript = awaiting ? null : (task?.transcript ?? null);
+
+  const stepStage: StepStage = idle ? "setup" : running ? "running" : failed || cancelled ? "failed" : "ready";
+  const layout = stepLayout(stepStage, Boolean(transcript || edit));
   // 至少保留一条台词
   const dialogueTotal = edit ? edit.paragraphs.reduce((sum, paragraph) => sum + paragraph.dialogues.length, 0) : 0;
 
@@ -98,13 +102,12 @@ export function ScriptStep(props: ScriptStepProps) {
       }
       fill
     >
-      {/* 剧本已出来时默认收起，把高度留给台词 */}
       <ConfigSection
         title="脚本风格与角色"
         summary={[styleLabel, form.speakerMain || meta?.speakers.main, form.speakerGuest || meta?.speakers.guest]
           .filter(Boolean)
           .join(" · ")}
-        defaultOpen={!transcript}
+        open={layout.configOpen}
       >
         <ScriptOptions meta={meta} form={form} onChange={onFormChange} disabled={optionsDisabled} />
         {awaiting && (
@@ -116,11 +119,20 @@ export function ScriptStep(props: ScriptStepProps) {
 
       {failed && <div className="alert">{task?.error ?? "剧本生成失败"}</div>}
 
-      {/* 配置固定在顶部，阶段与台词滚动 */}
       <div className="panel-scroll">
         <StageList stages={stages} />
 
-        {awaiting && edit && (
+        {task && (
+          <LogPanel
+            logs={task.logs}
+            stages={SCRIPT_STAGE_IDS}
+            collapsible
+            expanded={layout.logOpen}
+            tall={layout.logOpen}
+          />
+        )}
+
+        {layout.showResult && awaiting && edit && (
           <>
             <div className="field">
               <label htmlFor="script-title">标题</label>
@@ -171,7 +183,7 @@ export function ScriptStep(props: ScriptStepProps) {
           </>
         )}
 
-        {transcript && (
+        {layout.showResult && transcript && (
           <div>
             {transcript.title && <p className="script-title">{transcript.title}</p>}
             {transcript.paragraphs.map((paragraph, paragraphIndex) => (
@@ -190,8 +202,6 @@ export function ScriptStep(props: ScriptStepProps) {
             ))}
           </div>
         )}
-
-        {task && !awaiting && <LogPanel logs={task.logs} tall stages={SCRIPT_STAGE_IDS} />}
 
         {error && <div className="alert">{error}</div>}
       </div>
