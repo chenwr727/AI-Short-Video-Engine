@@ -1019,9 +1019,9 @@ body.electron.mac .tb-inner {
 
 /* 成片 */
 
-/* 成片预览占满剩余高度 */
+/* 末步的固定内容 */
 .panel-fill:has(> .panel-stage) {
-  height: 100%;
+  height: auto;
 }
 
 /* 配置与结果之间的日志条 */
