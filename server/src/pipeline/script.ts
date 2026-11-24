@@ -35,6 +35,8 @@ export interface ScriptRules {
   minParaTurns: number;
   maxParaTurns: number;
   maxSentence: number;
+  /** 一条台词最多允许几个句末标点；相声的「反问＋包袱」结构需要 2 */
+  maxStops: number;
 }
 
 /** 提示词给的是硬区间，这里各留一点余量，只拦明显跑偏的稿子 */
@@ -49,7 +51,8 @@ const RULES: Record<PromptSource, Omit<ScriptRules, "speakers">> = {
     maxTurns: 44,
     minParaTurns: 3,
     maxParaTurns: 9,
-    maxSentence: 26,
+    maxSentence: 20,
+    maxStops: 1,
   },
   crosstalk: {
     maxTitle: 10,
@@ -61,7 +64,8 @@ const RULES: Record<PromptSource, Omit<ScriptRules, "speakers">> = {
     maxTurns: 44,
     minParaTurns: 3,
     maxParaTurns: 9,
-    maxSentence: 26,
+    maxSentence: 20,
+    maxStops: 2,
   },
   talkshow: {
     maxTitle: 10,
@@ -73,7 +77,8 @@ const RULES: Record<PromptSource, Omit<ScriptRules, "speakers">> = {
     maxTurns: 50,
     minParaTurns: 3,
     maxParaTurns: 11,
-    maxSentence: 28,
+    maxSentence: 20,
+    maxStops: 1,
   },
 };
 
@@ -131,6 +136,11 @@ export function scriptIssues(raw: RawTranscript, rules: ScriptRules): string[] {
 
       const long = splitContent(content).find((sentence) => countChars(sentence) > rules.maxSentence);
       if (long) issues.push(`${where}单句超过 ${rules.maxSentence} 字`);
+
+      // 一条台词塞了两句话：分句后每句都不长，但合起来会撑爆一行字幕。
+      // 相声的「先反问再接包袱」是固定结构，拆开就断，所以 crosstalk 放宽到 2。
+      const stops = (content.match(/[。！？]/g) ?? []).length;
+      if (stops > rules.maxStops) issues.push(`${where}一条台词含 ${stops} 句，应拆成多条`);
     });
   });
 

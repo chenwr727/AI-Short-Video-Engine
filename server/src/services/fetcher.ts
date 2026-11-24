@@ -128,6 +128,26 @@ export function isSubstantial(text: string, min = MIN_CONTENT): boolean {
   return (text.match(/[.!?]\s/g) ?? []).length >= 8;
 }
 
+/**
+ * 判断抓到的是否为「列表页 / 导航页」而非文章正文。
+ * 正文的字/句读比通常在 30~60，列表页全是短标题，比值会高到 100 以上；
+ * 再加上平均行长明显偏短（标题一行十几字），两个信号同时命中才判定。
+ */
+export function looksLikeListing(text: string): string | null {
+  const chars = countChars(text);
+  if (chars < 300) return null;
+
+  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  const punct = (text.match(/[。！？；]/g) ?? []).length;
+  const charsPerPunct = chars / Math.max(punct, 1);
+  const avgLine = chars / Math.max(lines.length, 1);
+
+  if (charsPerPunct >= 90 && avgLine < 30) {
+    return `平均每 ${Math.round(charsPerPunct)} 字才有一个句号，平均行长仅 ${Math.round(avgLine)} 字，像是列表或导航页`;
+  }
+  return null;
+}
+
 /** 只在正文很短时按反爬特征判定，正常文章提到这些词不受影响 */
 export function detectAntiBot(title: string, text: string, html: string): string | null {
   if (countChars(text) >= 2000) return null;
@@ -426,6 +446,12 @@ export async function fetchContent(input: string, signal: AbortSignal, log: Logg
       `抓到的正文只有 ${chars} 字，可能是登录页、验证页，或内容由脚本动态渲染。` +
         `请用浏览器打开页面，复制正文粘贴到输入框。`,
     );
+  }
+
+  // 列表页字数够、但全是短标题，放过去会让模型从标题里瞎猜主题
+  const listing = looksLikeListing(article.text);
+  if (listing) {
+    throw new Error(`抓到的不是文章正文（${listing}）。请打开具体文章页，或复制正文粘贴到输入框。`);
   }
 
   const text = truncate(article.text);

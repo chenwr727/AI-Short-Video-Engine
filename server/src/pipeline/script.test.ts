@@ -4,9 +4,11 @@ import type { RawTranscript } from "../types.js";
 import { parseCritique, scriptIssues, scriptRules } from "./script.js";
 
 const RULES = scriptRules("podcast", { main: "小简", guest: "老陈" });
-const LINE = "一二三四五六七八九十一二三四五六七八九十一二三四五";
+// 一句 15 字，正好落在单行字幕的舒适区间
+const LINE = "一二三四五六七八九十一二三四五";
 
-function makeScript(paragraphs = 4, turns = 7, content = LINE): RawTranscript {
+// 5 段 × 7 轮 × 15 字 ≈ 525 字，落在 500~900 区间内
+function makeScript(paragraphs = 5, turns = 7, content = LINE): RawTranscript {
   return {
     title: "短标题",
     paragraphs: Array.from({ length: paragraphs }, (_, p) => ({
