@@ -19,6 +19,7 @@ function appIcon(): string | undefined {
 let backend: Backend | null = null;
 let mainWindow: BrowserWindow | null = null;
 let settingsWindow: BrowserWindow | null = null;
+let promptsWindow: BrowserWindow | null = null;
 
 interface HealthPayload {
   ok: boolean;
@@ -108,6 +109,9 @@ function createMainWindow(url: string): BrowserWindow {
       // 默认会开新窗口，改为通知渲染层
       event.preventDefault();
       win.webContents.send("app:new-task");
+    } else if (input.key.toLowerCase() === "p") {
+      event.preventDefault();
+      createPromptsWindow();
     }
   });
 
@@ -200,6 +204,48 @@ function createSettingsWindow(): void {
     settingsWindow = null;
   });
   settingsWindow = win;
+}
+
+/** 提示词编辑器：独立窗口，带系统标题栏（最小化/最大化/关闭） */
+function createPromptsWindow(): void {
+  if (promptsWindow) {
+    if (promptsWindow.isMinimized()) promptsWindow.restore();
+    promptsWindow.focus();
+    return;
+  }
+
+  const win = new BrowserWindow({
+    width: 1040,
+    height: 760,
+    minWidth: 760,
+    minHeight: 520,
+    parent: mainWindow ?? undefined,
+    show: false,
+    title: "提示词",
+    backgroundColor: "#ffffff",
+    icon: appIcon(),
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+
+  const base = backend?.baseUrl;
+  if (!base) {
+    dialog.showErrorBox("无法打开提示词", "后端未启动。");
+    win.destroy();
+    return;
+  }
+
+  win.loadURL(`${base}/prompts.html`).catch((e) => dialog.showErrorBox("无法打开提示词", String(e)));
+  win.once("ready-to-show", () => win.show());
+  win.on("closed", () => {
+    promptsWindow = null;
+  });
+  promptsWindow = win;
 }
 
 /** 重启前等旧进程真正退出 */
@@ -305,6 +351,9 @@ function registerAppIpc(): void {
       case "settings":
         createSettingsWindow();
         return { ok: true };
+      case "prompts":
+        createPromptsWindow();
+        return { ok: true };
       case "output-dir":
         await outDir().then(openDir);
         return { ok: true };
@@ -353,6 +402,11 @@ function registerAppIpc(): void {
     if (!file || !fs.existsSync(file)) return { ok: false, error: "成片文件不存在" };
     shell.showItemInFolder(file);
     return { ok: true };
+  });
+
+  /** 关掉发起请求的窗口（提示词独立窗口的「取消」） */
+  ipcMain.handle("app:close-self", (event) => {
+    BrowserWindow.fromWebContents(event.sender)?.close();
   });
 }
 

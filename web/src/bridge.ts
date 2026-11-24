@@ -8,10 +8,20 @@ export interface AisvBridge {
   pickMusic?: () => Promise<string>;
   /** 在文件管理器中定位成片 */
   revealFile?: (file: string) => Promise<{ ok: boolean; error?: string }>;
+  /** 关掉当前窗口（提示词独立窗口用） */
+  closeWindow?: () => Promise<void>;
 }
 
 export type MenuAction =
-  "settings" | "output-dir" | "data-dir" | "config-file" | "quit" | "about" | "docs" | "feedback";
+  | "settings"
+  | "prompts"
+  | "output-dir"
+  | "data-dir"
+  | "config-file"
+  | "quit"
+  | "about"
+  | "docs"
+  | "feedback";
 
 export function bridge(): AisvBridge | null {
   return (window as unknown as { aisv?: AisvBridge }).aisv ?? null;

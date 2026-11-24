@@ -23,8 +23,14 @@ export function assetsDir(): string {
   return process.env.AISV_ASSETS_DIR ?? path.join(process.cwd(), "assets");
 }
 
+/** 随包内置的提示词，打包后在 resources 里，用户改不到 */
 export function promptsDir(): string {
   return path.join(assetsDir(), "prompts");
+}
+
+/** 用户覆盖层：同名的写在 data/prompts 下，优先于内置 */
+export function userPromptsDir(): string {
+  return process.env.AISV_USER_PROMPTS_DIR ?? path.join(dataDir(), "prompts");
 }
 
 /** 自定义 BGM 目录 */

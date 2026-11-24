@@ -38,6 +38,37 @@ export interface Meta {
   cardTemplates: Record<CardKind, { id: string; name: string; hint: string }[]>;
 }
 
+export interface PromptField {
+  key: string;
+  label: string;
+  hint: string;
+}
+
+/** 可编辑的提示词文档，一个文件多个键 */
+export interface PromptDoc {
+  file: string;
+  title: string;
+  description: string;
+  fields: PromptField[];
+}
+
+export interface PromptValue {
+  file: string;
+  key: string;
+  value: string;
+  builtin: string;
+  overridden: boolean;
+  path: string;
+}
+
+/** 列表接口只带当前值，详情才带内置默认 */
+export interface PromptSummary {
+  file: string;
+  key: string;
+  value: string;
+  overridden: boolean;
+}
+
 export interface Health {
   ok: boolean;
   version: string;

@@ -4,6 +4,17 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
+  build: {
+    outDir: "dist",
+    emptyOutDir: true,
+    rollupOptions: {
+      // 主界面 + 提示词独立窗口
+      input: {
+        main: fileURLToPath(new URL("index.html", import.meta.url)),
+        prompts: fileURLToPath(new URL("prompts.html", import.meta.url)),
+      },
+    },
+  },
   resolve: {
     alias: {
       // 直接复用 remotion 子工程的卡片组件：预览与最终渲染是同一份代码
@@ -21,9 +32,5 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
-  },
-  build: {
-    outDir: "dist",
-    emptyOutDir: true,
   },
 });

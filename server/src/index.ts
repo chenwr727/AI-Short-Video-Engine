@@ -8,6 +8,7 @@ import { dataDir, ensureDir, outDir } from "./paths.js";
 import { probeDeps } from "./services/deps.js";
 import { metaPayload } from "./meta.js";
 import { registerConfigRoutes } from "./routes/config.js";
+import { registerPromptRoutes } from "./routes/prompts.js";
 import { registerTaskRoutes } from "./routes/task.js";
 import { taskManager } from "./task/manager.js";
 
@@ -62,6 +63,7 @@ async function build() {
   app.get("/api/health", async () => healthPayload());
   app.get("/api/meta", async () => metaPayload());
   await registerConfigRoutes(app);
+  await registerPromptRoutes(app);
   await registerTaskRoutes(app);
 
   ensureDir(dataDir());

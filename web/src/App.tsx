@@ -679,6 +679,19 @@ export default function App() {
     return hook(() => void newTaskRef.current());
   }, []);
 
+  // 浏览器里没有主进程，退化成开一个独立浏览器窗口
+  useEffect(() => {
+    const api = bridge();
+    if (api) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "p") return;
+      event.preventDefault();
+      window.open("/prompts.html", "aisv-prompts", "width=1040,height=760");
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   // 切换页面清除报错
   function onSelect(next: Phase) {
     setError("");

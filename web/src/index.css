@@ -2196,3 +2196,304 @@ body.electron.mac .tb-inner {
     grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
   }
 }
+
+/* 提示词编辑器 */
+
+.pm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(16, 32, 64, 0.34);
+  backdrop-filter: blur(2px);
+}
+
+/* 独立窗口：整页就是编辑器，无遮罩 */
+.pm-window {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--card);
+}
+
+/* 独立窗口的页面壳：去掉主界面的限宽与滚动 */
+body.prompt-window {
+  overflow: hidden;
+  background: var(--card);
+}
+
+body.prompt-window #root {
+  height: 100%;
+}
+
+body.prompt-window .pm-head {
+  /* 原生标题栏已占顶部，说明文字只留少量留白 */
+  padding-top: 14px;
+}
+
+.pm-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(1040px, 100%);
+  max-height: 100%;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: 0 28px 60px -30px rgba(16, 32, 64, 0.55);
+}
+
+.pm-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px 20px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.pm-head h2 {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+
+.pm-head .hint {
+  margin: 0;
+  max-width: 640px;
+}
+
+.pm-close {
+  margin-left: auto;
+  padding: 0;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--muted);
+  background: #fff;
+  cursor: pointer;
+}
+
+.pm-close:hover {
+  color: var(--text);
+  border-color: #b9c7db;
+}
+
+.pm-body {
+  display: grid;
+  grid-template-columns: 186px 1fr;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.pm-nav {
+  padding: 12px 10px;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  background: #fafcff;
+}
+
+.pm-group + .pm-group {
+  margin-top: 10px;
+}
+
+.pm-group-name {
+  padding: 4px 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  color: var(--muted);
+}
+
+.pm-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  text-align: left;
+  color: #3d4c63;
+  background: transparent;
+  cursor: pointer;
+}
+
+.pm-nav-item:hover {
+  background: #eef4ff;
+}
+
+.pm-nav-item.on {
+  font-weight: 600;
+  color: var(--brand);
+  background: rgba(47, 111, 237, 0.1);
+}
+
+.pm-dot {
+  margin-left: auto;
+  color: var(--brand);
+}
+
+.pm-main {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  padding: 16px 18px;
+  overflow-y: auto;
+}
+
+.pm-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.pm-badge {
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--brand);
+  background: rgba(47, 111, 237, 0.1);
+}
+
+.pm-badge.muted {
+  color: var(--muted);
+  background: #eef1f6;
+}
+
+.pm-desc {
+  margin: 0;
+}
+
+/* 字数压在文本框右上角，不占底部一行 */
+/* 字数在文本框外部的右上角，单独占一行 */
+.pm-editor {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+}
+
+.pm-count {
+  align-self: flex-end;
+  font-size: 11.5px;
+  color: var(--muted);
+  /* 与文本框内文字的右边距对齐 */
+  padding-right: 2px;
+  pointer-events: none;
+}
+
+.pm-textarea {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 320px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--text);
+  background: #fbfdff;
+  outline: none;
+  resize: vertical;
+}
+
+.pm-textarea:focus {
+  border-color: #7aa6f7;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(47, 111, 237, 0.12);
+}
+
+/* 底栏与设置页一致：浅色分隔、白底、状态在左按钮在右 */
+.pm-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 18px;
+  border-top: 1px solid var(--border);
+  background: #fff;
+}
+
+.pm-status {
+  margin-right: auto;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.pm-err {
+  color: var(--bad);
+}
+
+.pm-btn {
+  padding: 9px 18px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: #fff;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s;
+}
+
+.pm-btn:hover:not(:disabled) {
+  border-color: #c3cfdd;
+}
+
+.pm-btn.primary {
+  width: auto;
+  padding: 9px 18px;
+  border: 1px solid var(--brand);
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--brand);
+  box-shadow: none;
+}
+
+.pm-btn.primary:hover:not(:disabled) {
+  background: #2a62d4;
+  transform: none;
+  box-shadow: none;
+  filter: none;
+}
+
+.pm-btn.primary:disabled {
+  color: #fff;
+  background: #c3cede;
+  border-color: #c3cede;
+}
+
+/* 恢复默认值：设置页里的低权重文字按钮 */
+.pm-btn.link {
+  padding: 3px 8px;
+  border-color: transparent;
+  font-size: 11px;
+  color: var(--muted);
+  background: transparent;
+}
+
+.pm-btn.link:hover:not(:disabled) {
+  color: var(--brand);
+  background: #f1f6ff;
+}
+
+.pm-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

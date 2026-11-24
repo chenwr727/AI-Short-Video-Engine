@@ -92,6 +92,7 @@ const MENUS: MenuDef[] = [
     items: [
       { label: "新建一条", local: "new-task", icon: ICONS.plus, key: "N" },
       { label: "设置…", action: "settings", icon: ICONS.gear, key: ",", separator: true },
+      { label: "提示词…", action: "prompts", icon: ICONS.book, key: "P" },
       { label: "打开输出目录", action: "output-dir", icon: ICONS.folder, key: "O", separator: true },
       { label: "打开数据目录", action: "data-dir", icon: ICONS.database },
       { label: "打开配置文件", action: "config-file", icon: ICONS.file },

@@ -1,4 +1,14 @@
-import type { CardPrefs, Health, MaterialInfo, Meta, RawTranscript, TaskState } from "./types";
+import type {
+  CardPrefs,
+  Health,
+  MaterialInfo,
+  Meta,
+  PromptDoc,
+  PromptSummary,
+  PromptValue,
+  RawTranscript,
+  TaskState,
+} from "./types";
 
 const BASE = "/api";
 
@@ -28,6 +38,45 @@ export interface GeneratePayload {
   voice: string;
   materialSource: string;
   resolution: string;
+}
+
+export interface PromptCatalog {
+  docs: PromptDoc[];
+  values: PromptSummary[];
+}
+
+export function getPrompts(): Promise<PromptCatalog> {
+  return request<PromptCatalog>("/prompts", undefined, "读取提示词失败");
+}
+
+/** 详情带内置默认值，用来对比与恢复 */
+export function getPrompt(file: string, key: string): Promise<PromptValue> {
+  const query = `?file=${encodeURIComponent(file)}&key=${encodeURIComponent(key)}`;
+  return request<PromptValue>(`/prompts/one${query}`, undefined, "读取提示词失败");
+}
+
+export async function savePrompt(file: string, key: string, value: string): Promise<PromptValue> {
+  return request<PromptValue>(
+    "/prompts",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ file, key, value }),
+    },
+    "保存提示词失败",
+  );
+}
+
+export async function resetPrompt(file: string, key: string): Promise<PromptValue> {
+  return request<PromptValue>(
+    "/prompts/reset",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ file, key }),
+    },
+    "恢复默认失败",
+  );
 }
 
 export async function getTask(): Promise<TaskState | null> {
