@@ -6,7 +6,7 @@ import { pipeline } from "node:stream/promises";
 import type { ReadableStream as WebReadableStream } from "node:stream/web";
 import { cacheDir, ensureDir } from "../paths.js";
 import { probeVideo } from "./probe.js";
-import type { MaterialInfo, MaterialSource } from "../types.js";
+import type { MaterialInfo, MaterialSource, Relevance } from "../types.js";
 
 export interface MaterialQuery {
   apiKey: string;
@@ -16,7 +16,8 @@ export interface MaterialQuery {
   page: number;
 }
 
-const PIXABAY_LANG = "zh";
+/** 标签要和英文检索词做词面比对，必须拿英文标签 */
+const PIXABAY_LANG = "en";
 const PIXABAY_VIDEO_TYPE = "all";
 const PEXELS_LOCALE = "zh-CN";
 /** 素材缓存上限（MB），超出按最久未用淘汰 */
@@ -86,6 +87,76 @@ function pickRendition<T extends { width: number; height: number }>(files: T[], 
   return enough ?? best;
 }
 
+/** 检索词里的功能词，判断相关性时忽略 */
+const STOPWORDS = new Set([
+  "a", "an", "the", "of", "in", "on", "at", "to", "for", "with", "and", "or",
+  "close", "up", "view", "shot", "video", "footage", "background", "loop",
+]);
+
+/** 单独命中不足以判定相关的通用词，猫、壁炉的标签里也有 room/rack */
+const WEAK_WORDS = new Set([
+  "room", "rack", "closeup", "scene", "place", "area", "space", "indoor", "outdoor",
+  "day", "night", "light", "dark", "modern", "abstract", "technology", "business",
+]);
+
+/** 标签按逗号或空格切，保留功能词（`close up` 也是标签） */
+function tagWordsOf(tags: string): string[] {
+  return tags
+    .toLowerCase()
+    .split(/[,，、\s]+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length >= 2);
+}
+
+/** 检索词只按空格切，去掉功能词 */
+function keyWordsOf(term: string): string[] {
+  return term
+    .toLowerCase()
+    .split(/\s+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length >= 2 && !STOPWORDS.has(s));
+}
+
+/** 只认常见词形变化，用子串会让 ai 命中 chair、car 命中 carpet */
+function sameWord(a: string, b: string): boolean {
+  if (a === b) return true;
+  const [long, short] = a.length >= b.length ? [a, b] : [b, a];
+  return long.slice(0, short.length) === short && /^(s|es|ing|ed)$/.test(long.slice(short.length));
+}
+
+/** 贴合度：2 命中实义词，1 只命中通用词，0 跑题 */
+function relevanceOf(tags: string, term: string): Relevance {
+  // 没有标签（Pexels）就不判，交给选片模型
+  const tagWords = tagWordsOf(tags);
+  if (tagWords.length === 0) return 2;
+
+  const keys = keyWordsOf(term);
+  if (keys.length === 0) return 2;
+
+  const hitKeys = keys.filter((key) => tagWords.some((t) => sameWord(t, key)));
+  if (hitKeys.length === 0) return 0;
+
+  // 只命中通用词，而检索词里还有更具体的词没命中 → 跑偏
+  const onlyWeak = hitKeys.every((k) => WEAK_WORDS.has(k)) && keys.some((k) => !WEAK_WORDS.has(k));
+  if (onlyWeak) return 1;
+
+  return hitKeys.length * 2 >= keys.length ? 2 : 1;
+}
+
+/**
+ * 长检索词降级成两个词备选。中心词多在末尾（`gpu server room` → `server room`），
+ * 但修饰词也可能是图库常用标签（`data center corridor` → `data center`），
+ * 所以两头都试，末尾的优先。
+ */
+export function shortenTerms(term: string): string[] {
+  const words = keyWordsOf(term);
+  if (words.length <= 2) return [];
+
+  const head = words.slice(0, 2).join(" ");
+  const tail = words.slice(-2).join(" ");
+  return head === tail ? [head] : [tail, head];
+}
+
 async function searchPixabay(term: string, query: MaterialQuery): Promise<MaterialInfo[]> {
   // 不传 min_width/min_height，否则会误杀可裁切的横屏素材
   const params = new URLSearchParams({
@@ -118,8 +189,11 @@ async function searchPixabay(term: string, query: MaterialQuery): Promise<Materi
       isAiGenerated: Boolean(hit.isAiGenerated),
       imageUrl: best.thumbnail ?? "",
       videoPath: "",
+      relevance: relevanceOf(hit.tags ?? "", term),
     });
   }
+
+  // 跑题素材不丢，由调用方按 relevance 统一排序
   return items;
 }
 

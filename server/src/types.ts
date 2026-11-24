@@ -131,7 +131,15 @@ export interface MaterialInfo {
   imageUrl: string;
   /** 本地缓存路径 */
   videoPath: string;
+  /**
+   * 标签与检索词的贴合度：0 跑题，1 只命中通用词，2 命中实义词。
+   * 旧版 _videos.json 没有这个字段，读取时按 2 处理。
+   */
+  relevance?: Relevance;
 }
+
+/** 素材与检索词的贴合度，越大越贴合 */
+export type Relevance = 0 | 1 | 2;
 
 export interface MaterialItem extends MaterialInfo {
   paragraph: number;

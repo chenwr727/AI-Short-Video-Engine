@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { bool, loadConfig, num, numberOrZero } from "../config.js";
 import { chat, extractJsonArray, extractJsonObject } from "../services/llm.js";
-import { downloadMaterial, searchMaterials } from "../services/material.js";
+import { downloadMaterial, searchMaterials, shortenTerms } from "../services/material.js";
 import { loadSearchTermsPrompt, loadVideoSelectPrompt, loadVisionSelectPrompt } from "../services/prompts.js";
 import type {
   AudioManifest,
@@ -159,10 +159,21 @@ interface SelectOutcome {
   visionFailed: boolean;
 }
 
-/** 排给视觉模型的候选顺序：画幅接近、时长够、真实拍摄的优先 */
+/** 旧 _videos.json 与 Pexels（无标签）都没有 relevance，按贴合处理 */
+function relevanceOf(item: MaterialInfo): number {
+  return item.relevance ?? 2;
+}
+
+/** 去掉零相关素材，全被滤掉时退回原列表 */
+function relevantOnly(list: MaterialInfo[]): MaterialInfo[] {
+  const kept = list.filter((c) => relevanceOf(c) > 0);
+  return kept.length > 0 ? kept : list;
+}
+
+/** 排给视觉模型的候选顺序：相关性最重，其次画幅、时长、真实拍摄 */
 function visionScore(item: MaterialInfo, targetRatio: number, audioLength: number): number {
   const ratio = item.height > 0 ? item.width / item.height : 0;
-  let score = 0;
+  let score = relevanceOf(item) * 4;
   if (ratio > 0 && Math.abs(ratio - targetRatio) / targetRatio <= 0.2) score += 3;
   if (item.duration >= audioLength) score += 2;
   if (!item.isAiGenerated) score += 1;
@@ -195,7 +206,10 @@ async function visionSelect(
   if (usable.length < 3) return null;
 
   const targetRatio = ctx.options.width / ctx.options.height;
-  const ordered = [...usable]
+  // 有贴合的候选时，不把看图的额度浪费在零相关素材上
+  const relevant = relevantOnly(usable);
+  const pool = relevant.length >= 3 ? relevant : usable;
+  const ordered = [...pool]
     .sort((a, b) => visionScore(b, targetRatio, audioLength) - visionScore(a, targetRatio, audioLength))
     .slice(0, VISION_MAX_IMAGES);
 
@@ -271,6 +285,8 @@ async function aiSelect(
         views: c.views,
         is_ai_generated: c.isAiGenerated,
         orientation: Math.abs(c.width / c.height - targetRatio) / targetRatio <= 0.35 ? "竖屏" : "横屏",
+        // 0 表示标签与检索词完全不沾边，多为图库的模糊匹配结果
+        relevance: relevanceOf(c),
       })),
     };
     const answer = await chat(prompt, JSON.stringify(payload), { json: true, signal: ctx.signal, temperature: 0.3 });
@@ -308,14 +324,17 @@ function pickForSegment(candidates: MaterialInfo[], audioLength: number, used: S
   return { item: longest, loop: true };
 }
 
-/** 先按画幅接近挑，挑不到再放宽 */
+/** 先按画幅接近挑，挑不到再放宽；两种情况都优先避开零相关素材 */
 function chooseMaterial(
   preferred: MaterialInfo[],
   fallback: MaterialInfo[],
   audioLength: number,
   used: Set<string>,
 ): PickedMaterial | null {
-  return pickForSegment(preferred, audioLength, used) ?? pickForSegment(fallback, audioLength, used);
+  return (
+    pickForSegment(relevantOnly(preferred), audioLength, used) ??
+    pickForSegment(relevantOnly(fallback), audioLength, used)
+  );
 }
 
 /** 排除已用过的素材 */
@@ -377,9 +396,9 @@ export async function searchCandidates(
 
   const candidates: MaterialInfo[] = [];
   const seen = new Set<string>();
-
   const requested = new Set<string>();
 
+  /** 返回本次真正新增的候选数，用来判断这次检索有没有收获 */
   const fetchPage = async (term: string, page: number): Promise<number> => {
     const key = `${term}#${page}`;
     if (requested.has(key)) return 0;
@@ -393,30 +412,46 @@ export async function searchCandidates(
       page,
     });
 
+    const before = candidates.length;
     for (const item of found) {
       if (seen.has(item.url) || used.has(item.url)) continue;
       seen.add(item.url);
       candidates.push(item);
     }
-    return found.length;
+    return candidates.length - before;
   };
 
-  /** 多词短语零结果时拆成前两个词重搜，避免一次检索机会被浪费 */
-  const searchTerm = async (term: string): Promise<number> => {
-    const count = await fetchPage(term, 1);
-    if (count > 0) return count;
+  /**
+   * 没有贴切结果时用更短的两词短语重搜。判据是「有没有 2 分候选」而不是
+   * 「有没有结果」：后者会返回 10 条只命中 room 的猫和壁炉，等于没搜到。
+   */
+  const searchTerm = async (term: string): Promise<void> => {
+    const before = candidates.length;
+    await fetchPage(term, 1);
+    const got = candidates.slice(before);
+    if (got.some((c) => relevanceOf(c) === 2)) return;
 
-    const short = term.split(/\s+/).slice(0, 2).join(" ");
-    if (short === term || short.length === 0) return count;
+    for (const short of shortenTerms(term)) {
+      ctx.log(`「${term}」没有贴切素材，改用「${short}」重搜`, "warn");
+      if ((await fetchPage(short, 1)) === 0) continue;
 
-    ctx.log(`「${term}」没搜到，拆成「${short}」重试`, "warn");
-    return fetchPage(short, 1);
+      // 有收获时清掉这批低分候选，别让猫和壁炉挤占候选池
+      const weak = new Set(got.filter((c) => relevanceOf(c) < 2).map((c) => c.url));
+      for (let i = candidates.length - 1; i >= 0; i--) {
+        if (weak.has(candidates[i]!.url)) candidates.splice(i, 1);
+      }
+      return;
+    }
   };
+
+  // 截断前按贴合度重排，别让后搜到的贴切素材被前一批挤掉
+  const take = (): MaterialInfo[] =>
+    [...candidates].sort((a, b) => relevanceOf(b) - relevanceOf(a)).slice(0, MAX_CANDIDATES);
 
   // 第一轮每个词搜一遍，避免候选集中
   for (const term of terms) {
     if (ctx.signal.aborted) throw new DOMException("已取消", "AbortError");
-    if (candidates.length >= MAX_CANDIDATES) return candidates.slice(0, MAX_CANDIDATES);
+    if (candidates.length >= MAX_CANDIDATES) return take();
     await searchTerm(term);
     await sleep(REQUEST_INTERVAL, ctx.signal);
   }
@@ -426,13 +461,11 @@ export async function searchCandidates(
     for (const term of terms) {
       if (ctx.signal.aborted) throw new DOMException("已取消", "AbortError");
       if (candidates.length >= MAX_CANDIDATES) break;
-      const count = await fetchPage(term, page);
-      if (count === 0) continue;
-      await sleep(REQUEST_INTERVAL, ctx.signal);
+      if ((await fetchPage(term, page)) > 0) await sleep(REQUEST_INTERVAL, ctx.signal);
     }
   }
 
-  return candidates.slice(0, MAX_CANDIDATES);
+  return take();
 }
 
 /** 匹配素材，阶段收尾由调用方负责 */
