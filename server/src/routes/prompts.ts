@@ -1,10 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import {
-  PROMPT_DOCS,
-  readPromptValue,
-  resetPromptValue,
-  writePromptValue,
-} from "../services/prompts.js";
+import { PROMPT_DOCS, readPromptValue, resetPromptValue, writePromptValue } from "../services/prompts.js";
 
 interface PromptBody {
   file?: unknown;

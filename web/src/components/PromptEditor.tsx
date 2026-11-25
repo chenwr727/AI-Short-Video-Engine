@@ -194,7 +194,11 @@ export function PromptEditor({ onClose, standalone = false }: PromptEditorProps)
                 <span>
                   {doc?.title} · {field?.label}
                 </span>
-                {overridden ? <span className="pm-badge">已自定义</span> : <span className="pm-badge muted">内置默认</span>}
+                {overridden ? (
+                  <span className="pm-badge">已自定义</span>
+                ) : (
+                  <span className="pm-badge muted">内置默认</span>
+                )}
               </div>
               {doc?.description && <p className="hint pm-desc">{doc.description}</p>}
               {field?.hint && <p className="hint pm-desc">{field.hint}</p>}
@@ -229,7 +233,12 @@ export function PromptEditor({ onClose, standalone = false }: PromptEditorProps)
         <button type="button" className="pm-btn" onClick={onClose} disabled={busy}>
           取消
         </button>
-        <button type="button" className="pm-btn primary" onClick={() => void onSave()} disabled={busy || !ready || !dirty}>
+        <button
+          type="button"
+          className="pm-btn primary"
+          onClick={() => void onSave()}
+          disabled={busy || !ready || !dirty}
+        >
           保存
         </button>
       </div>

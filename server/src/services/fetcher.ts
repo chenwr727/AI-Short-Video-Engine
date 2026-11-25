@@ -137,7 +137,10 @@ export function looksLikeListing(text: string): string | null {
   const chars = countChars(text);
   if (chars < 300) return null;
 
-  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  const lines = text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
   const punct = (text.match(/[。！？；]/g) ?? []).length;
   const charsPerPunct = chars / Math.max(punct, 1);
   const avgLine = chars / Math.max(lines.length, 1);

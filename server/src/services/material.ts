@@ -89,14 +89,47 @@ function pickRendition<T extends { width: number; height: number }>(files: T[], 
 
 /** 检索词里的功能词，判断相关性时忽略 */
 const STOPWORDS = new Set([
-  "a", "an", "the", "of", "in", "on", "at", "to", "for", "with", "and", "or",
-  "close", "up", "view", "shot", "video", "footage", "background", "loop",
+  "a",
+  "an",
+  "the",
+  "of",
+  "in",
+  "on",
+  "at",
+  "to",
+  "for",
+  "with",
+  "and",
+  "or",
+  "close",
+  "up",
+  "view",
+  "shot",
+  "video",
+  "footage",
+  "background",
+  "loop",
 ]);
 
 /** 单独命中不足以判定相关的通用词，猫、壁炉的标签里也有 room/rack */
 const WEAK_WORDS = new Set([
-  "room", "rack", "closeup", "scene", "place", "area", "space", "indoor", "outdoor",
-  "day", "night", "light", "dark", "modern", "abstract", "technology", "business",
+  "room",
+  "rack",
+  "closeup",
+  "scene",
+  "place",
+  "area",
+  "space",
+  "indoor",
+  "outdoor",
+  "day",
+  "night",
+  "light",
+  "dark",
+  "modern",
+  "abstract",
+  "technology",
+  "business",
 ]);
 
 /** 标签按逗号或空格切，保留功能词（`close up` 也是标签） */
