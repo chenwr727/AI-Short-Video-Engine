@@ -13,7 +13,10 @@ if (!raw) {
 
 // 参数过长时后端会改传 "@props.json" 形式的文件路径
 const payload = JSON.parse(raw.startsWith("@") ? fs.readFileSync(raw.slice(1), "utf8") : raw);
-const { output, compositionId = "TitleCard", still, ...inputProps } = payload;
+const { output, compositionId = "TitleCard", still, codec: rawCodec, ...inputProps } = payload;
+
+/** vp9 = 带 alpha 的透明层，其余走原来的 h264 */
+const alpha = rawCodec === "vp9";
 
 if (!output) {
   console.error("missing output");
@@ -93,13 +96,14 @@ if (still !== undefined) {
 await renderMedia({
   composition,
   serveUrl,
-  codec: "h264",
+  codec: alpha ? "vp9" : "h264",
   outputLocation: output,
   inputProps,
   browserExecutable,
-  crf: 18,
-  pixelFormat: "yuv420p",
-  concurrency: 4,
+  // VP9 的 alpha 走独立平面，必须 png 帧；jpeg 没有 alpha 通道会被丢弃
+  ...(alpha
+    ? { pixelFormat: "yuva420p", imageFormat: "png", crf: 28, concurrency: 4 }
+    : { crf: 18, pixelFormat: "yuv420p", concurrency: 4 }),
 });
 
 console.log("ok");

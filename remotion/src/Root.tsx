@@ -4,6 +4,7 @@ import { ChapterSplit } from "./ChapterSplit";
 import { OutroCard, type OutroCardProps } from "./OutroCard";
 import { OutroMinimal } from "./OutroMinimal";
 import { QuoteCard, type QuoteCardProps } from "./QuoteCard";
+import { SubtitleLayer, type SubtitleLayerProps } from "./SubtitleLayer";
 import { TitleCard, type TitleCardProps } from "./TitleCard";
 import { TitleHero } from "./TitleHero";
 
@@ -50,6 +51,27 @@ const chapterDefaults: ChapterCardProps = {
   height: 1920,
   fps: 24,
   durationInFrames: 48,
+};
+
+/** 字幕层的参数全部来自后端，这里只给一份能让 Studio 打开的最小样例 */
+const subtitleDefaults: SubtitleLayerProps = {
+  cues: [{ lines: ["字幕层示例", "第二行"], start: 0, end: 2, style: "Subtitle" }],
+  width: 1080,
+  height: 1920,
+  fps: 24,
+  durationInFrames: 48,
+  fontName: "Microsoft YaHei",
+  subtitleSize: 72,
+  titleSize: 101,
+  subtitleMarginV: 639,
+  titleMarginV: 0,
+  marginL: 108,
+  marginR: 108,
+  subtitleOutline: 3,
+  titleOutline: 5.1,
+  subtitleShadow: 2,
+  titleShadow: 3.4,
+  shadowColour: "&H80000000",
 };
 
 export const RemotionRoot: React.FC = () => (
@@ -153,6 +175,22 @@ export const RemotionRoot: React.FC = () => (
       fps={outroDefaults.fps}
       durationInFrames={outroDefaults.durationInFrames}
       defaultProps={outroDefaults}
+      calculateMetadata={({ props }) => ({
+        width: props.width,
+        height: props.height,
+        fps: props.fps,
+        durationInFrames: props.durationInFrames,
+      })}
+    />
+    {/* 透明字幕层：输出 VP9 + alpha，合流时 overlay 到成片上 */}
+    <Composition
+      id="SubtitleLayer"
+      component={SubtitleLayer}
+      width={subtitleDefaults.width}
+      height={subtitleDefaults.height}
+      fps={subtitleDefaults.fps}
+      durationInFrames={subtitleDefaults.durationInFrames}
+      defaultProps={subtitleDefaults}
       calculateMetadata={({ props }) => ({
         width: props.width,
         height: props.height,

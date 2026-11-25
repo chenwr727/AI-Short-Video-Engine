@@ -46,7 +46,7 @@ export function lastRenderErrorMessage(): string {
 }
 
 /** 渲染脚本是纯 Node 进程，避免把 Remotion 的依赖装进 server */
-function spawnRender(dir: string, propsFile: string, signal?: AbortSignal): Promise<boolean> {
+function spawnRender(dir: string, propsFile: string, signal?: AbortSignal, timeoutMs = 180_000): Promise<boolean> {
   return new Promise((resolve) => {
     // 不能把父进程的 loader 注入（NODE_OPTIONS 里的 --require/--import）带下去，
     // 渲染脚本是纯 JS，带了反而会在启动阶段就挂掉
@@ -65,7 +65,7 @@ function spawnRender(dir: string, propsFile: string, signal?: AbortSignal): Prom
       stderr += String(chunk);
     });
 
-    const timer = setTimeout(() => child.kill(), 180_000);
+    const timer = setTimeout(() => child.kill(), timeoutMs);
     const onAbort = () => child.kill();
     signal?.addEventListener("abort", onAbort, { once: true });
 
@@ -241,6 +241,92 @@ export function renderCard(options: SpecCardOptions): Promise<boolean> {
     output: options.output,
     signal: options.signal,
   });
+}
+
+/** 字幕层的一条 cue，lines 已由后端按 libass 规则折好 */
+export interface SubtitleLayerCue {
+  lines: string[];
+  start: number;
+  end: number;
+  style: "Subtitle" | "Title";
+}
+
+/** 与 ASS 样式同名同单位，方便两条渲染路径共用一份参数 */
+export interface SubtitleLayerStyle {
+  fontName: string;
+  subtitleSize: number;
+  titleSize: number;
+  subtitleMarginV: number;
+  titleMarginV: number;
+  marginL: number;
+  marginR: number;
+  subtitleOutline: number;
+  titleOutline: number;
+  subtitleShadow: number;
+  titleShadow: number;
+  shadowColour: string;
+}
+
+export interface SubtitleLayerOptions extends SubtitleLayerStyle {
+  cues: SubtitleLayerCue[];
+  width: number;
+  height: number;
+  fps: number;
+  durationSec: number;
+  output: string;
+  signal?: AbortSignal;
+}
+
+/**
+ * 渲染整片字幕为透明 VP9/webm。
+ * 注意：合流时必须显式用 libvpx-vp9 解码，ffmpeg 原生 vp9 解码器会丢掉 alpha。
+ */
+export async function renderSubtitleLayer(options: SubtitleLayerOptions): Promise<boolean> {
+  const dir = remotionDir();
+  if (!dir) {
+    lastRenderError = "没找到 remotion 运行环境：resources/remotion 下缺 render.mjs 或 node_modules";
+    return false;
+  }
+
+  const propsFile = `${options.output}.props.json`;
+  const durationInFrames = Math.max(1, Math.round(options.durationSec * options.fps));
+
+  fs.writeFileSync(
+    propsFile,
+    JSON.stringify({
+      compositionId: "SubtitleLayer",
+      codec: "vp9",
+      cues: options.cues,
+      width: options.width,
+      height: options.height,
+      fps: options.fps,
+      durationInFrames,
+      fontName: options.fontName,
+      subtitleSize: options.subtitleSize,
+      titleSize: options.titleSize,
+      subtitleMarginV: options.subtitleMarginV,
+      titleMarginV: options.titleMarginV,
+      marginL: options.marginL,
+      marginR: options.marginR,
+      subtitleOutline: options.subtitleOutline,
+      titleOutline: options.titleOutline,
+      subtitleShadow: options.subtitleShadow,
+      titleShadow: options.titleShadow,
+      shadowColour: options.shadowColour,
+      output: options.output,
+    }),
+    "utf8",
+  );
+
+  // 实测全片渲染约 1.1× 实时，按 4 倍时长给上限，再兜底 5 分钟
+  const timeoutMs = Math.max(300_000, options.durationSec * 4000);
+
+  try {
+    if (!(await spawnRender(dir, propsFile, options.signal, timeoutMs))) return false;
+    return fs.existsSync(options.output) && fs.statSync(options.output).size > 0;
+  } finally {
+    fs.rmSync(propsFile, { force: true });
+  }
 }
 
 /**

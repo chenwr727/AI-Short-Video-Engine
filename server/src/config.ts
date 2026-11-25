@@ -29,6 +29,12 @@ export interface AppConfig {
   SUBTITLE_INTERVAL: string;
   /** px，0 = 按画宽自动 */
   SUBTITLE_FONT_SIZE: string;
+  /**
+   * ass = 合并期用 libass 烧字幕（快，默认）。
+   * remotion = 叠一层透明 VP9：当前实现与 ass 视觉等价、但慢约 20 倍，
+   * 只在需要 ASS 表达不了的逐字动效时才值得开；remotion/ 缺席或失败会自动回退 ass。
+   */
+  SUBTITLE_RENDER: string;
   BGM_ENABLED: string;
   BGM_VOLUME: string;
   /** 秒数，0 = 关闭 */
@@ -94,6 +100,7 @@ const DEFAULTS: AppConfig = {
   TITLE_DURATION: "1.6",
   SUBTITLE_INTERVAL: "0.2",
   SUBTITLE_FONT_SIZE: "0",
+  SUBTITLE_RENDER: "ass",
   BGM_ENABLED: "1",
   BGM_VOLUME: "0.1",
   AUDIO_FADE_IN: "0.8",

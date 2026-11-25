@@ -1,4 +1,5 @@
 import { CARD_TEMPLATES } from "./card-templates.js";
+import { cardDefaults, MAX_CHAPTER_CARDS } from "./pipeline/cards.js";
 import {
   autoSubtitleFontSize,
   bool,
@@ -93,5 +94,18 @@ export function metaPayload(cfg: AppConfig = loadConfig()) {
     /** 版式确认页的配色与模板选项 */
     cardAccents: cardAccentPalette(cfg),
     cardTemplates: CARD_TEMPLATES,
+    /**
+     * 版式确认页要显示的配置现值。
+     * 之前页面只拿到色板，片头/章节/片尾的时长与开关全靠猜，
+     * 用户改了设置却看不出有没有生效。
+     */
+    cardDefaults: {
+      ...cardDefaults(cfg),
+      /** 章节卡上限：每段之间最多一张，另有 6 张的总量上限 */
+      maxChapters: MAX_CHAPTER_CARDS,
+      accent: cardAccentPalette(cfg)[0] ?? "#ff5a3c",
+      outroTitle: (cfg.OUTRO_TITLE ?? "").trim(),
+      outroHandle: (cfg.OUTRO_HANDLE ?? "").trim(),
+    },
   };
 }

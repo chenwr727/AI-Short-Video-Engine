@@ -43,6 +43,7 @@ export const DEFAULTS: AppConfig = {
   TITLE_DURATION: "1.6",
   SUBTITLE_INTERVAL: "0.2",
   SUBTITLE_FONT_SIZE: "0",
+  SUBTITLE_RENDER: "ass",
   BGM_ENABLED: "1",
   BGM_VOLUME: "0.1",
   AUDIO_FADE_IN: "0.8",

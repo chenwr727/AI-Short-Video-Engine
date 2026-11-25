@@ -115,6 +115,31 @@ const WORD_SEAM_COST = 6;
 const BAD_EDGE_COST = 120;
 const HEAD_PUNCT_COST = 2000;
 
+/**
+ * 封闭类虚词：单独一个虚词落在行尾会「悬空」，读起来最别扭。
+ * 词表只收单字虚词（助/介/连/副/代/量 + 常见单字动词），实词不在此列。
+ */
+const FUNC_WORD = new Set<string>(
+  "的了着过地得是把被给跟和与及或向从对为在以于而且并却只更但还也就都又才再很最不没要想会能可该让使将他她它个次种件条位名本台套份当由于是因所如若虽则此".split(
+    "",
+  ),
+);
+
+/**
+ * 悬空虚词的代价。实测真实语料（42 条 × 72/96 两个字号）：
+ * 0 → 11/56 条存在行尾悬空虚词；120 → 4 条，且词内断行不变、畸短行仍为 0。
+ * 注意只罚「行尾」：虚词落在行首是自然的（它开启一个词），一起罚会让行长严重失衡。
+ */
+const TAIL_FUNC_COST = 120;
+
+/**
+ * 畸短行代价。偏差平方对小行本来就不敏感（3 字行 vs 目标 8 字只记 25），
+ * 会被其它惩罚项一路推着选出来，于是出现「语气里」这种 3 字孤行。
+ * 低于目标宽度 55% 的行额外记一笔，逼 DP 去选更均衡的切法。
+ */
+const SHORT_LINE_COST = 400;
+const SHORT_LINE_RATIO = 0.55;
+
 /** 行数固定，让各行宽度尽量贴近均值 */
 function optLines(chars: string[], width: number[], maxChars: number, levels: Uint8Array): number[] | null {
   const n = chars.length;
@@ -143,6 +168,9 @@ function optLines(chars: string[], width: number[], maxChars: number, levels: Ui
         let cost = (target - lineWidth) ** 2;
 
         if (end < n) {
+          // 只对非末行判畸短：最后一行多半是余数，天然短
+          if (lineWidth < target * SHORT_LINE_RATIO) cost += SHORT_LINE_COST;
+
           const head = chars[end] as string;
           if (TAIL_PUNCT.test(head)) cost += HEAD_PUNCT_COST;
           else {
@@ -150,8 +178,11 @@ function optLines(chars: string[], width: number[], maxChars: number, levels: Ui
             if (level === Break.Inside) cost += MID_WORD_COST;
             else if (level === Break.BetweenWords) cost += WORD_SEAM_COST;
           }
+          const tail = chars[end - 1] as string;
           if (BAD_LINE_START.test(head)) cost += BAD_EDGE_COST;
-          if (BAD_LINE_END.test(chars[end - 1] as string)) cost += BAD_EDGE_COST;
+          if (BAD_LINE_END.test(tail)) cost += BAD_EDGE_COST;
+          // 分词器已判定这是单字词：让它在行尾单独悬着最难看
+          if (FUNC_WORD.has(tail)) cost += TAIL_FUNC_COST;
         }
 
         const rest = bestRest[end] as number;
