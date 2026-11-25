@@ -574,6 +574,11 @@ body.electron.mac .tb-inner {
   gap: 12px;
 }
 
+/* 版式参数：片头 / 章节 / 片尾 三项并排一行 */
+.row.row-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 /* 复选框 + 文字 */
 .check {
   display: flex;
@@ -1019,23 +1024,16 @@ body.electron.mac .tb-inner {
 
 /* 成片 */
 
-/* 末步的固定内容 */
-.panel-fill:has(> .panel-stage) {
-  height: auto;
-}
-
-/* 配置与结果之间的日志条 */
-.panel-logbar {
+/* 在滚动区里按内容高度排，不能裁切，否则视频只露出一条 */
+.panel-scroll > .panel-stage {
   flex: none;
-  min-width: 0;
-}
-
-.panel-logbar .log-details {
-  margin-bottom: 10px;
+  min-height: 0;
+  margin: 12px 0 0;
+  overflow: visible;
 }
 
 .panel-stage {
-  /* basis 0：高度只由剩余空间决定 */
+  /* 直接做卡片子项时，高度由剩余空间决定 */
   flex: 1 1 0;
   min-height: 120px;
   display: flex;
@@ -1049,16 +1047,16 @@ body.electron.mac .tb-inner {
   display: block;
   width: auto;
   max-width: 100%;
-  max-height: min(560px, 70vh);
+  max-height: min(420px, 60vh);
   margin: 0 auto 14px;
   border-radius: 12px;
   background: #0b1220;
   box-shadow: 0 16px 32px -24px rgba(11, 18, 32, 0.9);
 }
 
+/* 父容器高度 auto 时 100% 无参照，这里沿用 .player 的绝对上限 */
 .panel-stage .player {
   margin: 0;
-  max-height: 100%;
 }
 
 .audio-summary {
@@ -1717,6 +1715,11 @@ body.electron.mac .tb-inner {
   gap: 8px;
 }
 
+/* 版式参数里的时长输入：与字幕字号那种窄输入框保持一致 */
+.panel-config .field input[type="number"].text-input {
+  max-width: 120px;
+}
+
 .chip {
   padding: 5px 12px;
   border: 1px solid var(--border-strong);
@@ -1828,9 +1831,9 @@ body.electron.mac .tb-inner {
   resize: none;
 }
 
-/* 锁在一屏内，矮窗口时给 520px 下限 */
+/* 锁在一屏内：矮窗口下也让内容区滚动，按钮始终可见 */
 .panel-fill:has(> .panel-scroll) {
-  max-height: max(100%, 520px);
+  max-height: 100%;
 }
 
 /* 长内容区在卡片内部滚动，底部按钮不用滚到底 */
@@ -2102,10 +2105,6 @@ body.electron.mac .tb-inner {
 
   .panel-head h2 {
     margin-bottom: 3px;
-  }
-
-  .panel-fill:has(> .panel-scroll) {
-    max-height: max(100%, 460px);
   }
 }
 

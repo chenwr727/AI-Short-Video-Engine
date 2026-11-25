@@ -20,14 +20,30 @@ export function saveTaskState(state: TaskState): void {
   }
 }
 
-/** 老快照没有这个字段，缺失或脏值都当作「没选过」 */
+/** 时长统一按 0–15 秒收；脏值当作「没改过」，让配置说了算 */
+function normalizeSec(raw: unknown): number | undefined {
+  if (raw === undefined || raw === null || raw === "") return undefined;
+  const sec = Number(raw);
+  if (!Number.isFinite(sec) || sec < 0 || sec > 15) return undefined;
+  return Math.round(sec * 10) / 10;
+}
+
+/** 老快照没有这些字段，缺失或脏值都当作「没选过」 */
 function normalizePrefs(raw: unknown): CardPrefs | null {
   if (!raw || typeof raw !== "object") return null;
-  const obj = raw as { accent?: unknown; chapterDurationSec?: unknown };
+  const obj = raw as {
+    accent?: unknown;
+    introDurationSec?: unknown;
+    chapterDurationSec?: unknown;
+    outroDurationSec?: unknown;
+  };
   const accent = typeof obj.accent === "string" && obj.accent.trim() ? obj.accent.trim().toLowerCase() : undefined;
-  const sec = Number(obj.chapterDurationSec);
-  const chapterDurationSec = Number.isFinite(sec) && sec >= 0.5 && sec <= 15 ? Math.round(sec * 10) / 10 : undefined;
-  return accent || chapterDurationSec ? { accent, chapterDurationSec } : null;
+  const introDurationSec = normalizeSec(obj.introDurationSec);
+  const chapterDurationSec = normalizeSec(obj.chapterDurationSec);
+  const outroDurationSec = normalizeSec(obj.outroDurationSec);
+  const next: CardPrefs = { accent, introDurationSec, chapterDurationSec, outroDurationSec };
+  const filled = Object.values(next).some((value) => value !== undefined);
+  return filled ? next : null;
 }
 
 function normalize(raw: unknown, name: string): TaskState | null {

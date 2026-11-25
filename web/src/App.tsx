@@ -456,8 +456,8 @@ export default function App() {
     setPhase("cards");
   }
 
-  async function onRegenerateCards() {
-    const state = await withBusy(regenerateCards);
+  async function onRegenerateCards(prefs: CardPrefs = {}) {
+    const state = await withBusy(() => regenerateCards(prefs));
     if (!state) return;
     setTask(state);
     setFollowing(true);
@@ -477,7 +477,7 @@ export default function App() {
     return true;
   }
 
-  async function onBatchCards(patch: { accent?: string; chapterDurationSec?: number }) {
+  async function onBatchCards(patch: CardPrefs) {
     const state = await withBusy(() => batchCards(patch));
     if (state) setTask(state);
   }
@@ -901,7 +901,7 @@ export default function App() {
             error={error}
             meta={meta}
             onGenerate={(prefs) => void onGenerateCards(prefs)}
-            onRegenerate={() => void onRegenerateCards()}
+            onRegenerate={(prefs) => void onRegenerateCards(prefs)}
             onRewrite={(id, mode) => void onRewriteCard(id, mode)}
             onUpdate={onUpdateCard}
             onBatch={(patch) => void onBatchCards(patch)}

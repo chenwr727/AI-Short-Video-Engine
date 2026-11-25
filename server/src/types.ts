@@ -193,12 +193,21 @@ export interface CardManifest {
   style?: string;
 }
 
-/** 版式生成偏好：用户手动点选过才写；null 表示全部跟随 AI 与配置 */
+/**
+ * 版式生成偏好：用户手动改过才写；字段缺省表示跟随 AI 与配置。
+ *
+ * 三个时长都是「绝对值」语义：0 = 这次不要这类卡，>0 = 用这个秒数。
+ * 和缺省（undefined）区分开，否则无法表达「配置里开着，这次关掉」。
+ */
 export interface CardPrefs {
   /** 指定主色，须在色板内 */
   accent?: string;
-  /** 指定章节卡时长（秒），0.5–15 */
+  /** 片头时长（秒），0–15 */
+  introDurationSec?: number;
+  /** 章节卡时长（秒），0–15 */
   chapterDurationSec?: number;
+  /** 片尾时长（秒），0–15 */
+  outroDurationSec?: number;
 }
 
 export interface LogLine {

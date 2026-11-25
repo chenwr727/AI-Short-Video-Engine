@@ -119,7 +119,6 @@ export function RenderSetupStep(props: RenderSetupStepProps) {
           onChange={onChange}
           onVoiceChange={onVoiceChange}
         />
-        <p className="hint">素材来源与分辨率在下一步「素材确认」里选。</p>
       </div>
 
       <div className="kv">

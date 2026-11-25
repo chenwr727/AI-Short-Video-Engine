@@ -36,6 +36,22 @@ export interface Meta {
   /** 版式页可选的卡片配色与模板 */
   cardAccents: string[];
   cardTemplates: Record<CardKind, { id: string; name: string; hint: string }[]>;
+  /** 版式页要显示的配置现值（设置页里配的片头/章节/片尾） */
+  cardDefaults?: CardDefaults;
+}
+
+/** 与后端 cardDefaults() 的返回值一致 */
+export interface CardDefaults {
+  introSec: number;
+  chapterSec: number;
+  outroSec: number;
+  /** 三个开关全关，按上面的时长出一份默认清单 */
+  auto: boolean;
+  /** 章节卡总量上限 */
+  maxChapters: number;
+  accent: string;
+  outroTitle: string;
+  outroHandle: string;
 }
 
 export interface PromptField {
@@ -187,10 +203,15 @@ export interface CardManifest {
   style?: string;
 }
 
-/** 版式生成偏好：手动点选过才写；null / 缺省表示跟随 AI 与配置 */
+/**
+ * 版式生成偏好：手动改过才写；字段缺省表示跟随 AI 与配置。
+ * 时长是绝对取值：0 = 这次不要这类卡。
+ */
 export interface CardPrefs {
   accent?: string;
+  introDurationSec?: number;
   chapterDurationSec?: number;
+  outroDurationSec?: number;
 }
 
 export interface AudioFileInfo {

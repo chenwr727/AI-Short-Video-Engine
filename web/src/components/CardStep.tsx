@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cardStillUrl } from "../api";
 import { CARD_STAGE_IDS } from "../phases";
 import type { CardPrefs, CardSpec, Meta, TaskState } from "../types";
@@ -14,11 +14,12 @@ interface CardStepProps {
   meta: Meta | null;
   /** 还没生成时先选好的配色 / 时长随请求带给后端 */
   onGenerate: (prefs: CardPrefs) => void;
-  onRegenerate: () => void;
+  /** 换一批可带上当前时长选择，否则沿用服务端记住的值 */
+  onRegenerate: (prefs?: CardPrefs) => void;
   onRewrite: (id: string, mode: "text" | "accent") => void;
   /** 保存成功返回 true；失败由调用方提示，返回 false */
   onUpdate: (id: string, patch: CardDraft) => Promise<boolean>;
-  onBatch: (patch: { accent?: string; chapterDurationSec?: number }) => void;
+  onBatch: (patch: CardPrefs) => void;
   onRemove: (id: string) => void;
   onConfirm: () => void;
   onRetry: () => void;
@@ -43,6 +44,79 @@ const KIND_TEXT: Record<CardSpec["kind"], string> = {
 };
 
 const DURATION_PRESETS = [1.5, 2, 2.5, 3];
+
+/** 后端没返回 maxChapters 时的兜底，与 cards.ts 的 MAX_CHAPTER_CARDS 一致 */
+const MAX_CHAPTER_FALLBACK = 6;
+
+/** 允许输入空值或半个数字，失焦或回车才提交，避免每敲一个字符发一次请求 */
+function DurationInput({
+  id,
+  value,
+  missing = false,
+  disabled,
+  onCommit,
+}: {
+  id: string;
+  /** null 表示多张卡取值不一致 */
+  value: number | null;
+  /** 这份版式里没有这类卡 */
+  missing?: boolean;
+  disabled?: boolean;
+  onCommit: (seconds: number) => void;
+}) {
+  const shown = value === null ? "" : String(value);
+  const [text, setText] = useState(shown);
+
+  // 外部值变了（切换任务、批量应用回写）才覆盖输入框
+  useEffect(() => {
+    setText(shown);
+  }, [shown]);
+
+  function commit() {
+    const raw = text.trim();
+    // 留空表示不指定，不动原有取值
+    if (!raw) {
+      setText(shown);
+      return;
+    }
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      setText(shown);
+      return;
+    }
+    const clamped = Math.min(15, Math.round(parsed * 10) / 10);
+    setText(String(clamped));
+    if (clamped !== value) onCommit(clamped);
+  }
+
+  const placeholder = value === null ? "各卡不同" : missing ? "无此卡" : "0";
+
+  return (
+    <input
+      id={id}
+      className="text-input"
+      type="number"
+      min={0}
+      max={15}
+      step={0.5}
+      value={text}
+      placeholder={placeholder}
+      title={
+        value === null
+          ? "这份版式里几张卡时长不同。填一个数会把这类卡统一成这个时长。"
+          : missing
+            ? "这份版式里没有这类卡。填一个大于 0 的秒数会新建出来。"
+            : "0 表示不出这类卡"
+      }
+      disabled={disabled}
+      onChange={(event) => setText(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") event.currentTarget.blur();
+      }}
+    />
+  );
+}
 
 function draftOf(spec: CardSpec): CardDraft {
   return {
@@ -90,14 +164,34 @@ export function CardStep(props: CardStepProps) {
     return values.every((value) => value === values[0]) ? (values[0] as T) : null;
   }
   const sharedAccent = shared(items.map((item) => item.accent.toLowerCase()));
-  const sharedChapterSec = shared(items.filter((item) => item.kind === "chapter").map((item) => item.durationSec));
+  const defaults = meta?.cardDefaults;
 
-  // 还没生成版式时，批量控件当「生成参数」用：点选只记在本地，点「开始生成版式」一起提交
+  // 还没生成版式时，这几个控件当「生成参数」用：改动只记在本地，点「开始生成版式」一起提交
   const [preset, setPreset] = useState<CardPrefs>({});
   const canPreset = !busy && (editable || (awaiting && !manifest));
   const accentPick = sharedAccent ?? (manifest ? null : (preset.accent ?? task.cardPrefs?.accent ?? null));
-  const chapterPick =
-    sharedChapterSec ?? (manifest ? null : (preset.chapterDurationSec ?? task.cardPrefs?.chapterDurationSec ?? null));
+
+  // 缺这类卡时 missing 为真，与「几张卡取值不同」（value 为 null）区分开
+  function secOf(
+    kind: "intro" | "chapter" | "outro",
+    key: "introDurationSec" | "chapterDurationSec" | "outroDurationSec",
+    fallback: number | undefined,
+  ): { value: number | null; missing: boolean } {
+    if (manifest) {
+      const own = items.filter((item) => item.kind === kind).map((item) => item.durationSec);
+      if (own.length === 0) return { value: 0, missing: true };
+      return { value: shared(own), missing: false };
+    }
+    return { value: preset[key] ?? task.cardPrefs?.[key] ?? fallback ?? 0, missing: false };
+  }
+  const introPick = secOf("intro", "introDurationSec", defaults?.introSec);
+  const chapterPick = secOf("chapter", "chapterDurationSec", defaults?.chapterSec);
+  const outroPick = secOf("outro", "outroDurationSec", defaults?.outroSec);
+  const paramsSummary = [
+    `片头 ${introPick.value ? `${introPick.value}s` : "关"}`,
+    `章节 ${chapterPick.value ? `${chapterPick.value}s` : "关"}`,
+    `片尾 ${outroPick.value ? `${outroPick.value}s` : "关"}`,
+  ].join(" · ");
 
   function pickAccent(color: string) {
     if (manifest) {
@@ -107,12 +201,12 @@ export function CardStep(props: CardStepProps) {
     setPreset((prev) => ({ ...prev, accent: color.toLowerCase() }));
   }
 
-  function pickChapterSec(seconds: number) {
+  function commitSec(key: keyof CardPrefs, seconds: number) {
     if (manifest) {
-      onBatch({ chapterDurationSec: seconds });
+      onBatch({ [key]: seconds });
       return;
     }
-    setPreset((prev) => ({ ...prev, chapterDurationSec: seconds }));
+    setPreset((prev) => ({ ...prev, [key]: seconds }));
   }
 
   const [editing, setEditing] = useState<string | null>(null);
@@ -173,7 +267,48 @@ export function CardStep(props: CardStepProps) {
       }
       fill
     >
-      <ConfigSection title="批量设置" summary="统一配色 · 章节卡时长" open={layout.configOpen}>
+      <ConfigSection title="版式参数" summary={paramsSummary} open={layout.configOpen} resetKey={stepStage}>
+        <div className="row row-3">
+          <div className="field">
+            <label htmlFor="card-intro-sec">
+              片头（秒）<span className="hint">0 = 不出片头</span>
+            </label>
+            <DurationInput
+              id="card-intro-sec"
+              value={introPick.value}
+              missing={introPick.missing}
+              disabled={!canPreset}
+              onCommit={(seconds) => commitSec("introDurationSec", seconds)}
+            />
+          </div>
+
+          <div className="field">
+            <label htmlFor="card-chapter-sec">
+              章节卡（秒）<span className="hint">0 = 不出章节卡</span>
+            </label>
+            <DurationInput
+              id="card-chapter-sec"
+              value={chapterPick.value}
+              missing={chapterPick.missing}
+              disabled={!canPreset}
+              onCommit={(seconds) => commitSec("chapterDurationSec", seconds)}
+            />
+          </div>
+
+          <div className="field">
+            <label htmlFor="card-outro-sec">
+              片尾（秒）<span className="hint">0 = 不出片尾</span>
+            </label>
+            <DurationInput
+              id="card-outro-sec"
+              value={outroPick.value}
+              missing={outroPick.missing}
+              disabled={!canPreset}
+              onCommit={(seconds) => commitSec("outroDurationSec", seconds)}
+            />
+          </div>
+        </div>
+
         <div className="row">
           <div className="field">
             <label>统一配色</label>
@@ -193,29 +328,17 @@ export function CardStep(props: CardStepProps) {
               ))}
             </div>
           </div>
-
-          <div className="field">
-            <label>章节卡时长</label>
-            <div className="card-presets">
-              {DURATION_PRESETS.map((seconds) => (
-                <button
-                  key={seconds}
-                  type="button"
-                  className={`chip${chapterPick === seconds ? " on" : ""}`}
-                  aria-pressed={chapterPick === seconds}
-                  disabled={!canPreset}
-                  onClick={() => pickChapterSec(seconds)}
-                >
-                  {seconds}s
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
+
         <p className="hint">
           {manifest
-            ? "批量操作作用于全部卡片，选中态表示当前所有卡取值一致；只想改一张，用卡片上的「编辑」。想换模板，用卡片上的「换模板」。"
-            : "还没生成版式：这里选的值会作为生成参数，不选则跟随 AI 与配置（主色由 AI 按画面挑，时长取配置）。生成后这里变成批量修改。"}
+            ? `时长改的是现有卡片，留空表示各卡取值不一。章节卡最多 ${Math.min(
+                defaults?.maxChapters ?? MAX_CHAPTER_FALLBACK,
+                total - 1,
+              )} 张；只想改一张，用卡片上的「编辑」。`
+            : `这里是这次任务的参数，初值来自设置页${
+                defaults?.auto ? "（三个卡片开关都没开，按这些时长出一份默认清单）" : ""
+              }。想长期改，去设置页；改这里只影响这一条任务。`}
         </p>
       </ConfigSection>
 
@@ -445,7 +568,7 @@ export function CardStep(props: CardStepProps) {
           </button>
         )}
         {editable && !generating && (
-          <button className="secondary" type="button" disabled={busy} onClick={onRegenerate}>
+          <button className="secondary" type="button" disabled={busy} onClick={() => onRegenerate(preset)}>
             换一批（重新生成）
           </button>
         )}

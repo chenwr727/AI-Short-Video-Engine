@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import {
@@ -14,10 +15,18 @@ import { ensureDir } from "../paths.js";
 import { prepareBgm } from "../services/bgm.js";
 import { runFfmpeg } from "../services/ffmpeg.js";
 import { ensureSfx } from "../services/sfx.js";
-import { renderChapter, renderIntro, renderOutro, renderQuote } from "../services/remotion.js";
+import {
+  lastRenderErrorMessage,
+  renderChapter,
+  renderIntro,
+  renderOutro,
+  renderQuote,
+  renderSubtitleLayer,
+} from "../services/remotion.js";
 import { ensureCardVideo } from "./cards.js";
+import { transcriptFingerprint } from "./tts.js";
 import { probeVideo } from "../services/probe.js";
-import { buildAss, charsPerLine, type SubtitleCue } from "../services/subtitle.js";
+import { buildAss, charsPerLine, layoutCueText, type SubtitleCue } from "../services/subtitle.js";
 import type {
   AudioManifest,
   CardManifest,
@@ -37,8 +46,6 @@ const MIN_STROKE = 1;
 /** AABBGGRR */
 const SHADOW_COLOUR = "&H80000000";
 const BGM_VOLUME = 0.1;
-/** 改渲染效果或折行规则时加一，旧片段缓存随之失效 */
-const SUBTITLE_STYLE_VERSION = 4;
 const CLIP_CRF = "18";
 const CLIP_PRESET = "veryfast";
 const CLIP_SIG_SUFFIX = ".json";
@@ -208,6 +215,14 @@ interface TimelineOptions {
   interval: number;
   padLead: number;
   padTail: number;
+  /**
+   * 首段前面还排着一张卡（片头或第 1 段的章节卡）。
+   * 首段本身没有前置留白，但卡片是靠 xfade 压上来的，
+   * 不垫 padLead 的话首句配音和字幕会在卡片还没退场时就冒出来。
+   */
+  leadCard?: boolean;
+  /** 末段后面还排着一张卡（片尾），同理需要尾部留白 */
+  tailCard?: boolean;
 }
 
 /** 排时间轴：首句前插标题，句间留间隔，转场时垫首尾留白 */
@@ -252,12 +267,12 @@ export function planParagraphs(transcript: Transcript, audio: AudioManifest, o: 
     }
   }
 
-  // 首段不垫片头、末段不垫片尾
+  // 首段不垫片头、末段不垫片尾；但外面还挂着卡片时，它同样要靠留白让出转场窗口
   for (let i = 0; i < plans.length; i++) {
     const plan = plans[i];
     if (!plan) continue;
-    plan.padLead = i === 0 ? 0 : o.padLead;
-    plan.padTail = i === plans.length - 1 ? 0 : o.padTail;
+    plan.padLead = i === 0 ? (o.leadCard ? o.padLead : 0) : o.padLead;
+    plan.padTail = i === plans.length - 1 ? (o.tailCard ? o.padTail : 0) : o.padTail;
     if (plan.padLead === 0 && plan.padTail === 0) continue;
 
     for (const sentence of plan.sentences) sentence.start += plan.padLead;
@@ -449,14 +464,16 @@ function assOptions(width: number, height: number, fontSize: number) {
   };
 }
 
-/** 素材、画幅、字号、时间轴任一变化都会失效 */
+/**
+ * 只看画面要素：素材、画幅、运镜调色、时间轴。
+ * 字幕不在这里——它在合并阶段才烧上去，改字号或文案不必重渲素材。
+ */
 export function clipSignature(
   plan: ParagraphPlan,
   materialPath: string | string[],
   width: number,
   height: number,
   fps: number,
-  fontSize: number,
   look = "",
 ): string {
   // 单素材时保持与旧签名一致的格式，多镜头按顺序拼接
@@ -476,12 +493,9 @@ export function clipSignature(
     width,
     height,
     fps,
-    fontSize,
     look,
-    style: SUBTITLE_STYLE_VERSION,
     duration: Number(plan.duration.toFixed(3)),
     sentences: plan.sentences.map((s) => [s.file, Number(s.start.toFixed(3))]),
-    cues: plan.cues.map((c) => [c.text, Number(c.start.toFixed(3)), Number(c.end.toFixed(3)), c.style]),
   });
 }
 
@@ -489,19 +503,17 @@ async function renderParagraph(
   ctx: TaskContext,
   plan: ParagraphPlan,
   materialPaths: string[],
-  subsDir: string,
   clipsDir: string,
   onProgress: (ratio: number) => void,
 ): Promise<string> {
   const cfg = loadConfig();
   const fps = ctx.options.fps > 0 ? ctx.options.fps : num(cfg.FPS, 24);
   const { width, height } = ctx.options;
-  const fontSize = subtitleFontSize(cfg, ctx.options);
   const look = lookOptions(cfg);
 
   const clipFile = path.join(clipsDir, `${plan.index}.mp4`);
   const sigFile = path.join(clipsDir, `${plan.index}.mp4${CLIP_SIG_SUFFIX}`);
-  const signature = clipSignature(plan, materialPaths, width, height, fps, fontSize, lookKey(look));
+  const signature = clipSignature(plan, materialPaths, width, height, fps, lookKey(look));
 
   if (fs.existsSync(clipFile) && fs.statSync(clipFile).size > 0) {
     let cached = "";
@@ -517,9 +529,6 @@ async function renderParagraph(
     ctx.log(`第 ${plan.index} 段的素材或参数变了，重新渲染片段`);
     fs.rmSync(clipFile, { force: true });
   }
-
-  const assFile = path.join(subsDir, `${plan.index}.ass`);
-  fs.writeFileSync(assFile, buildAss(plan.cues, assOptions(width, height, fontSize)), "utf-8");
 
   // 段内多镜头：按句子边界切时长，每个素材占一段
   const durations = shotDurations(plan, materialPaths.length);
@@ -546,12 +555,10 @@ async function renderParagraph(
   const motion = motionChain(plan, width, height, fps, look.motion);
   if (motion) {
     postChain.push(motion);
-    // zoompan 会重算像素比，ass 依赖 SAR 定位字幕
+    // zoompan 会重算像素比，后续叠加字幕层依赖 SAR
     postChain.push("setsar=1");
   }
   postChain.push(...gradeChain(look.grade));
-  // 字幕放在调色之后，避免暗角和颗粒影响可读性
-  postChain.push(`ass=subs/${plan.index}.ass`);
 
   const filters: string[] = [];
   if (shots.length === 1) {
@@ -634,6 +641,12 @@ interface SfxFiles {
   volume: number;
 }
 
+/** ass = libass 直接烧在视频上；webm = 带 alpha 的 VP9 层，overlay 上去 */
+interface SubsLayer {
+  file: string;
+  kind: "ass" | "webm";
+}
+
 interface MergeOptions {
   ctx: TaskContext;
   clips: string[];
@@ -649,6 +662,42 @@ interface MergeOptions {
   sfx: SfxFiles | null;
   totalDurationMs: number;
   render: RenderOptions;
+  /**
+   * 拿到各片段在成片里的起点（秒）后生成整片字幕层；null = 本次不叠字幕。
+   * 异步是因为 Remotion 那条路径要真的渲一段视频出来。
+   */
+  buildSubs?: (starts: number[]) => Promise<SubsLayer | null> | SubsLayer | null;
+}
+
+/**
+ * 把字幕层挂到当前视频流上。
+ * webm 是透明层，必须显式指定 libvpx-vp9 解码——ffmpeg 原生 vp9 解码器不输出 alpha 平面，
+ * overlay 上去会得到一块黑底。
+ */
+function attachSubs(
+  filters: string[],
+  videoLabel: string,
+  subs: SubsLayer,
+  inputIndex: number,
+): { label: string; usedInput: boolean } {
+  if (subs.kind === "ass") {
+    filters.push(`[${videoLabel}]ass=${subs.file}[vs]`);
+    return { label: "vs", usedInput: false };
+  }
+
+  filters.push(`[${inputIndex}:v]format=yuva420p[subraw]`, `[${videoLabel}][subraw]overlay=0:0:format=auto[vs]`);
+  return { label: "vs", usedInput: true };
+}
+
+/** 转场串联时每个片段的起点：前一片段结束再吃掉重叠部分 */
+function transitionStarts(durations: number[], fade: number): number[] {
+  const starts: number[] = [];
+  let at = 0;
+  for (let i = 0; i < durations.length; i++) {
+    starts.push(at);
+    at += (durations[i] ?? 0) - fade;
+  }
+  return starts;
 }
 
 /** 音效轨统一成主音轨的采样格式，才能跟配音一起 amix */
@@ -732,7 +781,18 @@ async function mergeWithTransitions(options: MergeOptions): Promise<void> {
     videoLabel = "vf";
   }
 
+  // 字幕放在调色与淡入淡出之后，否则会被暗角、颗粒和首尾淡出一起吃掉
   let nextInput = clips.length;
+  const subs = await options.buildSubs?.(transitionStarts(durations, fade));
+  if (subs) {
+    const attached = attachSubs(filters, videoLabel, subs, nextInput);
+    videoLabel = attached.label;
+    if (attached.usedInput) {
+      args.push("-c:v", "libvpx-vp9", "-i", subs.file);
+      nextInput++;
+    }
+  }
+
   const mixLabels: string[] = audioLabel ? [audioLabel] : [];
 
   if (bgm) {
@@ -779,7 +839,13 @@ async function mergeByConcat(options: MergeOptions): Promise<void> {
   const listFile = path.join(ctx.workspace, "listfile.txt");
   fs.writeFileSync(listFile, `${clips.map((clip) => `file '${clip.replace(/'/g, "'\\''")}'`).join("\n")}\n`, "utf-8");
 
-  const needFilter = Boolean(bgm) || Boolean(sfx?.impact) || render.videoFadeIn > 0 || render.videoFadeOut > 0;
+  // 有字幕层时不能再走流拷贝，必须重编码一遍
+  const needFilter =
+    Boolean(bgm) ||
+    Boolean(sfx?.impact) ||
+    render.videoFadeIn > 0 ||
+    render.videoFadeOut > 0 ||
+    Boolean(options.buildSubs);
   if (!needFilter) {
     await runFfmpeg(["-f", "concat", "-safe", "0", "-i", listFile, "-c", "copy", "-movflags", "+faststart", output], {
       cwd: ctx.workspace,
@@ -798,10 +864,22 @@ async function mergeByConcat(options: MergeOptions): Promise<void> {
 
   const args: string[] = ["-f", "concat", "-safe", "0", "-i", listFile];
   const filters: string[] = [`[0:v]${videoChain.length > 0 ? videoChain.join(",") : "null"}[v]`];
+  let videoMap = "[v]";
+
+  // 无转场时片段首尾相接，起点就是前面时长累加
+  let nextInput = 1;
+  const subs = await options.buildSubs?.(transitionStarts(durations, 0));
+  if (subs) {
+    const attached = attachSubs(filters, "v", subs, nextInput);
+    videoMap = `[${attached.label}]`;
+    if (attached.usedInput) {
+      args.push("-c:v", "libvpx-vp9", "-i", subs.file);
+      nextInput++;
+    }
+  }
 
   // 无转场时只在片头加一个落点音效
   const audioMix: string[] = ["0:a"];
-  let nextInput = 1;
 
   if (bgm) {
     args.push("-stream_loop", "-1", "-i", bgm);
@@ -824,7 +902,7 @@ async function mergeByConcat(options: MergeOptions): Promise<void> {
     audioMap = "[a]";
   }
 
-  args.push("-filter_complex", filters.join(";"), "-map", "[v]", "-map", audioMap, ...encode);
+  args.push("-filter_complex", filters.join(";"), "-map", videoMap, "-map", audioMap, ...encode);
   if (bgm) args.push("-shortest");
   args.push(output);
 
@@ -832,7 +910,7 @@ async function mergeByConcat(options: MergeOptions): Promise<void> {
 }
 
 /** 成片旁边写一份「完成标记」：只有正常合完才算数，中途被杀的残留文件不能复用 */
-function outputMarker(output: string): string {
+export function outputMarker(output: string): string {
   return `${output}.ok`;
 }
 
@@ -841,13 +919,86 @@ function outputStamp(output: string): string {
   return `${stat.size}:${Math.round(stat.mtimeMs)}`;
 }
 
-/** 文件存在且标记与它的大小/时间戳对得上，才认为是上一版完整成片 */
-export function isComposedOutput(output: string): boolean {
+/**
+ * 成片指纹：把「影响成片的一切输入」压成一个短串。
+ *
+ * 以前只比对文件大小与 mtime，等于只认「文件还是那个文件」，
+ * 却不认「参数还是那套参数」——改了转场、字幕字号、静音间隔、画幅之后，
+ * 旧成片照样命中缓存，用户会看到「改了没反应」，还以为是功能坏了。
+ *
+ * 这里刻意只收真正会写进画面的项：
+ * - 字幕文案走 transcriptFingerprint（改错别字必须重合成）
+ * - cfg 里与合成无关的（API Key、模型名）一律不收，否则改密钥也会白跑一遍
+ */
+export function composeFingerprint(
+  ctx: TaskContext,
+  transcript: Transcript,
+  audio: AudioManifest,
+  material: MaterialManifest,
+  cards: CardManifest | null | undefined,
+  cfg: AppConfig,
+  fps: number,
+): string {
+  const options = ctx.options;
+  const payload = {
+    // 文案与配音
+    transcript: transcriptFingerprint(transcript),
+    audio: [audio.engine, audio.model, Number(audio.totalDuration.toFixed(3))],
+    sentences: audio.paragraphs.flatMap((p) =>
+      p.dialogues.flatMap((d) => d.files.map((f) => `${f.file}:${f.duration.toFixed(3)}`)),
+    ),
+    // 画幅与帧率进片段签名，但成片也直接受它们影响
+    frame: `${options.width}x${options.height}@${fps}`,
+    // 素材：段落、镜头、兜底标记。缓存文件本身用路径+sig，改动会换文件
+    material: material.items.map((item) => [
+      item.paragraph,
+      item.videoPath ?? "",
+      item.fallback ? "fallback" : "real",
+      (item.shots ?? []).map((shot) => shot.videoPath ?? "").join(","),
+    ]),
+    // 版式：卡片清单和每张卡的指纹，换卡必然重合成
+    cards: (cards?.items ?? []).map((spec) => [spec.id, spec.kind, spec.fingerprint ?? "", spec.durationSec]),
+    // 合并期参数：这些只在最后一步生效，片段缓存命中也不会更新
+    render: {
+      transition: numberOrZero(cfg.TRANSITION_DURATION, 0),
+      transitionStyle: transitionMode(cfg),
+      subtitleInterval: numberOrZero(cfg.SUBTITLE_INTERVAL, 0),
+      subtitleFontSize: options.subtitleFontSize ?? numberOrZero(cfg.SUBTITLE_FONT_SIZE, 0),
+      subtitleRender: (cfg.SUBTITLE_RENDER ?? "").trim().toLowerCase(),
+      titleDuration: numberOrZero(cfg.TITLE_DURATION, 0),
+      motion: Math.min(MAX_MOTION_LEVEL, numberOrZero(cfg.CAMERA_MOTION, 0)),
+      grade: Math.min(MAX_MOTION_LEVEL, numberOrZero(cfg.COLOR_GRADE, 0)),
+      bgm: options.bgmEnabled ?? bool(cfg.BGM_ENABLED, true),
+      bgmVolume: options.bgmVolume ?? numberOrZero(cfg.BGM_VOLUME, BGM_VOLUME),
+      bgmFile: (options.bgmFile ?? "").trim(),
+      bgmFade: [numberOrZero(cfg.AUDIO_FADE_IN, 0), numberOrZero(cfg.AUDIO_FADE_OUT, 0)],
+      videoFade: [numberOrZero(cfg.VIDEO_FADE_IN, 0), numberOrZero(cfg.VIDEO_FADE_OUT, 0)],
+      sfx: bool(cfg.SFX_ENABLED, true) ? numberOrZero(cfg.SFX_VOLUME, 0.2) : "off",
+      intro: [bool(cfg.INTRO_ENABLED, false), numberOrZero(cfg.OUTRO_DURATION, 0)],
+      outro: [(cfg.OUTRO_TITLE ?? "").trim(), (cfg.OUTRO_HANDLE ?? "").trim()],
+      chapter: [bool(cfg.CHAPTER_CARD, false), numberOrZero(cfg.CHAPTER_DURATION, 2)],
+    },
+  };
+  return crypto.createHash("sha1").update(JSON.stringify(payload)).digest("hex").slice(0, 16);
+}
+
+/**
+ * 标记格式：`<指纹>\n<大小:时间戳>`。
+ * 指纹对不上说明参数变了；戳对不上说明文件被改过或没写完，两种情况都不能复用。
+ */
+export function isComposedOutput(output: string, fingerprint?: string): boolean {
   try {
     if (!fs.existsSync(output) || fs.statSync(output).size === 0) return false;
     const marker = outputMarker(output);
     if (!fs.existsSync(marker)) return false;
-    return fs.readFileSync(marker, "utf-8").trim() === outputStamp(output);
+    const text = fs.readFileSync(marker, "utf-8").trim();
+    const [markedFingerprint, stamp] = text.split("\n");
+    if (stamp === undefined) {
+      // 老格式（只有戳）：当参数已变，让它重合成一次，之后就走新格式
+      return fingerprint === undefined;
+    }
+    if (fingerprint !== undefined && markedFingerprint !== fingerprint) return false;
+    return stamp.trim() === outputStamp(output);
   } catch {
     return false;
   }
@@ -863,14 +1014,20 @@ export async function runComposeStage(
 ): Promise<string> {
   const output = path.join(ctx.workspace, "_output.mp4");
   const marker = outputMarker(output);
-  if (isComposedOutput(output)) {
+
+  const cfg = loadConfig();
+  const fps = ctx.options.fps > 0 ? ctx.options.fps : num(cfg.FPS, 24);
+  // 参数一变，旧成片就不再是「这次的成片」，必须重合成
+  const fingerprint = composeFingerprint(ctx, transcript, audio, material, cards, cfg, fps);
+
+  if (isComposedOutput(output, fingerprint)) {
     ctx.log("复用已生成的成片（_output.mp4）");
     ctx.markStage("compose", "skipped", "命中缓存");
     return output;
   }
-  // 上次合成没跑完留下的半成品：直接丢掉，否则会当成完整成片复用，看起来就是「成片里没有版式」
   if (fs.existsSync(output) && fs.statSync(output).size > 0) {
-    ctx.log("上次合成没跑完，丢弃不完整的成片重新合成", "warn");
+    // 分两种原因，方便用户判断是「上次没跑完」还是「改了参数」
+    ctx.log(fs.existsSync(marker) ? "成片参数已变，重新合成" : "上次合成没跑完，丢弃不完整的成片重新合成", "warn");
     fs.rmSync(output, { force: true });
   }
   fs.rmSync(marker, { force: true });
@@ -879,8 +1036,6 @@ export async function runComposeStage(
   const clipsDir = ensureDir(path.join(ctx.workspace, "clips"));
   const subsDir = ensureDir(path.join(ctx.workspace, "subs"));
 
-  const cfg = loadConfig();
-  const fps = ctx.options.fps > 0 ? ctx.options.fps : num(cfg.FPS, 24);
   const transition = numberOrZero(cfg.TRANSITION_DURATION, 0);
   const mode = transitionMode(cfg);
   const look = lookOptions(cfg);
@@ -939,6 +1094,9 @@ export async function runComposeStage(
     }
   } else {
     // 没开版式阶段时沿用配置开关
+    if (bool(cfg.INTRO_ENABLED, false) && titleDuration <= 0) {
+      ctx.log("已勾选用 Remotion 渲染片头，但「片头时长」是 0，本次不出片头", "warn");
+    }
     if (bool(cfg.INTRO_ENABLED, false) && titleDuration > 0) {
       const introFile = path.join(ctx.workspace, "intro.mp4");
       if (fs.existsSync(introFile) && fs.statSync(introFile).size > 0) {
@@ -1009,7 +1167,17 @@ export async function runComposeStage(
 
   const withTransition = bare.length >= 2 && transition > 0;
   const pad = withTransition ? transition : 0;
-  const plans = pad > 0 ? planParagraphs(transcript, audio, { ...timeline, padLead: pad, padTail: pad }) : bare;
+  // 片头/片尾挂着时，首末段的转场窗口和中间段一样需要让出来
+  const plans =
+    pad > 0
+      ? planParagraphs(transcript, audio, {
+          ...timeline,
+          padLead: pad,
+          padTail: pad,
+          leadCard: Boolean(introClip),
+          tailCard: Boolean(outroClip),
+        })
+      : bare;
 
   const contentMs = plans.reduce((sum, p) => sum + p.duration * 1000, 0);
 
@@ -1024,11 +1192,14 @@ export async function runComposeStage(
 
   const clips: string[] = [];
   const transitionStyles: string[] = [];
+  /** 与 clips 一一对应：段落给字幕，卡片给 null（卡片自带大字，不能再叠一遍） */
+  const cueSets: (SubtitleCue[] | null)[] = [];
 
   /** 片段入列时顺带记下它与前一片段之间的转场风格 */
-  const addClip = (file: string, style?: string): void => {
+  const addClip = (file: string, style?: string, cues: SubtitleCue[] | null = null): void => {
     if (clips.length > 0) transitionStyles.push(style ?? xfadeStyle(mode, clips.length));
     clips.push(file);
+    cueSets.push(cues);
   };
 
   if (introClip) addClip(introClip);
@@ -1104,14 +1275,14 @@ export async function runComposeStage(
     );
 
     let lastPercent = -1;
-    const clip = await renderParagraph(ctx, plan, materialPaths, subsDir, clipsDir, (ratio) => {
+    const clip = await renderParagraph(ctx, plan, materialPaths, clipsDir, (ratio) => {
       const percent = Math.floor((ratio * 100) / 10) * 10;
       if (percent !== lastPercent) {
         lastPercent = percent;
         ctx.markStage("compose", "running", `第 ${plan.index}/${plans.length} 段 ${percent}%`);
       }
     });
-    addClip(clip, afterCard ? "fade" : undefined);
+    addClip(clip, afterCard ? "fade" : undefined, plan.cues);
     afterCard = false;
   }
 
@@ -1128,6 +1299,48 @@ export async function runComposeStage(
   }
 
   ctx.markStage("compose", "running", "合并片段");
+
+  // 字幕整片一次性烧上去：片段本身是纯画面，改字号或文案只需重走这一步
+  const subsFile = path.join(subsDir, "all.ass");
+  const layerFile = path.join(subsDir, "layer.webm");
+  const fontSize = subtitleFontSize(cfg, ctx.options);
+  const style = assOptions(ctx.options.width, ctx.options.height, fontSize);
+  const wantRemotion = (cfg.SUBTITLE_RENDER ?? "").trim().toLowerCase() === "remotion";
+
+  const buildSubs = async (starts: number[]): Promise<SubsLayer | null> => {
+    const merged: SubtitleCue[] = [];
+    cueSets.forEach((cues, i) => {
+      if (!cues) return;
+      const offset = starts[i] ?? 0;
+      for (const cue of cues) {
+        merged.push({ ...cue, start: cue.start + offset, end: cue.end + offset });
+      }
+    });
+    if (merged.length === 0) return null;
+
+    if (wantRemotion) {
+      // 折行交给后端算，两条路径的断行结果才会逐字一致
+      const cues = merged.map((cue) => ({
+        lines: layoutCueText(cue.text, style).split("\\N"),
+        start: cue.start,
+        end: cue.end,
+        style: cue.style,
+      }));
+      const ok = await renderSubtitleLayer({
+        cues,
+        fps,
+        durationSec: totalDurationMs / 1000,
+        output: layerFile,
+        signal: ctx.signal,
+        ...style,
+      });
+      if (ok) return { file: layerFile, kind: "webm" };
+      ctx.log(`Remotion 字幕层不可用，回退 libass：${lastRenderErrorMessage()}`, "warn");
+    }
+
+    fs.writeFileSync(subsFile, buildAss(merged, style), "utf-8");
+    return { file: "subs/all.ass", kind: "ass" };
+  };
 
   const render = renderOptions(cfg, ctx.options);
   const withTransitions = clips.length >= 2 && withTransition;
@@ -1191,6 +1404,7 @@ export async function runComposeStage(
   const mergeOptions: MergeOptions = {
     ctx,
     clips,
+    buildSubs,
     transition,
     transitionMode: mode,
     transitionStyles,
@@ -1207,8 +1421,8 @@ export async function runComposeStage(
   if (missingCards > 0) {
     ctx.log(`注意：本次成片缺少 ${missingCards} 张已确认的版式卡`, "error");
   }
-  // 合完才写完成标记，下次复用前会先对一遍
-  fs.writeFileSync(marker, outputStamp(output), "utf-8");
+  // 合完才写完成标记：指纹 + 文件戳，下次复用前两样都要对得上
+  fs.writeFileSync(marker, `${fingerprint}\n${outputStamp(output)}`, "utf-8");
 
   const missingNote = missingCards > 0 ? ` / 缺 ${missingCards} 张版式卡` : "";
   ctx.markStage("compose", "done", `${clips.length} 段 / ${(totalDurationMs / 1000).toFixed(1)}s${missingNote}`);

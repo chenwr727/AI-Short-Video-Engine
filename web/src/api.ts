@@ -261,8 +261,8 @@ export async function updateCard(
   return data.state;
 }
 
-/** 批量应用：统一配色 / 章节时长 */
-export async function batchCards(patch: { accent?: string; chapterDurationSec?: number }): Promise<TaskState> {
+/** 批量应用：统一配色 / 各类时长（0 = 去掉这类卡） */
+export async function batchCards(patch: CardPrefs): Promise<TaskState> {
   const data = await request<{ state: TaskState }>(
     "/task/cards/batch",
     {

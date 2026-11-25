@@ -36,15 +36,19 @@ export function ResultStep(props: ResultStepProps) {
   const defaultFontSize = autoFontSize > 0 ? autoFontSize : 72;
   const shownFontSize = (value?: number) => (value && value > 0 ? value : defaultFontSize);
 
-  const [fontSize, setFontSize] = useState(shownFontSize(options?.subtitleFontSize));
+  const [fontSize, setFontSize] = useState(String(shownFontSize(options?.subtitleFontSize)));
   const [bgmEnabled, setBgmEnabled] = useState(options?.bgmEnabled ?? defaults?.bgmEnabled ?? true);
   const [bgmVolume, setBgmVolume] = useState(options?.bgmVolume ?? defaults?.bgmVolume ?? 0.1);
   const [music, setMusic] = useState(options?.bgmFile ?? "");
   const [picking, setPicking] = useState(false);
 
+  // 清空或非法输入回落到默认值，摘要与实际提交都用这个值
+  const parsedFontSize = Math.round(Number(fontSize));
+  const effectiveFontSize = parsedFontSize > 0 ? Math.min(200, parsedFontSize) : defaultFontSize;
+
   // 任务参数或默认值晚到时回填
   useEffect(() => {
-    setFontSize(shownFontSize(options?.subtitleFontSize));
+    setFontSize(String(shownFontSize(options?.subtitleFontSize)));
     setBgmEnabled(options?.bgmEnabled ?? defaults?.bgmEnabled ?? true);
     setBgmVolume(options?.bgmVolume ?? defaults?.bgmVolume ?? 0.1);
     setMusic(options?.bgmFile ?? "");
@@ -85,7 +89,7 @@ export function ResultStep(props: ResultStepProps) {
 
   function render() {
     onRender({
-      subtitleFontSize: Math.max(1, Math.min(200, Math.round(Number(fontSize) || defaultFontSize))),
+      subtitleFontSize: effectiveFontSize,
       bgmEnabled,
       bgmVolume: Math.min(2, Math.max(0, Number(bgmVolume) || 0)),
       bgmFile: bgmEnabled ? music.trim() : "",
@@ -93,7 +97,7 @@ export function ResultStep(props: ResultStepProps) {
   }
 
   const bgmText = bgmEnabled ? `BGM ${bgmVolume}` : "无 BGM";
-  const configSummary = `字幕 ${fontSize}px · ${bgmText}${music.trim() ? ` · ${music.trim()}` : " · 默认音乐"}`;
+  const configSummary = `字幕 ${effectiveFontSize}px · ${bgmText}${music.trim() ? ` · ${music.trim()}` : " · 默认音乐"}`;
 
   return (
     <Panel
@@ -106,7 +110,7 @@ export function ResultStep(props: ResultStepProps) {
       fill
     >
       {/* 有片子时收起配置与日志，把高度留给预览 */}
-      <ConfigSection title="渲染参数" summary={configSummary} open={layout.configOpen}>
+      <ConfigSection title="渲染参数" summary={configSummary} open={layout.configOpen} resetKey={stepStage}>
         <div className="row">
           <div className="field">
             <label htmlFor="subtitle-size">字幕字号（px）</label>
@@ -118,7 +122,9 @@ export function ResultStep(props: ResultStepProps) {
               max={200}
               step={1}
               value={fontSize}
-              onChange={(event) => setFontSize(Number(event.target.value))}
+              placeholder={String(defaultFontSize)}
+              onChange={(event) => setFontSize(event.target.value)}
+              onBlur={() => setFontSize(String(effectiveFontSize))}
               disabled={rendering || picking}
             />
           </div>
@@ -178,27 +184,30 @@ export function ResultStep(props: ResultStepProps) {
         </p>
       </ConfigSection>
 
-      {task && (
-        <div className="panel-logbar">
-          <StageList stages={task.stages.filter((stage) => COMPOSE_STAGE_IDS.includes(stage.id))} />
-          <LogPanel
-            logs={task.logs}
-            stages={COMPOSE_STAGE_IDS}
-            collapsible
-            expanded={layout.logOpen}
-            tall={layout.logOpen}
-          />
-        </div>
-      )}
+      <div className="panel-scroll">
+        <StageList stages={task.stages.filter((stage) => COMPOSE_STAGE_IDS.includes(stage.id))} />
 
-      {/* 预览占满剩余高度 */}
-      <div className="panel-stage">
-        {hasVideo ? (
-          // updatedAt 作版本号，播放器才会换新片
-          <video className="player" src={`/api/result?v=${encodeURIComponent(task.updatedAt)}`} controls playsInline />
-        ) : (
-          <p className="hint">还没有生成成片。</p>
-        )}
+        <LogPanel
+          logs={task.logs}
+          stages={COMPOSE_STAGE_IDS}
+          collapsible
+          expanded={layout.logOpen}
+          tall={layout.logOpen}
+        />
+
+        <div className="panel-stage">
+          {hasVideo ? (
+            // updatedAt 作版本号，播放器才会换新片
+            <video
+              className="player"
+              src={`/api/result?v=${encodeURIComponent(task.updatedAt)}`}
+              controls
+              playsInline
+            />
+          ) : (
+            <p className="hint">还没有生成成片。</p>
+          )}
+        </div>
       </div>
 
       {error && <div className="alert">{error}</div>}

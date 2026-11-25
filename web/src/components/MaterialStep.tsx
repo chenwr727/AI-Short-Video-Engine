@@ -124,7 +124,12 @@ export function MaterialStep(props: MaterialStepProps) {
       }
       fill
     >
-      <ConfigSection title="素材来源与分辨率" summary={`${sourceLabel} · ${resolutionLabel}`} open={layout.configOpen}>
+      <ConfigSection
+        title="素材来源与分辨率"
+        summary={`${sourceLabel} · ${resolutionLabel}`}
+        open={layout.configOpen}
+        resetKey={stepStage}
+      >
         <div className="row">
           <div className="field">
             <label htmlFor="material-source">素材来源</label>

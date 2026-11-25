@@ -40,37 +40,59 @@ interface CardPlan {
   auto: boolean;
 }
 
-const DEFAULT_INTRO_SEC = 1.6;
 const DEFAULT_CHAPTER_SEC = 2;
 
-/** 各类卡片的实际时长。版式步骤开着但细项全关时给一份默认，否则这一步永远是 0 张 */
+/** 章节卡总量上限：再多的段也只插这么多张，避免成片全是卡片 */
+export const MAX_CHAPTER_CARDS = 6;
+
+/** 各类卡片的时长决策，与段落数无关；版式页的展示与出片共用这一套 */
+export function cardDefaults(cfg: AppConfig): CardPlan {
+  const introOn = bool(cfg.INTRO_ENABLED, false);
+  const chapterOn = bool(cfg.CHAPTER_CARD, false);
+  const titleSec = Math.max(0, numberOrZero(cfg.TITLE_DURATION, 0));
+  const chapterSec = Math.max(0, numberOrZero(cfg.CHAPTER_DURATION, DEFAULT_CHAPTER_SEC));
+  const outroSec = Math.max(0, numberOrZero(cfg.OUTRO_DURATION, 0));
+
+  // 三个开关全关：步骤开着总得有点产出，按片头/过场卡时长出一份默认清单
+  if (!introOn && !chapterOn && outroSec === 0) {
+    return { introSec: titleSec, chapterSec, outroSec: 0, auto: true };
+  }
+
+  return {
+    introSec: introOn ? titleSec : 0,
+    chapterSec: chapterOn ? chapterSec : 0,
+    outroSec,
+    auto: false,
+  };
+}
+
+/**
+ * 各类卡片的实际时长。段落不足时章节卡自动取消，其余沿用 cardDefaults。
+ * overrides 是绝对取值：0 = 不出这类卡，>0 = 用这个秒数，只有 undefined 才回落到配置。
+ */
 export function cardPlan(
   cfg: AppConfig,
   paragraphs: number,
-  overrides: { chapterDurationSec?: number } = {},
+  overrides: {
+    introDurationSec?: number;
+    chapterDurationSec?: number;
+    outroDurationSec?: number;
+  } = {},
 ): CardPlan {
-  const chapterLimit = Math.max(0, Math.min(paragraphs - 1, 6));
-  const titleSec = Math.max(0, numberOrZero(cfg.TITLE_DURATION, 0));
-  const introOn = bool(cfg.INTRO_ENABLED, false);
-  const chapterOn = bool(cfg.CHAPTER_CARD, false);
-  const outroSec = Math.max(0, numberOrZero(cfg.OUTRO_DURATION, 0));
-  const introSec = introOn ? titleSec : 0;
-  const chapterSec =
-    chapterOn && chapterLimit > 0 ? Math.max(0, numberOrZero(cfg.CHAPTER_DURATION, DEFAULT_CHAPTER_SEC)) : 0;
+  const chapterLimit = Math.max(0, Math.min(paragraphs - 1, MAX_CHAPTER_CARDS));
+  const base = cardDefaults(cfg);
 
-  const plan: CardPlan =
-    introOn || chapterOn || outroSec > 0
-      ? { introSec, chapterSec, outroSec, auto: false }
-      : {
-          introSec: titleSec > 0 ? titleSec : DEFAULT_INTRO_SEC,
-          chapterSec: chapterLimit > 0 ? DEFAULT_CHAPTER_SEC : 0,
-          outroSec: 0,
-          auto: true,
-        };
+  const pick = (manual: number | undefined, fallback: number) =>
+    manual === undefined ? fallback : Math.max(0, manual);
 
-  // 手动点过时长就以它为准，但只作用于本来就会出的章节卡
-  const manual = overrides.chapterDurationSec ?? 0;
-  if (manual > 0 && plan.chapterSec > 0) plan.chapterSec = manual;
+  const plan: CardPlan = {
+    introSec: pick(overrides.introDurationSec, base.introSec),
+    // 章节卡插在段落之间，只有 1 段时没有位置
+    chapterSec: chapterLimit > 0 ? pick(overrides.chapterDurationSec, base.chapterSec) : 0,
+    outroSec: pick(overrides.outroDurationSec, base.outroSec),
+    auto: base.auto,
+  };
+
   return plan;
 }
 
@@ -211,7 +233,7 @@ function fallbackManifest(
   const items: CardSpec[] = [];
   const palette = cardAccentPalette(cfg);
   const accent = manualAccent(prefs, palette) ?? palette[0] ?? "#ff5a3c";
-  const plan = cardPlan(cfg, transcript.paragraphs.length, { chapterDurationSec: prefs?.chapterDurationSec });
+  const plan = cardPlan(cfg, transcript.paragraphs.length, prefs ?? {});
 
   if (plan.introSec > 0) {
     items.push(
@@ -283,6 +305,67 @@ function fallbackManifest(
   return { items, style: "内置模板", signature: cardSignature(transcript, width, height) };
 }
 
+/** 按内置模板补建指定类型（wanted 只放真正缺的类型），规则与 fallbackManifest 一致 */
+export function buildCards(
+  cfg: AppConfig,
+  transcript: Transcript,
+  wanted: Iterable<CardKind>,
+  secs: Partial<Record<CardKind, number>>,
+  accent: string,
+  width: number,
+  height: number,
+  fps: number,
+): CardSpec[] {
+  const want = new Set(wanted);
+  const items: CardSpec[] = [];
+  const push = (spec: CardSpec) => items.push(normalizeSpec(spec, cfg, width, height, fps));
+
+  if (want.has("intro")) {
+    push({
+      id: "intro",
+      kind: "intro",
+      compositionId: defaultTemplate("intro"),
+      title: transcript.title,
+      label: DEFAULT_LABEL.intro,
+      accent,
+      durationSec: secs.intro ?? 0,
+    });
+  }
+
+  // 章节卡插在段落之间：第 1 段前面不放，最多 MAX_CHAPTER_CARDS 张
+  if (want.has("chapter")) {
+    const limit = Math.max(0, Math.min(transcript.paragraphs.length - 1, MAX_CHAPTER_CARDS));
+    transcript.paragraphs.slice(1, limit + 1).forEach((paragraph, offset) => {
+      const index = offset + 2;
+      push({
+        id: `chapter-${index}`,
+        kind: "chapter",
+        compositionId: defaultTemplate("chapter"),
+        paragraph: index,
+        title: paragraph.dialogues[0]?.contents[0] ?? paragraph.description ?? "",
+        label: DEFAULT_LABEL.chapter,
+        accent,
+        durationSec: secs.chapter ?? 0,
+      });
+    });
+  }
+
+  if (want.has("outro")) {
+    push({
+      id: "outro",
+      kind: "outro",
+      compositionId: defaultTemplate("outro"),
+      title: (cfg.OUTRO_TITLE ?? "").trim() || "关注我，下期见",
+      label: DEFAULT_LABEL.outro,
+      handle: (cfg.OUTRO_HANDLE ?? "").trim() || undefined,
+      accent,
+      durationSec: secs.outro ?? 0,
+    });
+  }
+
+  return items;
+}
+
 /** 一次 LLM 调用产出整份清单，失败退回内置模板，不阻塞流水线 */
 export async function runCardsStage(
   ctx: TaskContext,
@@ -295,9 +378,9 @@ export async function runCardsStage(
   const { width, height, fps } = ctx.options;
   const palette = cardAccentPalette(cfg);
   const paragraphs = transcript.paragraphs.length;
-  const chapterLimit = Math.max(0, Math.min(paragraphs - 1, 6));
+  const chapterLimit = Math.max(0, Math.min(paragraphs - 1, MAX_CHAPTER_CARDS));
 
-  const plan = cardPlan(cfg, paragraphs, { chapterDurationSec: prefs?.chapterDurationSec });
+  const plan = cardPlan(cfg, paragraphs, prefs ?? {});
   const fallback = fallbackManifest(cfg, transcript, width, height, fps, prefs);
   if (plan.introSec === 0 && plan.chapterSec === 0 && plan.outroSec === 0) {
     ctx.log("没有可用的卡片类型，跳过版式", "warn");
@@ -306,7 +389,10 @@ export async function runCardsStage(
 
   ctx.markStage("cards", "running", "AI 设计版式");
   if (plan.auto) {
-    ctx.log("片头 / 章节卡 / 片尾三个开关都没开，先按默认出片头与章节卡；不需要就在设置里关掉版式步骤", "warn");
+    ctx.log(
+      "片头 / 章节卡 / 片尾三个开关都没开，按「片头时长」与「过场卡时长」出片头与章节卡；不要卡片就在设置里关掉版式步骤",
+      "warn",
+    );
   }
   ctx.log("正在让 AI 为片头 / 章节 / 片尾写文案并选模板…");
 

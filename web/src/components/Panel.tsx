@@ -34,6 +34,7 @@ export function ConfigSection({
   title,
   summary,
   open = true,
+  resetKey,
   children,
 }: {
   title: string;
@@ -41,6 +42,8 @@ export function ConfigSection({
   summary?: string;
   /** 由页面按阶段控制展开，用户点标题可临时覆盖 */
   open?: boolean;
+  /** 阶段标识：变化时清掉手动展开。只看 open 不够，重新生成前后它都是 false */
+  resetKey?: string;
   children: ReactNode;
 }) {
   // null = 跟随 open，非 null = 用户手动覆盖
@@ -48,7 +51,7 @@ export function ConfigSection({
 
   useEffect(() => {
     setManual(null);
-  }, [open]);
+  }, [open, resetKey]);
 
   const shown = manual ?? open;
 

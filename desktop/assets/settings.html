@@ -551,6 +551,20 @@
               </div>
             </div>
             <div class="field">
+              <label class="lbl"
+                >片头 / 标题时长<span class="hint">关掉版式步骤时控制字幕大标题，开了版式卡则兼作片头卡时长；0 = 不显示</span></label
+              >
+              <div class="with-unit">
+                <input type="text" data-key="TITLE_DURATION" placeholder="1.6" data-num="0,30" data-unit="秒" />
+              </div>
+            </div>
+            <div class="field">
+              <label class="lbl">字幕渲染<span class="hint">ass = 合并期直接烧（快）；remotion = 叠透明层（慢很多，需 remotion/ 依赖）</span></label>
+              <div class="with-unit">
+                <input type="text" data-key="SUBTITLE_RENDER" placeholder="ass" data-text="1" />
+              </div>
+            </div>
+            <div class="field">
               <label class="lbl">段落转场<span class="hint">0 = 关闭</span></label>
               <div class="with-unit">
                 <input type="text" data-key="TRANSITION_DURATION" placeholder="0.5" data-num="0,10" data-unit="秒" />
@@ -577,22 +591,16 @@
                 <input type="text" data-key="CARD_ACCENT" placeholder="#ff5a3c" data-text="1" />
               </div>
             </div>
-            <div class="field">
-              <label class="lbl">片头时长<span class="hint">字幕大标题与 Remotion 片头共用；0 = 不显示片头</span></label>
-              <div class="with-unit">
-                <input type="text" data-key="TITLE_DURATION" placeholder="1.6" data-num="0,30" data-unit="秒" />
-              </div>
-            </div>
             <label class="check"
-              ><input type="checkbox" data-key="INTRO_ENABLED" /> 用 Remotion 模板渲染片头（需要 remotion/ 依赖，失败自动回退字幕标题）</label
+              ><input type="checkbox" data-key="INTRO_ENABLED" /> 用 Remotion 模板渲染片头（时长见上方「字幕与节奏 → 片头 / 标题时长」；需要 remotion/ 依赖，失败自动回退字幕标题）</label
             >
             <label class="check"
-              ><input type="checkbox" data-key="CHAPTER_CARD" /> 段落之间插入过场卡（从第 2 段起，每段一张）</label
+              ><input type="checkbox" data-key="CHAPTER_CARD" /> 段落之间插入过场卡（从第 2 段起，最多 6 张；单段视频不出卡）</label
             >
             <div class="field">
-              <label class="lbl">过场卡时长<span class="hint">太短会被转场吃掉</span></label>
+              <label class="lbl">过场卡时长<span class="hint">0 = 不出过场卡；太短会被转场吃掉</span></label>
               <div class="with-unit">
-                <input type="text" data-key="CHAPTER_DURATION" placeholder="2" data-num="0.5,10" data-unit="秒" />
+                <input type="text" data-key="CHAPTER_DURATION" placeholder="2" data-num="0,10" data-unit="秒" />
               </div>
             </div>
             <div class="field">

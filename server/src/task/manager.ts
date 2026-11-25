@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { autoSubtitleFontSize, cardAccentPalette, loadConfig } from "../config.js";
+import { autoSubtitleFontSize, cardAccentPalette, loadConfig, type AppConfig } from "../config.js";
 import { newWorkspace } from "../paths.js";
 import { persistConfirmed, runScriptStages, sentenceCount } from "../pipeline/script.js";
 import { runTtsStage, transcriptFingerprint } from "../pipeline/tts.js";
@@ -11,6 +11,7 @@ import {
   cleanCardText,
   ensureCardStill,
   nextAccent,
+  buildCards,
   normalizeCard,
   rewriteCardTitle,
   runCardsStage,
@@ -22,6 +23,7 @@ import { lastRenderErrorMessage } from "../services/remotion.js";
 import { loadLatestTask, saveTaskState } from "./store.js";
 import type {
   AudioManifest,
+  CardKind,
   CardPrefs,
   CardSpec,
   GenerateOptions,
@@ -50,6 +52,14 @@ export const STAGE_DEFS: { id: string; label: string }[] = [
   { id: "cards", label: "生成版式" },
   { id: "compose", label: "合成视频" },
 ];
+
+/** 日志与提示里用的中文名，避免各处各写一份 */
+const CARD_KIND_LABEL: Record<CardKind, string> = {
+  intro: "片头",
+  chapter: "章节卡",
+  outro: "片尾",
+  quote: "观点卡",
+};
 
 const MAX_LOGS = 300;
 
@@ -84,8 +94,12 @@ export interface CardPatch {
 export interface CardsBatchPatch {
   /** 统一主色 */
   accent?: string;
-  /** 只改章节卡的时长 */
+  /** 片头时长；0 表示去掉片头卡 */
+  introDurationSec?: number;
+  /** 章节卡时长；0 表示去掉全部章节卡 */
   chapterDurationSec?: number;
+  /** 片尾时长；0 表示去掉片尾卡 */
+  outroDurationSec?: number;
 }
 
 class TaskManager {
@@ -597,32 +611,54 @@ class TaskManager {
       notes.push(`配色 ${accent}`);
     }
 
-    let chapterSec: number | null = null;
-    if (patch.chapterDurationSec !== undefined) {
-      const value = Number(patch.chapterDurationSec);
-      if (!Number.isFinite(value) || value < 0.5 || value > 15) {
-        throw new TaskError("时长要在 0.5–15 秒之间", 400);
+    /** 0 = 移除这类卡；>0 = 把这类卡的时长统一改掉（没有就补建） */
+    const secs: Partial<Record<CardKind, number>> = {};
+    const readSec = (raw: number | undefined, kind: CardKind, label: string) => {
+      if (raw === undefined) return;
+      const value = Number(raw);
+      if (!Number.isFinite(value) || value < 0 || value > 15) {
+        throw new TaskError(`${label}时长要在 0–15 秒之间`, 400);
       }
-      chapterSec = Math.round(value * 10) / 10;
-      notes.push(`章节 ${chapterSec}s`);
-    }
+      secs[kind] = Math.round(value * 10) / 10;
+      notes.push(value > 0 ? `${label} ${secs[kind]}s` : `去掉${label}`);
+    };
+    readSec(patch.introDurationSec, "intro", "片头");
+    readSec(patch.chapterDurationSec, "chapter", "章节卡");
+    readSec(patch.outroDurationSec, "outro", "片尾");
 
     if (notes.length === 0) throw new TaskError("没有要应用的改动", 400);
 
-    manifest.items = manifest.items.map((spec) => {
-      const next: CardSpec = { ...spec };
-      if (accent) next.accent = accent;
-      if (chapterSec !== null && spec.kind === "chapter") next.durationSec = chapterSec;
-      delete next.videoPath;
-      delete next.stillPath;
-      return normalizeCard(next, cfg, state.options.width, state.options.height, state.options.fps);
-    });
+    const { width, height, fps } = state.options;
+    manifest.items = manifest.items
+      .filter((spec) => secs[spec.kind] !== 0)
+      .map((spec) => {
+        const next: CardSpec = { ...spec };
+        if (accent) next.accent = accent;
+        const sec = secs[spec.kind];
+        if (sec !== undefined && sec > 0) next.durationSec = sec;
+        delete next.videoPath;
+        delete next.stillPath;
+        return normalizeCard(next, cfg, width, height, fps);
+      });
 
-    // 手动选过的值记下来，后面「换一批」也按这个来
-    const prefs: CardPrefs = { ...(state.cardPrefs ?? {}) };
-    if (accent) prefs.accent = accent;
-    if (chapterSec !== null) prefs.chapterDurationSec = chapterSec;
-    state.cardPrefs = prefs.accent || prefs.chapterDurationSec ? prefs : null;
+    // 填了秒数但这类卡一张都没有：按内置模板补齐，否则输入框的值看着生效、实际无事发生
+    const wanted = new Set((["intro", "chapter", "outro"] as const).filter((kind) => (secs[kind] ?? 0) > 0));
+    const lacking = [...wanted].filter((kind) => !manifest.items.some((spec) => spec.kind === kind));
+    if (lacking.length > 0) {
+      const additions = this.buildCardsFor(cfg, state, new Set(lacking), secs, accent);
+      if (additions.length > 0) {
+        manifest.items = [...manifest.items, ...additions];
+        notes.push(`补建 ${lacking.map((kind) => CARD_KIND_LABEL[kind]).join(" / ")}`);
+      }
+    }
+
+    // 手动改过的值记下来，后面「换一批」也按这个来
+    this.mergeCardPrefs(state, {
+      accent: accent ?? undefined,
+      introDurationSec: secs.intro,
+      chapterDurationSec: secs.chapter,
+      outroDurationSec: secs.outro,
+    });
 
     state.result = null;
     fs.rmSync(path.join(state.workspace, "_output.mp4"), { force: true });
@@ -1063,24 +1099,55 @@ class TaskManager {
     return state.status === "awaiting_cards" || state.status === "cards_ready" || state.status === "completed";
   }
 
-  /** 合并用户点选的配色与章节时长；没选的继续跟随 AI 与配置 */
+  /** 补建缺失的卡片：只补 wanted 里的类型，规则在 cards.ts 的 buildCards 里 */
+  private buildCardsFor(
+    cfg: AppConfig,
+    state: TaskState,
+    wanted: Set<CardKind>,
+    secs: Partial<Record<CardKind, number>>,
+    accent: string | null,
+  ): CardSpec[] {
+    const transcript = state.transcript;
+    if (!transcript) return [];
+
+    const { width, height, fps } = state.options;
+    const palette = cardAccentPalette(cfg);
+    const color = accent ?? state.cardPrefs?.accent ?? palette[0] ?? "#ff5a3c";
+    return buildCards(cfg, transcript, wanted, secs, color, width, height, fps);
+  }
+
+  /**
+   * 合并版式页改的配色与时长，没传的沿用旧值。
+   * 时长 0 表示这次不出这类卡，判空只能用 undefined，不能用真假值。
+   */
   private mergeCardPrefs(state: TaskState, patch: CardPrefs = {}): void {
     const current = state.cardPrefs ?? {};
     const wanted = typeof patch.accent === "string" ? patch.accent.trim().toLowerCase() : "";
     const accent = wanted ? cardAccentPalette(loadConfig()).find((c) => c.toLowerCase() === wanted) : undefined;
     if (wanted && !accent) throw new TaskError("配色不在允许的色板里", 400);
 
-    const rawSec = patch.chapterDurationSec === undefined ? undefined : Number(patch.chapterDurationSec);
-    if (rawSec !== undefined && (!Number.isFinite(rawSec) || rawSec < 0.5 || rawSec > 15)) {
-      throw new TaskError("时长要在 0.5–15 秒之间", 400);
-    }
+    const pickSec = (raw: number | undefined, fallback: number | undefined, label: string) => {
+      if (raw === undefined) return fallback;
+      const value = Number(raw);
+      if (!Number.isFinite(value) || value < 0 || value > 15) {
+        throw new TaskError(`${label}时长要在 0–15 秒之间`, 400);
+      }
+      return Math.round(value * 10) / 10;
+    };
 
     const next: CardPrefs = {};
     const finalAccent = accent ?? current.accent;
-    const finalSec = rawSec === undefined ? current.chapterDurationSec : Math.round(rawSec * 10) / 10;
     if (finalAccent) next.accent = finalAccent;
-    if (finalSec) next.chapterDurationSec = finalSec;
-    state.cardPrefs = next.accent || next.chapterDurationSec ? next : null;
+
+    const intro = pickSec(patch.introDurationSec, current.introDurationSec, "片头");
+    const chapter = pickSec(patch.chapterDurationSec, current.chapterDurationSec, "章节卡");
+    const outro = pickSec(patch.outroDurationSec, current.outroDurationSec, "片尾");
+    if (intro !== undefined) next.introDurationSec = intro;
+    if (chapter !== undefined) next.chapterDurationSec = chapter;
+    if (outro !== undefined) next.outroDurationSec = outro;
+
+    const filled = Object.values(next).some((value) => value !== undefined);
+    state.cardPrefs = filled ? next : null;
   }
 
   private reopenCards(state: TaskState): void {

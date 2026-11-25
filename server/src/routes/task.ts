@@ -3,9 +3,17 @@ import path from "node:path";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { autoSubtitleFontSize, loadConfig, normalizeSpeaker, num, numberOrZero, speakerNames } from "../config.js";
 import { MATERIAL_SOURCES, PROMPT_SOURCES, RESOLUTIONS, ttsEngines } from "../meta.js";
-import { TaskError, taskManager, type MaterialReplacement } from "../task/manager.js";
+import { TaskError, taskManager, type CardsBatchPatch, type MaterialReplacement } from "../task/manager.js";
 import { mimeOf, sendFileWithRange } from "./send.js";
-import type { GenerateOptions, MaterialSource, PromptSource, RawTranscript, RenderPatch, TtsEngine } from "../types.js";
+import type {
+  CardPrefs,
+  GenerateOptions,
+  MaterialSource,
+  PromptSource,
+  RawTranscript,
+  RenderPatch,
+  TtsEngine,
+} from "../types.js";
 
 interface GenerateBody {
   input?: string;
@@ -275,31 +283,23 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
     return sendFileWithRange(reply, item.videoPath, req.headers.range, { contentType: "video/mp4" });
   });
 
-  /** 进入版式步骤后由用户手动触发首次生成；可带上先选好的配色与章节时长 */
-  app.post<{ Body: { accent?: string; chapterDurationSec?: number } }>(
-    "/api/task/cards/generate",
-    async (req, reply) => {
-      try {
-        const { accent, chapterDurationSec } = req.body ?? {};
-        return { state: taskManager.generateCards({ accent, chapterDurationSec }) };
-      } catch (error) {
-        return fail(reply, error);
-      }
-    },
-  );
+  /** 进入版式步骤后由用户手动触发首次生成；可带上先选好的配色与各类时长 */
+  app.post<{ Body: CardPrefs }>("/api/task/cards/generate", async (req, reply) => {
+    try {
+      return { state: taskManager.generateCards(req.body ?? {}) };
+    } catch (error) {
+      return fail(reply, error);
+    }
+  });
 
   /** 整份版式重做 */
-  app.post<{ Body: { accent?: string; chapterDurationSec?: number } }>(
-    "/api/task/cards/regenerate",
-    async (req, reply) => {
-      try {
-        const { accent, chapterDurationSec } = req.body ?? {};
-        return { state: taskManager.regenerateCards({ accent, chapterDurationSec }) };
-      } catch (error) {
-        return fail(reply, error);
-      }
-    },
-  );
+  app.post<{ Body: CardPrefs }>("/api/task/cards/regenerate", async (req, reply) => {
+    try {
+      return { state: taskManager.regenerateCards(req.body ?? {}) };
+    } catch (error) {
+      return fail(reply, error);
+    }
+  });
 
   /** 换一张卡：重写文案或换配色 */
   app.post<{ Body: { id?: string; mode?: string } }>("/api/task/cards/rewrite", async (req, reply) => {
@@ -335,11 +335,10 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  /** 批量应用：统一配色 / 章节时长 */
-  app.post<{ Body: { accent?: string; chapterDurationSec?: number } }>("/api/task/cards/batch", async (req, reply) => {
+  /** 批量应用：统一配色 / 各类时长（0 = 去掉这类卡） */
+  app.post<{ Body: CardsBatchPatch }>("/api/task/cards/batch", async (req, reply) => {
     try {
-      const { accent, chapterDurationSec } = req.body ?? {};
-      return { state: taskManager.applyCardsPatch({ accent, chapterDurationSec }) };
+      return { state: taskManager.applyCardsPatch(req.body ?? {}) };
     } catch (error) {
       return fail(reply, error);
     }
