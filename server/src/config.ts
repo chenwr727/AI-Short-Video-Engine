@@ -77,7 +77,7 @@ export interface AppConfig {
   SPEAKER_GUEST: string;
 }
 
-const DEFAULTS: AppConfig = {
+export const DEFAULTS: AppConfig = {
   LLM_API_KEY: "",
   LLM_API_URL: "https://api.deepseek.com",
   LLM_MODEL: "deepseek-flash",
@@ -121,7 +121,7 @@ const DEFAULTS: AppConfig = {
   OUTRO_HANDLE: "",
   CHAPTER_CARD: "0",
   CHAPTER_DURATION: "2",
-  CARDS_ENABLED: "0",
+  CARDS_ENABLED: "1",
   CARD_ACCENT: "#ff5a3c",
   SPEAKER_MAIN: "小简",
   SPEAKER_GUEST: "老陈",

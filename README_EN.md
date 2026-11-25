@@ -33,7 +33,7 @@ One 36kr article, one script style swap, a completely different video. Samples a
 
 ## Why This One
 
-The hard part of "one-click AI video" was never generation — it is discovering, after the render, that the tone is off or the footage does not fit, and having to run the whole thing again. So this pipeline puts human checkpoints at **the expensive moments**: **script** (edit the title and any line, confirm, then dub), **footage** (preview each clip, hit **Replace** to swap in another candidate), and **cards** (optional with `CARDS_ENABLED=1`: the AI picks templates and writes copy, tune each card before rendering).
+The hard part of "one-click AI video" was never generation — it is discovering, after the render, that the tone is off or the footage does not fit, and having to run the whole thing again. So this pipeline puts human checkpoints at **the expensive moments**: **script** (edit the title and any line, confirm, then dub), **footage** (preview each clip, hit **Replace** to swap in another candidate), and **cards** (on by default: the AI picks templates and writes copy, tune each card before rendering; set `CARDS_ENABLED=0` to skip this step).
 
 Everything else stays out of your way:
 
@@ -76,7 +76,7 @@ flowchart LR
     I --> J([Final mp4])
 ```
 
-The UI mirrors this in six steps (card review only appears with `CARDS_ENABLED=1`); the step bar at the top lets you revisit completed steps at any time:
+The UI mirrors this in six steps (card review is hidden when `CARDS_ENABLED=0`); the step bar at the top lets you revisit completed steps at any time:
 
 1. **Script input** — paste a URL or article text, pick a style, click **Start**
 2. **Script generation** — the AI fetches and drafts, then pauses; title and every line are editable

@@ -37,7 +37,7 @@
 | 片头 | `INTRO_ENABLED` | 1 = 用 Remotion 模板渲染片头（需先安装 `remotion/` 依赖），默认 0；渲染失败自动回退到字幕标题 |
 | 片尾 | `OUTRO_DURATION` / `OUTRO_TITLE` / `OUTRO_HANDLE` | 片尾卡片秒数（0 = 不加）、标题文案、账号名（留空不显示） |
 | 过场 | `CHAPTER_CARD` / `CHAPTER_DURATION` | 1 = 段落之间插入 Remotion 过场卡，默认关；单张时长默认 2 秒 |
-| 版式 | `CARDS_ENABLED` | 1 = 素材确认后多一步「版式确认」，AI 为片头 / 章节 / 片尾选模板写文案，默认关；需要 `remotion/` 依赖。片头 / 章节卡 / 片尾三个开关都没开时，默认出片头 + 章节卡 |
+| 版式 | `CARDS_ENABLED` | 1 = 素材确认后多一步「版式确认」，AI 为片头 / 章节 / 片尾选模板写文案，默认开；需要 `remotion/` 依赖。片头 / 章节卡 / 片尾三个开关都没开时，默认出片头 + 章节卡 |
 | 版式 | `CARD_ACCENT` | 卡片主色，默认 `#ff5a3c`；AI 只能在这个色板（主色 + 5 个预设）里挑 |
 
 ## 成片页可按任务覆盖

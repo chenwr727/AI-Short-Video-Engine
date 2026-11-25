@@ -37,7 +37,7 @@ Field reference (environment variables take precedence over the file, which is h
 | Intro | `INTRO_ENABLED` | 1 = render the intro with the Remotion template (needs `remotion/` dependencies), default 0; falls back to the subtitle title on failure |
 | Outro | `OUTRO_DURATION` / `OUTRO_TITLE` / `OUTRO_HANDLE` | Outro card length in seconds (0 = no outro), title copy, account name (hidden when empty) |
 | Chapters | `CHAPTER_CARD` / `CHAPTER_DURATION` | 1 = insert a Remotion chapter card between segments, default off; card length defaults to 2s |
-| Cards | `CARDS_ENABLED` | 1 = add a **Card review** step after footage confirmation, where the AI picks templates and writes copy for intro / chapter / outro cards, default off; needs `remotion/` dependencies. If none of the intro / chapter / outro switches is on, it defaults to intro + chapter cards |
+| Cards | `CARDS_ENABLED` | 1 = add a **Card review** step after footage confirmation, where the AI picks templates and writes copy for intro / chapter / outro cards, default on; needs `remotion/` dependencies. If none of the intro / chapter / outro switches is on, it defaults to intro + chapter cards |
 | Cards | `CARD_ACCENT` | Primary card color, default `#ff5a3c`; the AI may only pick from this palette (primary + 5 presets) |
 
 ## Per-task overrides

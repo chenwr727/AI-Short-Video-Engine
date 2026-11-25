@@ -390,8 +390,7 @@ export async function runCardsStage(
   ctx.markStage("cards", "running", "AI 设计版式");
   if (plan.auto) {
     ctx.log(
-      "片头 / 章节卡 / 片尾三个开关都没开，按「片头时长」与「过场卡时长」出片头与章节卡；不要卡片就在设置里关掉版式步骤",
-      "warn",
+      "未单独开启片头 / 章节卡 / 片尾，按「片头时长」与「过场卡时长」出片头与章节卡；不想要卡片请在版式页把时长改成 0",
     );
   }
   ctx.log("正在让 AI 为片头 / 章节 / 片尾写文案并选模板…");

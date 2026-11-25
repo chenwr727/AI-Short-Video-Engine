@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { AppConfig } from "../config.js";
+import { DEFAULTS, type AppConfig } from "../config.js";
 import type { Transcript } from "../types.js";
-import { buildCards, cardDefaults, cardPlan, MAX_CHAPTER_CARDS } from "./cards.js";
+import { buildCards, cardDefaults, cardPlan, cardsEnabled, MAX_CHAPTER_CARDS } from "./cards.js";
 
 const cfg = (patch: Record<string, string>): AppConfig => patch as unknown as AppConfig;
 
@@ -195,4 +195,14 @@ test("段落太少时只砍章节卡，片头片尾照旧", () => {
   assert.equal(plan.chapterSec, 0);
   assert.equal(plan.introSec, 1.6);
   assert.equal(plan.outroSec, 3);
+});
+
+/**
+ * 默认配置（CARDS_ENABLED=1，三个卡片开关全关）就应产出片头 + 章节卡，
+ * 只在设置页改时长即可调，不需要用户额外开开关。
+ */
+test("默认配置下开箱就有片头与章节卡", () => {
+  const plan = cardPlan(DEFAULTS, 6);
+  assert.deepEqual(plan, { introSec: 1.6, chapterSec: 2, outroSec: 0, auto: true });
+  assert.equal(cardsEnabled(DEFAULTS), true);
 });
