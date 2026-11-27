@@ -32,6 +32,16 @@ contextBridge.exposeInMainWorld("aisv", {
   setWindowTheme: (theme: "light" | "dark") => {
     ipcRenderer.send("app:window-theme", theme);
   },
+  /** 别的窗口改了外观时通知本窗口 */
+  onThemeChanged: (handler: (theme: "light" | "dark" | "system") => void) => {
+    const listener = (_event: unknown, theme: "light" | "dark" | "system") => handler(theme);
+    ipcRenderer.on("app:theme-changed", listener);
+    return () => ipcRenderer.off("app:theme-changed", listener);
+  },
+  announceTheme: (theme: "light" | "dark" | "system") => {
+    ipcRenderer.send("app:theme-changed", theme);
+  },
+  getTheme: () => ipcRenderer.invoke("app:theme-get") as Promise<"light" | "dark" | "system">,
   /** 关掉当前窗口 */
   closeWindow: () => ipcRenderer.invoke("app:close-self") as Promise<void>,
   /**

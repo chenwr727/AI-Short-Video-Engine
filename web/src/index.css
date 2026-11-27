@@ -459,6 +459,114 @@ body.electron.mac .tb-inner {
   }
 }
 
+/* ---------- 模态确认框 ---------- */
+
+/* 替代原生 confirm()，浮层质感与菜单一致 */
+.dialog-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgb(0 0 0 / 32%);
+  animation: dialog-mask-in var(--aisv-t-fast) var(--aisv-ease);
+}
+
+@keyframes dialog-mask-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.dialog {
+  width: 100%;
+  max-width: 380px;
+  padding: 20px;
+  border-radius: var(--aisv-radius-lg);
+  background: var(--aisv-bg-layer-1);
+  box-shadow: var(--aisv-elevation-prominent);
+  animation: dialog-in var(--aisv-t-fast) var(--aisv-ease);
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+}
+
+.dialog-title {
+  margin: 0 0 8px;
+  font-size: var(--aisv-font-size);
+  font-weight: 600;
+  color: var(--aisv-label-primary);
+}
+
+.dialog-body {
+  margin: 0 0 18px;
+  font-size: var(--aisv-font-size-xs);
+  line-height: 1.6;
+  color: var(--aisv-label-secondary);
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dialog-btn {
+  height: 32px;
+  padding: 0 14px;
+  border: none;
+  border-radius: var(--aisv-radius-sm);
+  background: var(--aisv-bg-layer-3);
+  font-family: inherit;
+  font-size: var(--aisv-font-size-xs);
+  font-weight: 500;
+  color: var(--aisv-label-primary);
+  cursor: pointer;
+  transition:
+    background var(--aisv-t-base) var(--aisv-ease),
+    opacity var(--aisv-t-base) var(--aisv-ease);
+}
+
+@media (hover: hover) {
+  .dialog-btn:hover {
+    background: var(--aisv-bg-layer-2);
+  }
+}
+
+.dialog-btn-primary {
+  background: var(--aisv-button-primary-fill);
+  color: var(--aisv-button-primary-label);
+}
+
+@media (hover: hover) {
+  .dialog-btn-primary:hover {
+    background: var(--aisv-button-primary-hover);
+  }
+}
+
+/* 会丢数据的操作：红色实心，和菜单里的「退出」同一套语义 */
+.dialog-btn-danger {
+  background: var(--aisv-bad-solid);
+  color: var(--aisv-label-on-fill);
+}
+
+@media (hover: hover) {
+  .dialog-btn-danger:hover {
+    opacity: 0.88;
+  }
+}
+
+.dialog-btn:focus-visible {
+  outline: 2px solid var(--aisv-accent);
+  outline-offset: 2px;
+}
+
 .menu-item {
   display: flex;
   align-items: center;
@@ -577,19 +685,6 @@ body.electron.mac .tb-inner {
   background: var(--aisv-bg-layer-1);
   color: var(--aisv-label-primary);
   box-shadow: var(--aisv-elevation-soft);
-}
-
-/* 只给读屏用 */
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  padding: 0;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-  border: 0;
 }
 
 /* ---------- 胶囊 = 状态标签 ---------- */

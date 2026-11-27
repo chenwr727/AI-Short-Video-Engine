@@ -18,8 +18,9 @@ export const script = {
   needLine: "Keep at least one line",
   nextHint: "Next: pick a script style and cast, then writing starts after you confirm",
   nextTts: "Next: voice",
-  regenerateConfirm:
-    "Regenerating discards the current script (including unsaved edits), plus generated voiceover, footage and the final cut. Continue?",
+  regenerateConfirmBody:
+    "The current script (including unsaved edits), plus the generated voiceover, footage and final cut will all be discarded.",
+  regenerateConfirmTitle: "Regenerate script",
   regenerateHint:
     "Discard the current script (including unsaved edits) and everything after it, then redo the whole flow with the content, style and cast above",
   regenerateHint2:

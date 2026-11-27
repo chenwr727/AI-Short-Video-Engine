@@ -14,7 +14,8 @@ export const script = {
   needLine: "剧本至少要留一条台词",
   nextHint: "下一步选脚本风格与角色名，确认后才开始写稿",
   nextTts: "下一步：配音生成",
-  regenerateConfirm: "重新生成会丢弃当前剧本（含未保存的修改），以及已生成的配音、素材与成片。继续？",
+  regenerateConfirmBody: "当前剧本（含未保存的修改），以及已生成的配音、素材与成片都会作废。",
+  regenerateConfirmTitle: "重新生成剧本",
   regenerateHint: "丢弃当前剧本（含未保存的修改）以及后续配音、素材与成片，按上面的内容、风格与角色名重写",
   regenerateHint2:
     "改完上面的风格或角色名，点「重新生成」会按新设置重写整篇；当前剧本与后面的配音、素材、成片都会作废。",

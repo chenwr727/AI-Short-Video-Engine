@@ -1,14 +1,13 @@
 /** common 命名空间的中文字典，也是这一组键的真源。 */
 export const common = {
   back: "返回上一步",
+  cancel: "取消",
   chinese: "中文",
   choose: "选择…",
   choosing: "选择中…",
   close: "关闭",
   collapse: "收起",
   continue: "继续",
-  currentDark: "当前深色",
-  currentLight: "当前浅色",
   customized: "已自定义",
   desktopOnly: "该功能只在桌面应用里可用。",
   english: "English",
@@ -18,6 +17,7 @@ export const common = {
   loading: "读取中…",
   notConfigured: "未配置",
   notGenerated: "未生成",
+  notice: "提示",
   operationFailed: "操作失败",
   processing: "处理中…",
   ready: "就绪",

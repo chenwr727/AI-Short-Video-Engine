@@ -51,7 +51,8 @@ export const material = {
   pendingReplace: "Replace",
   previewRetry: "Preview isn't ready — click to retry",
   ready: "Voiceover is done. Hit Start matching and AI finds usable clips for each section.",
-  regenerateConfirm: "Re-matching discards matched footage and the generated final cut. Continue?",
+  regenerateConfirmBody: "Matched footage and the generated final cut will be discarded.",
+  regenerateConfirmTitle: "Re-match footage",
   regenerateHint:
     "After changing the setup above, Regenerate redoes the footage with the new settings; matched footage and the final cut are invalidated.",
   rejudgeCard: "Have AI re-decide which card fits this section",

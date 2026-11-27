@@ -30,6 +30,7 @@ import {
   type Phase,
 } from "./phases";
 import { AppMenu } from "./components/AppMenu";
+import { useConfirm } from "./components/ConfirmDialog";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { EnvStatus } from "./components/EnvStatus";
 import { StatusBar } from "./components/StatusBar";
@@ -136,6 +137,8 @@ export default function App() {
   const [edit, setEdit] = useState<RawTranscript | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // 确认框：替代原生 confirm()，样式跟界面一致
+  const { confirm, alert, dialog } = useConfirm();
   const [form, setForm] = useState<FormState>(
     () =>
       readDraft() ?? {
@@ -434,14 +437,16 @@ export default function App() {
     }
   }
 
-  function confirmDiscard(message: string): boolean {
-    return window.confirm(message);
-  }
-
   /** 重跑剧本，参数取表单当前值 */
   async function onRegenerate() {
-    if (task?.transcript && !confirmDiscard(t("script.regenerateConfirm"))) {
-      return;
+    if (task?.transcript) {
+      const ok = await confirm({
+        title: "script.regenerateConfirmTitle",
+        body: "script.regenerateConfirmBody",
+        confirmLabel: "common.regenerate",
+        danger: true,
+      });
+      if (!ok) return;
     }
     setBusy(true);
     setError("");
@@ -463,7 +468,15 @@ export default function App() {
   }
 
   async function onMatchMaterial(force = false) {
-    if (force && task?.material && !confirmDiscard(t("material.regenerateConfirm"))) return;
+    if (force && task?.material) {
+      const ok = await confirm({
+        title: "material.regenerateConfirmTitle",
+        body: "material.regenerateConfirmBody",
+        confirmLabel: "common.regenerate",
+        danger: true,
+      });
+      if (!ok) return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -486,7 +499,15 @@ export default function App() {
 
   /** 台词不动，按当前音色设置重做配音 */
   async function onRegenerateTts() {
-    if (task?.audio && !confirmDiscard(t("tts.regenerateConfirm"))) return;
+    if (task?.audio) {
+      const ok = await confirm({
+        title: "tts.regenerateConfirmTitle",
+        body: "tts.regenerateConfirmBody",
+        confirmLabel: "common.regenerate",
+        danger: true,
+      });
+      if (!ok) return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -532,9 +553,11 @@ export default function App() {
     if (!reveal) return;
     try {
       const res = await reveal(file);
-      if (!res.ok) window.alert(res.error ?? t("result.revealFailed"));
+      if (!res.ok) {
+        await alert({ title: "common.operationFailed", body: { raw: res.error ?? t("result.revealFailed") } });
+      }
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : String(e));
+      await alert({ title: "common.operationFailed", body: { raw: e instanceof Error ? e.message : String(e) } });
     }
   }
 
@@ -888,6 +911,7 @@ export default function App() {
       </div>
 
       <StatusBar health={health} task={task} />
+      {dialog}
     </div>
   );
 }

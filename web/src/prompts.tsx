@@ -3,17 +3,18 @@ import { createRoot } from "react-dom/client";
 import { bridge } from "./bridge";
 import { PromptEditor } from "./components/PromptEditor";
 import { initLanguage, syncLanguageFromHost, t, bindDocumentTitle, watchSystemLanguage } from "./i18n";
-import { initTheme, watchSystemTheme } from "./theme";
+import { initTheme, syncThemeFromHost, watchSystemTheme } from "./theme";
 import "./index.css";
 
 // 先定主题和语言再挂载，避免首帧闪一下再跳变
 initTheme();
+// 独立窗口不会跟着主窗口重渲染，主题与语言变化都要自己接住
 watchSystemTheme(() => undefined);
 initLanguage();
-// 独立窗口不会跟着主窗口重渲染，语言变化要自己接住
 watchSystemLanguage();
 bindDocumentTitle("prompts.title");
 void syncLanguageFromHost();
+void syncThemeFromHost();
 
 const container = document.getElementById("root");
 if (!container) throw new Error(t("error.root"));

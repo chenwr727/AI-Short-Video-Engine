@@ -1,7 +1,17 @@
 import fs from "node:fs";
 import path from "node:path";
 import { app, BrowserWindow, Menu, dialog, ipcMain, nativeTheme, shell } from "electron";
-import { configFile, DEFAULTS, ensureConfig, loadConfig, loadUi, saveConfig, saveUi, type AppConfig } from "./config";
+import {
+  configFile,
+  DEFAULTS,
+  ensureConfig,
+  loadConfig,
+  loadUi,
+  saveConfig,
+  saveUi,
+  type AppConfig,
+  type UiPreferences,
+} from "./config";
 import { isPortable, setupPortableMode } from "./paths";
 import { findFreePort, startBackend, type Backend } from "./server";
 
@@ -21,6 +31,15 @@ let mainWindow: BrowserWindow | null = null;
 let settingsWindow: BrowserWindow | null = null;
 let promptsWindow: BrowserWindow | null = null;
 let aboutWindow: BrowserWindow | null = null;
+
+/** 广播界面偏好，跳过发起窗口 —— 它自己已经切过了，回声会多一次重绘 */
+function broadcast<T>(origin: Electron.WebContents, channel: string, value: T): void {
+  for (const target of [mainWindow, settingsWindow, promptsWindow, aboutWindow]) {
+    if (!target || target.isDestroyed()) continue;
+    if (target.webContents === origin) continue;
+    target.webContents.send(channel, value);
+  }
+}
 
 interface HealthPayload {
   ok: boolean;
@@ -87,15 +106,22 @@ const WINDOW_THEME = {
 
 type WindowTheme = keyof typeof WINDOW_THEME;
 
+/** 偏好解析成实际深浅，跟随系统时读系统 */
+function resolveWindowTheme(preference: UiPreferences["theme"]): WindowTheme {
+  if (preference === "light" || preference === "dark") return preference;
+  return nativeTheme.shouldUseDarkColors ? "dark" : "light";
+}
+
 function createMainWindow(url: string): BrowserWindow {
+  // 铺底跟随用户选的外观；按系统铺底会在「选浅色 + 系统深色」时闪一下深色
+  const palette = WINDOW_THEME[resolveWindowTheme(loadUi().theme)];
   const win = new BrowserWindow({
     width: 1320,
     height: 900,
     minWidth: 1024,
     minHeight: 700,
     show: false,
-    // 深色用户启动时先按深色铺底，避免白屏一闪
-    backgroundColor: nativeTheme.shouldUseDarkColors ? WINDOW_THEME.dark.bg : WINDOW_THEME.light.bg,
+    backgroundColor: palette.bg,
     title: "AI 短视频生成器",
     icon: appIcon(),
     // 菜单由渲染层绘制
@@ -104,8 +130,8 @@ function createMainWindow(url: string): BrowserWindow {
       ? { trafficLightPosition: { x: 16, y: 22 } }
       : {
           titleBarOverlay: {
-            color: nativeTheme.shouldUseDarkColors ? WINDOW_THEME.dark.bg : WINDOW_THEME.light.bg,
-            symbolColor: nativeTheme.shouldUseDarkColors ? WINDOW_THEME.dark.symbol : WINDOW_THEME.light.symbol,
+            color: palette.bg,
+            symbolColor: palette.symbol,
             height: HEADER_HEIGHT,
           },
         }),
@@ -133,23 +159,25 @@ function createMainWindow(url: string): BrowserWindow {
   });
 
   /*
-   * 界面语言在窗口之间的转发。
+   * 界面偏好的转发。
    *
-   * 设置页是 file:// 下的独立页面，主窗口在 http://127.0.0.1:port，
-   * 两者的 localStorage 完全隔离，storage 事件也传不过去。
-   * 所以偏好的真源放在 ui.json：写入方落盘，主进程广播给其他窗口。
+   * 设置页在 file:// 下、主窗口在 http://127.0.0.1:port，两者 localStorage
+   * 完全隔离。所以真源放 ui.json：写入方落盘，主进程广播给其他窗口。
    */
   ipcMain.handle("app:language-get", () => loadUi().language);
 
   ipcMain.on("app:language-changed", (event, language: unknown) => {
     if (language !== "zh" && language !== "en" && language !== "system") return;
     saveUi({ language });
-    for (const target of [mainWindow, settingsWindow, promptsWindow, aboutWindow]) {
-      if (!target || target.isDestroyed()) continue;
-      // 发起的窗口自己已经切过了，不用回声
-      if (target.webContents === event.sender) continue;
-      target.webContents.send("app:language-changed", language);
-    }
+    broadcast(event.sender, "app:language-changed", language);
+  });
+
+  ipcMain.handle("app:theme-get", () => loadUi().theme);
+
+  ipcMain.on("app:theme-changed", (event, theme: unknown) => {
+    if (theme !== "light" && theme !== "dark" && theme !== "system") return;
+    saveUi({ theme });
+    broadcast(event.sender, "app:theme-changed", theme);
   });
 
   // 菜单在渲染层，快捷键在此兜住

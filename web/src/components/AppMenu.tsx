@@ -2,6 +2,7 @@ import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { bridge, type MenuAction } from "../bridge";
 import { useT } from "../i18n";
 import type { MessageKey } from "../i18n";
+import { useConfirm } from "./ConfirmDialog";
 
 /** action 交给主进程，local 由页内处理 */
 interface MenuItemDef {
@@ -145,6 +146,8 @@ export function AppMenu({ onNewTask }: AppMenuProps) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const desktop = Boolean(bridge());
   const platform = bridge()?.platform;
+  // 菜单动作的失败提示
+  const { alert, dialog } = useConfirm();
 
   const menu = MENUS.find((m) => m.id === open) ?? null;
 
@@ -216,14 +219,19 @@ export function AppMenu({ onNewTask }: AppMenuProps) {
 
     const api = bridge();
     if (!api) {
-      window.alert(t("common.desktopOnly"));
+      await alert({ title: "common.notice", body: "common.desktopOnly" });
       return;
     }
     try {
       const res = await api.menu(item.action);
-      if (!res.ok) window.alert(res.error ?? t("common.operationFailed"));
+      if (!res.ok) {
+        await alert({ title: "common.operationFailed", body: { raw: res.error ?? t("common.operationFailed") } });
+      }
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : String(error));
+      await alert({
+        title: "common.operationFailed",
+        body: { raw: error instanceof Error ? error.message : String(error) },
+      });
     }
   }
 
@@ -273,6 +281,7 @@ export function AppMenu({ onNewTask }: AppMenuProps) {
           )}
         </div>
       ))}
+      {dialog}
     </div>
   );
 }

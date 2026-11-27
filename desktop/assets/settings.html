@@ -958,21 +958,13 @@
       }
 
       /*
-       * 主题：与主界面共用 localStorage["aisv.theme"]。
-       * 主界面切换后在这里打开就是新主题；反过来这里切，
-       * 独立窗口之间靠 storage 事件同步。
+       * ---------- 外观 ----------
+       *
+       * 偏好存在主进程的 ui.json，不走 localStorage —— 本页在 file:// 下、
+       * 主窗口在 http:// 下，两套 localStorage 互不相通。
+       * 生效值写在 <html data-theme>，CSS 只认这个属性。
        */
-      const THEME_KEY = "aisv.theme";
-
-      function readPreference() {
-        try {
-          const raw = localStorage.getItem(THEME_KEY);
-          if (raw === "light" || raw === "dark" || raw === "system") return raw;
-        } catch {
-          /* 隐私模式下可能读不到 */
-        }
-        return "system";
-      }
+      let themePreference = "system";
 
       function resolveTheme(preference) {
         if (preference === "light" || preference === "dark") return preference;
@@ -980,15 +972,26 @@
       }
 
       function applyTheme() {
-        document.documentElement.dataset.theme = resolveTheme(readPreference());
+        const theme = resolveTheme(themePreference);
+        document.documentElement.dataset.theme = theme;
+        // 系统自绘控件（滚动条、select 弹层）按这个走
+        document.documentElement.style.colorScheme = theme;
       }
 
-      applyTheme();
+      async function loadTheme() {
+        if (window.aisv?.getTheme) {
+          try {
+            const stored = await window.aisv.getTheme();
+            if (stored === "light" || stored === "dark" || stored === "system") themePreference = stored;
+          } catch {
+            /* 取不到就按跟随系统 */
+          }
+        }
+        applyTheme();
+      }
+
       window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
-        if (readPreference() === "system") applyTheme();
-      });
-      window.addEventListener("storage", (event) => {
-        if (event.key === THEME_KEY) applyTheme();
+        if (themePreference === "system") applyTheme();
       });
 
       const form = document.getElementById("form");
@@ -1018,7 +1021,7 @@
           descKey: "sec.general.desc",
           rows: [
             {
-              // 没有 key：只存在于 localStorage，不进配置文件
+              // 没有 key：只存在于 ui.json，不进配置文件
               id: "language",
               titleKey: "general.language.title",
               descKey: "general.language.desc",
@@ -1028,6 +1031,20 @@
                 { value: "en", labelKey: "lang.en" },
                 { value: "system", labelKey: "lang.system" },
               ],
+              pref: "language",
+            },
+            {
+              // 同上。取值 light / dark / system，与 theme.ts 保持一致
+              id: "theme",
+              titleKey: "general.theme.title",
+              descKey: "general.theme.desc",
+              kind: "select",
+              options: [
+                { value: "light", labelKey: "theme.light" },
+                { value: "dark", labelKey: "theme.dark" },
+                { value: "system", labelKey: "theme.system" },
+              ],
+              pref: "theme",
             },
           ],
         },
@@ -1436,7 +1453,7 @@
 
         if (field.kind === "select") {
           const select = document.createElement("select");
-          // 语言项没有 data-key：它不是后端配置，提交时不该被收进 config
+          // 偏好项没有 data-key：它不是后端配置，提交时不该被收进 config
           select.id = `field-${field.id}`;
           for (const option of field.options) {
             const el = document.createElement("option");
@@ -1444,13 +1461,20 @@
             el.textContent = t(option.labelKey);
             select.appendChild(el);
           }
-          select.value = langPreference;
+          const isTheme = field.pref === "theme";
+          select.value = isTheme ? themePreference : langPreference;
           select.addEventListener("change", () => {
-            setLang(select.value);
             /*
              * 交给主进程落盘并广播给主窗口、提示词窗口。
              * 本页自己不能再存 localStorage —— 那份数据别的窗口看不到。
              */
+            if (isTheme) {
+              themePreference = select.value;
+              applyTheme();
+              if (window.aisv?.announceTheme) window.aisv.announceTheme(select.value);
+              return;
+            }
+            setLang(select.value);
             langPreference = select.value;
             if (window.aisv?.announceLanguage) window.aisv.announceLanguage(select.value);
           });
@@ -1464,7 +1488,12 @@
         if (field.wide) input.placeholder = "";
         input.spellcheck = false;
         if (field.kind === "password") input.autocomplete = "off";
-        if (field.max) input.maxLength = field.max;
+        /*
+         * maxLength 只对文本生效。
+         * 数字字段的 max 是数值上限（TTS_SPEED 的 max: 2 指「最多 2 倍」），
+         * 拿来当字符数会让 1.1 这种三位数输入直接打不进去。
+         */
+        if (field.kind !== "number" && field.max) input.maxLength = field.max;
         if (field.placeholder) input.placeholder = field.placeholder;
 
         input.addEventListener("input", () => paintNavState());
@@ -1892,13 +1921,13 @@
       let run = { values: {}, status: "", statusKind: "status" };
 
       /*
-       * 首帧：先对齐主进程的语言、等语言包到位，再把静态文案与表单建出来。
+       * 首帧：先对齐主进程的语言与外观、等语言包到位，再把静态文案与表单建出来。
        *
        * 不等就会先按 HTML 里的中文闪一下再切成英文。locales.json 是本地的，
        * 读它比一次网络往返快得多。
        */
       (async () => {
-        await loadLanguage();
+        await Promise.all([loadLanguage(), loadTheme()]);
         await loadLocales();
         applySharedText();
         buildNav();
@@ -1914,6 +1943,18 @@
           // 比较偏好而不是解析结果：选「跟随系统」时 lang 是 zh/en，永远不等于 next
           if (next === langPreference) return;
           setLang(next);
+        });
+      }
+
+      // 别的窗口改了外观：主窗口没有外观菜单，入口只在设置页，这里兜住极端情况
+      if (window.aisv?.onThemeChanged) {
+        window.aisv.onThemeChanged((next) => {
+          if (next !== "light" && next !== "dark" && next !== "system") return;
+          if (next === themePreference) return;
+          themePreference = next;
+          applyTheme();
+          const select = document.getElementById("field-theme");
+          if (select) select.value = themePreference;
         });
       }
     </script>

@@ -17,7 +17,8 @@ export const tts = {
   paragraphMeta: "{sec}s · {n} lines",
   play: "Play",
   playAll: "Play section",
-  regenerateConfirm: "Regenerating discards the generated voiceover, plus matched footage and the final cut. Continue?",
+  regenerateConfirmBody: "The generated voiceover, matched footage and the final cut will all be discarded.",
+  regenerateConfirmTitle: "Regenerate voiceover",
   regenerateHint:
     "After changing voice or speed, Regenerate redos the voiceover; matched footage and the final cut are invalidated too.",
   running: "Rendering segments → joining → mixing. Switches to the final cut when done.",

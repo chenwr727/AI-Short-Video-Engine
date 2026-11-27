@@ -3,14 +3,13 @@ import type { CommonKey } from "./common.zh";
 /** common 命名空间的英文字典，键由 zh 侧约束。 */
 export const common = {
   back: "Back",
+  cancel: "Cancel",
   chinese: "中文",
   choose: "Choose…",
   choosing: "Choosing…",
   close: "Close",
   collapse: "Collapse",
   continue: "Continue",
-  currentDark: "Dark now",
-  currentLight: "Light now",
   customized: "Customized",
   desktopOnly: "This feature is only available in the desktop app.",
   english: "English",
@@ -20,6 +19,7 @@ export const common = {
   loading: "Loading…",
   notConfigured: "Not set",
   notGenerated: "Not generated",
+  notice: "Notice",
   operationFailed: "Operation failed",
   processing: "Working…",
   ready: "Ready",

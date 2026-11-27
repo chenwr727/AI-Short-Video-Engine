@@ -120,18 +120,28 @@ export function loadConfig(): AppConfig {
 }
 
 /*
- * 界面偏好：主题、语言。
+ * 界面偏好，单独存 ui.json。
  *
- * 单独存一个 ui.json，不放进 config.json —— 后者是后端配置，
- * 键集合被一致性检查严格约束，加界面项会破坏那层对应关系。
- * 更要紧的是：设置页在 file:// 下，主窗口在 http:// 下，
- * 两边的 localStorage 互不相通，只有落到同一个文件才谈得上共享。
+ * 不放进 config.json：后者是后端配置，键集合被一致性检查严格约束。
+ * 更要紧的是设置页在 file:// 下、主窗口在 http:// 下，两边 localStorage
+ * 互不相通，只有落到同一个文件才谈得上共享。
  */
+export type ThemePreference = "light" | "dark" | "system";
+
 export interface UiPreferences {
   language: "zh" | "en" | "system";
+  theme: ThemePreference;
 }
 
-export const UI_DEFAULTS: UiPreferences = { language: "system" };
+export const UI_DEFAULTS: UiPreferences = { language: "system", theme: "system" };
+
+/** 两个偏好的取值集合相同，共用一个守卫 */
+function isPreference<T extends string>(value: unknown, options: readonly T[]): value is T {
+  return typeof value === "string" && (options as readonly string[]).includes(value);
+}
+
+const LANGUAGE_OPTIONS = ["zh", "en", "system"] as const;
+const THEME_OPTIONS = ["light", "dark", "system"] as const;
 
 export function uiFile(): string {
   return path.join(userDataDir(), "ui.json");
@@ -141,9 +151,9 @@ export function loadUi(): UiPreferences {
   try {
     const raw = fs.readFileSync(uiFile(), "utf-8");
     const parsed = JSON.parse(raw) as Record<string, unknown>;
-    const language = parsed.language;
     return {
-      language: language === "zh" || language === "en" || language === "system" ? language : UI_DEFAULTS.language,
+      language: isPreference(parsed.language, LANGUAGE_OPTIONS) ? parsed.language : UI_DEFAULTS.language,
+      theme: isPreference(parsed.theme, THEME_OPTIONS) ? parsed.theme : UI_DEFAULTS.theme,
     };
   } catch {
     return { ...UI_DEFAULTS };

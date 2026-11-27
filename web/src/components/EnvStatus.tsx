@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { bridge } from "../bridge";
 import { useT } from "../i18n";
 import type { Health } from "../types";
+import { useConfirm } from "./ConfirmDialog";
 
 /** 一项是一组能力，组内为「或」关系 */
 interface EnvItem {
@@ -57,6 +58,8 @@ export function EnvStatus({ health }: { health: Health | null }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  // 打不开设置时的提示
+  const { alert, dialog } = useConfirm();
 
   useEffect(() => {
     if (!open) return;
@@ -92,14 +95,19 @@ export function EnvStatus({ health }: { health: Health | null }) {
     setOpen(false);
     const api = bridge();
     if (!api) {
-      window.alert(t("common.settingsDesktopOnly"));
+      await alert({ title: "common.notice", body: "common.settingsDesktopOnly" });
       return;
     }
     try {
       const res = await api.menu("settings");
-      if (!res.ok) window.alert(res.error ?? t("error.settings"));
+      if (!res.ok) {
+        await alert({ title: "common.operationFailed", body: { raw: res.error ?? t("error.settings") } });
+      }
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : String(error));
+      await alert({
+        title: "common.operationFailed",
+        body: { raw: error instanceof Error ? error.message : String(error) },
+      });
     }
   }
 
@@ -133,6 +141,7 @@ export function EnvStatus({ health }: { health: Health | null }) {
           </button>
         </div>
       )}
+      {dialog}
     </div>
   );
 }
