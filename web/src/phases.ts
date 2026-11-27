@@ -28,12 +28,12 @@ export function hasCards(task: TaskState | null): boolean {
 }
 
 /** 步骤条固定 5 步，版式不再是独立一步 */
-export function stepsFor(_withCards: boolean): StepDef[] {
+export function stepsFor(): StepDef[] {
   return ALL_STEPS;
 }
 
-export function indexOf(phase: Phase, withCards: boolean): number {
-  const index = stepsFor(withCards).findIndex((step) => step.id === phase);
+export function indexOf(phase: Phase): number {
+  const index = stepsFor().findIndex((step) => step.id === phase);
   return index < 0 ? 0 : index;
 }
 
@@ -118,36 +118,34 @@ export function derivePhase(task: TaskState | null): Phase | null {
 
 export function stalledPhase(task: TaskState | null): Phase | null {
   if (!task || task.status === "idle") return null;
-  return derivePhase(task) ?? stepsFor(hasCards(task))[reachedIndex(task)]?.id ?? null;
+  return derivePhase(task) ?? stepsFor()[reachedIndex(task)]?.id ?? null;
 }
 
 export function doneThrough(task: TaskState | null): number {
   if (!task || task.status === "idle") return 0;
-  const withCards = hasCards(task);
-  if (task.status === "completed") return indexOf("result", withCards) + 1;
+  if (task.status === "completed") return indexOf("result") + 1;
   if (task.status === "failed" || task.status === "cancelled") return reachedIndex(task);
 
-  if (task.status === "awaiting_script") return indexOf("script", withCards) + 1;
-  if (task.status === "awaiting_cards") return indexOf("material", withCards);
-  if (task.status === "cards_ready") return indexOf("result", withCards);
+  if (task.status === "awaiting_script") return indexOf("script") + 1;
+  if (task.status === "awaiting_cards") return indexOf("material");
+  if (task.status === "cards_ready") return indexOf("result");
   if (task.status === "awaiting_material" || task.status === "material_ready") {
-    return task.status === "material_ready" ? indexOf("result", withCards) : indexOf("material", withCards);
+    return task.status === "material_ready" ? indexOf("result") : indexOf("material");
   }
   if (task.status === "running" && task.audio) {
-    if (!materialDone(task)) return indexOf("material", withCards);
-    if (!cardsDone(task)) return indexOf("material", withCards);
-    return indexOf("result", withCards);
+    if (!materialDone(task)) return indexOf("material");
+    if (!cardsDone(task)) return indexOf("material");
+    return indexOf("result");
   }
 
   const current = derivePhase(task);
-  return current ? indexOf(current, withCards) : reachedIndex(task);
+  return current ? indexOf(current) : reachedIndex(task);
 }
 
 /** 最远到达的步骤，决定步骤条哪些可点回 */
 export function reachedIndex(task: TaskState | null): number {
   if (!task || task.status === "idle") return 0;
-  const withCards = hasCards(task);
-  const at = (phase: Phase) => indexOf(phase, withCards);
+  const at = (phase: Phase) => indexOf(phase);
 
   if (task.status === "completed") return at("result");
   if (task.status === "failed" || task.status === "cancelled") {

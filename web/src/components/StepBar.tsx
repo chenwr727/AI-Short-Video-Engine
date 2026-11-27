@@ -5,15 +5,13 @@ interface Props {
   current: Phase;
   reached: number;
   doneThrough: number;
-  /** 任务是否开了版式阶段，决定要不要显示这一步 */
-  withCards: boolean;
   onSelect: (phase: Phase) => void;
 }
 
 /** 顶部步骤条：已完成打勾，已到达可点回 */
-export function StepBar({ current, reached, doneThrough, withCards, onSelect }: Props) {
-  const steps = stepsFor(withCards);
-  const cur = indexOf(current, withCards);
+export function StepBar({ current, reached, doneThrough, onSelect }: Props) {
+  const steps = stepsFor();
+  const cur = indexOf(current);
 
   return (
     <div className="stepper-wrap">

@@ -20,7 +20,6 @@ import {
   COMPOSE_STAGE_IDS,
   derivePhase,
   doneThrough,
-  hasCards,
   indexOf,
   reachedIndex,
   RENDER_STAGE_IDS,
@@ -301,14 +300,11 @@ export default function App() {
 
   const target = derivePhase(task);
 
-  // 没建任务时看配置开关
-  const cardsMode = task ? hasCards(task) : Boolean(health?.config.cards.enabled);
-
   // 只向前推进；用户回看时暂停跟随
   useEffect(() => {
     if (!following || !target) return;
-    setPhase((prev) => (indexOf(target, cardsMode) > indexOf(prev, cardsMode) ? target : prev));
-  }, [target, following, cardsMode]);
+    setPhase((prev) => (indexOf(target) > indexOf(prev) ? target : prev));
+  }, [target, following]);
 
   // 换步骤滚回顶部
   useEffect(() => {
@@ -317,8 +313,8 @@ export default function App() {
 
   // 记录走过的最远位置
   useEffect(() => {
-    setMaxStep((prev) => Math.max(prev, indexOf(phase, cardsMode)));
-  }, [phase, cardsMode]);
+    setMaxStep((prev) => Math.max(prev, indexOf(phase)));
+  }, [phase]);
 
   const running = task?.status === "running";
   const awaiting = task?.status === "awaiting_script";
@@ -720,14 +716,14 @@ export default function App() {
           </div>
         </header>
 
-        <StepBar current={phase} reached={reached} doneThrough={done} withCards={cardsMode} onSelect={onSelect} />
+        <StepBar current={phase} reached={reached} doneThrough={done} onSelect={onSelect} />
 
         {resumed && (
           <div className="resume-bar">
             <span className="resume-text">
               已恢复上次的任务（{new Date(resumed.createdAt).toLocaleString("zh-CN", { hour12: false })} ·{" "}
               {STATUS_TEXT[resumed.status]}），停在「
-              {stepsFor(cardsMode)[indexOf(phase, cardsMode)]?.label}」
+              {stepsFor()[indexOf(phase)]?.label}」
             </span>
             <button type="button" className="resume-btn" onClick={onRestart}>
               新建一条

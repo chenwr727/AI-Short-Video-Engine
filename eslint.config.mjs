@@ -12,6 +12,8 @@ export default tseslint.config(
       "**/node_modules/**",
       "server/data/**",
       "desktop/assets/**",
+      // 渲染期临时目录：Remotion 的 webpack 产物与 Chrome profile，不是源码
+      ".tmp-*/**",
     ],
   },
   js.configs.recommended,

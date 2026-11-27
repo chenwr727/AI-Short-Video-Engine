@@ -486,7 +486,8 @@ test("人物卡的要点要过校验：至少两条、单条不超 12 字", () =
   assert.ok([...(spec?.beats?.[0]?.text ?? "")].length <= 13, spec?.beats?.[0]?.text ?? "");
 
   // 只有一条要点：不成立，退回静态的一句判断
-  const single = draftInfoToSpec({ ...draft, beats: [draft.beats?.[0]!] }, ACCENT, 5, 2);
+  const [firstBeat] = draft.beats ?? [];
+  const single = draftInfoToSpec({ ...draft, beats: [firstBeat!] }, ACCENT, 5, 2);
   assert.equal(single?.beats, undefined);
 
   // 片段太短会误匹配到别的句子，直接丢

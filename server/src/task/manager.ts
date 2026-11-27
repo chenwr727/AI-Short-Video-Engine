@@ -55,15 +55,6 @@ export const STAGE_DEFS: { id: string; label: string }[] = [
   { id: "compose", label: "合成视频" },
 ];
 
-/** 日志与提示里用的中文名，避免各处各写一份 */
-const CARD_KIND_LABEL: Record<CardKind, string> = {
-  intro: "片头",
-  chapter: "章节卡",
-  outro: "片尾",
-  quote: "观点卡",
-  info: "信息卡",
-};
-
 const MAX_LOGS = 300;
 
 const STAGE_ORDER = STAGE_DEFS.map((def) => def.id);
@@ -111,13 +102,13 @@ function removeDirWithRetry(dir: string): void {
   }
   for (const name of names) {
     const target = path.join(dir, name);
-    let stat: fs.Stats | null = null;
+    let stat: fs.Stats;
     try {
       stat = fs.statSync(target);
     } catch {
       continue;
     }
-    if (stat?.isDirectory()) {
+    if (stat.isDirectory()) {
       removeDirWithRetry(target);
       continue;
     }
