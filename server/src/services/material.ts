@@ -176,17 +176,27 @@ function relevanceOf(tags: string, term: string): Relevance {
   return hitKeys.length * 2 >= keys.length ? 2 : 1;
 }
 
+/** 画幅筛选词：Pixabay 用它筛竖屏，缩短检索词时必须保留 */
+const ORIENTATION_WORD = "vertical";
+
 /**
  * 长检索词降级成两个词备选。中心词多在末尾（`gpu server room` → `server room`），
  * 但修饰词也可能是图库常用标签（`data center corridor` → `data center`），
  * 所以两头都试，末尾的优先。
+ *
+ * **画幅词必须带过去**：`vertical senate hearing` 缩成 `senate hearing` 看着像
+ * 只少了一个词，实际是把竖屏筛选整个丢掉了 —— 实测这样捡回来的全是横屏素材，
+ * 前 3 段好不容易攒的竖屏命中率到这里就白费了。
  */
 export function shortenTerms(term: string): string[] {
-  const words = keyWordsOf(term);
+  const all = keyWordsOf(term);
+  const portrait = all.includes(ORIENTATION_WORD);
+  const words = portrait ? all.filter((w) => w !== ORIENTATION_WORD) : all;
   if (words.length <= 2) return [];
 
-  const head = words.slice(0, 2).join(" ");
-  const tail = words.slice(-2).join(" ");
+  const withOrientation = (phrase: string) => (portrait ? `${ORIENTATION_WORD} ${phrase}` : phrase);
+  const head = withOrientation(words.slice(0, 2).join(" "));
+  const tail = withOrientation(words.slice(-2).join(" "));
   return head === tail ? [head] : [tail, head];
 }
 

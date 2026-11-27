@@ -10,6 +10,8 @@ export interface ChatOptions {
   config?: AppConfig;
   /** 随消息一起发送的图片 URL，按数组顺序编号（第 1 张 = 1） */
   images?: string[];
+  /** 输出上限，缺省 4096；显式传是为了避免服务端默认值太小把 JSON 截断 */
+  maxTokens?: number;
 }
 
 interface TextPart {
@@ -60,6 +62,12 @@ async function callOnce(cfg: AppConfig, system: string, user: string, opts: Chat
   };
   if (opts.json) body.response_format = { type: "json_object" };
   if (typeof opts.temperature === "number") body.temperature = opts.temperature;
+  /*
+   * 必须显式给 max_tokens。服务端默认值很小，长一点的 JSON 会在中途被截断，
+   * 而 finish_reason 仍然是 stop —— 看起来像「模型只回了一部分」，
+   * 实际是请求被截了。实测批量生成检索词时只回 1/3 段就是这个原因。
+   */
+  body.max_tokens = opts.maxTokens ?? 4096;
 
   // 允许只填域名或完整接口地址
   const trimmed = cfg.LLM_API_URL.replace(/\/+$/, "");

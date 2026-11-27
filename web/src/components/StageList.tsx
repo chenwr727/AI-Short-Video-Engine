@@ -49,6 +49,7 @@ export function LogPanel({
   collapsible,
   expanded,
   label,
+  since,
 }: {
   logs: LogLine[];
   tall?: boolean;
@@ -57,9 +58,15 @@ export function LogPanel({
   /** 由页面控制展开：生成中展开，跑完收起 */
   expanded?: boolean;
   label?: string;
+  /**
+   * 只显示这个时刻之后的日志。
+   * 重跑时会话那头的 stage 可能缺失，仅靠 stages 过滤会漏掉上一轮的残留行。
+   */
+  since?: number;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
-  const shown = stages ? logs.filter((line) => !line.stage || stages.includes(line.stage)) : logs;
+  const fresh = since === undefined ? logs : logs.filter((line) => Date.parse(line.time) >= since);
+  const shown = stages ? fresh.filter((line) => !line.stage || stages.includes(line.stage)) : fresh;
   const hasError = shown.some((line) => line.level === "error");
 
   // 展开由阶段决定，但有报错时始终撑开

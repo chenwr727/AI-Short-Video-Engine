@@ -1,4 +1,5 @@
 import type { Meta, TaskState, TtsEngineOption } from "../types";
+import { Dropdown } from "./Dropdown";
 import { Panel } from "./Panel";
 import type { RenderFormState } from "./stepTypes";
 
@@ -36,17 +37,12 @@ export function VoiceOptions({ speakers, form, engine, meta, disabled, onChange,
         {speakers.map((speaker) => (
           <div className="voice-row" key={speaker}>
             <span className="speaker">{speaker}</span>
-            <select
+            <Dropdown
               value={form.voices[speaker] ?? ""}
-              onChange={(event) => onVoiceChange(speaker, event.target.value)}
+              options={(engine?.voices ?? []).map((voice) => ({ value: voice.id, label: voice.label }))}
+              onChange={(next) => onVoiceChange(speaker, next)}
               disabled={disabled}
-            >
-              {engine?.voices.map((voice) => (
-                <option key={voice.id} value={voice.id}>
-                  {voice.label}
-                </option>
-              ))}
-            </select>
+            />
           </div>
         ))}
       </div>
@@ -54,35 +50,28 @@ export function VoiceOptions({ speakers, form, engine, meta, disabled, onChange,
       <div className="row">
         <div className="field">
           <label htmlFor="tts-engine">配音引擎</label>
-          <select
+          <Dropdown
             id="tts-engine"
             value={form.ttsEngine}
-            onChange={(event) => onChange({ ttsEngine: event.target.value })}
+            options={(meta?.ttsEngines ?? []).map((option) => ({ value: option.id, label: option.label }))}
+            onChange={(next) => onChange({ ttsEngine: next })}
             disabled={disabled}
-          >
-            {meta?.ttsEngines.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+          />
           {engine?.description && <span className="field-hint">{engine.description}</span>}
         </div>
 
         <div className="field">
           <label htmlFor="tts-speed">语速</label>
-          <select
+          <Dropdown
             id="tts-speed"
             value={String(form.ttsSpeed)}
-            onChange={(event) => onChange({ ttsSpeed: Number(event.target.value) })}
+            options={speedOptions.map((speed) => ({
+              value: String(speed),
+              label: speed === 1 ? "1.0 倍速（原速）" : `${speed.toFixed(1)} 倍速`,
+            }))}
+            onChange={(next) => onChange({ ttsSpeed: Number(next) })}
             disabled={disabled}
-          >
-            {speedOptions.map((speed) => (
-              <option key={speed} value={speed}>
-                {speed === 1 ? "1.0 倍速（原速）" : `${speed.toFixed(1)} 倍速`}
-              </option>
-            ))}
-          </select>
+          />
         </div>
       </div>
     </>

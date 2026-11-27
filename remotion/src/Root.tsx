@@ -1,12 +1,27 @@
 import { Composition } from "remotion";
 import { ChapterCard, type ChapterCardProps } from "./ChapterCard";
 import { ChapterSplit } from "./ChapterSplit";
+import { CompareCard, type CompareCardProps } from "./CompareCard";
 import { OutroCard, type OutroCardProps } from "./OutroCard";
 import { OutroMinimal } from "./OutroMinimal";
+import { PersonCard, type PersonCardProps } from "./PersonCard";
 import { QuoteCard, type QuoteCardProps } from "./QuoteCard";
+import { StatCard, type StatCardProps } from "./StatCard";
 import { SubtitleLayer, type SubtitleLayerProps } from "./SubtitleLayer";
+import { TimelineCard, type TimelineCardProps } from "./TimelineCard";
 import { TitleCard, type TitleCardProps } from "./TitleCard";
 import { TitleHero } from "./TitleHero";
+
+/**
+ * 所有卡片的画幅/帧率/时长都由 props 决定，Studio 只做预览。
+ * 16 个 Composition 共用同一段计算，不必各写一遍。
+ */
+const calculateMetadata = ({ props }: { props: Record<string, unknown> }) => ({
+  width: props.width as number,
+  height: props.height as number,
+  fps: props.fps as number,
+  durationInFrames: props.durationInFrames as number,
+});
 
 const titleDefaults: TitleCardProps = {
   title: "标题示例",
@@ -53,6 +68,66 @@ const chapterDefaults: ChapterCardProps = {
   durationInFrames: 48,
 };
 
+const personDefaults: PersonCardProps = {
+  title: "黄仁勋",
+  role: "英伟达 CEO",
+  line: "回归速度快得实在有点离谱",
+  label: "人物",
+  index: 1,
+  accent: "#ff5a3c",
+  width: 1080,
+  height: 1920,
+  fps: 24,
+  durationInFrames: 60,
+};
+
+const compareDefaults: CompareCardProps = {
+  title: "两个人的选择",
+  left: { name: "贝森特", stance: "立刻改口", note: "权力全靠川普" },
+  right: { name: "鲁比奥", stance: "选择沉默", note: "有国会根基，不必表态" },
+  label: "对比",
+  accent: "#ff5a3c",
+  rightAccent: "#3b82f6",
+  width: 1080,
+  height: 1920,
+  fps: 24,
+  durationInFrames: 72,
+};
+
+const timelineDefaults: TimelineCardProps = {
+  title: "老黄回归的时间线",
+  timeline: [
+    { time: "周一", text: "董事会内部开始游说" },
+    { time: "周三", text: "川普亲自出面说服" },
+    { time: "周五", text: "股价单日反弹 8%" },
+  ],
+  label: "时间线",
+  accent: "#ff5a3c",
+  width: 1080,
+  height: 1920,
+  fps: 24,
+  durationInFrames: 84,
+};
+
+const statDefaults: StatCardProps = {
+  stat: {
+    value: "32%",
+    caption: "家庭财富占比",
+    note: "股市一跌，中产的钱包直接缩水",
+    bars: [
+      { label: "股票与基金", value: 32, hint: "32%" },
+      { label: "房产", value: 28, hint: "28%" },
+      { label: "现金存款", value: 14, hint: "14%" },
+    ],
+  },
+  label: "数据",
+  accent: "#ff5a3c",
+  width: 1080,
+  height: 1920,
+  fps: 24,
+  durationInFrames: 72,
+};
+
 /** 字幕层的参数全部来自后端，这里只给一份能让 Studio 打开的最小样例 */
 const subtitleDefaults: SubtitleLayerProps = {
   cues: [{ lines: ["字幕层示例", "第二行"], start: 0, end: 2, style: "Subtitle" }],
@@ -84,12 +159,7 @@ export const RemotionRoot: React.FC = () => (
       fps={titleDefaults.fps}
       durationInFrames={titleDefaults.durationInFrames}
       defaultProps={titleDefaults}
-      calculateMetadata={({ props }) => ({
-        width: props.width,
-        height: props.height,
-        fps: props.fps,
-        durationInFrames: props.durationInFrames,
-      })}
+      calculateMetadata={calculateMetadata}
     />
     <Composition
       id="ChapterCard"
@@ -99,12 +169,7 @@ export const RemotionRoot: React.FC = () => (
       fps={chapterDefaults.fps}
       durationInFrames={chapterDefaults.durationInFrames}
       defaultProps={chapterDefaults}
-      calculateMetadata={({ props }) => ({
-        width: props.width,
-        height: props.height,
-        fps: props.fps,
-        durationInFrames: props.durationInFrames,
-      })}
+      calculateMetadata={calculateMetadata}
     />
     <Composition
       id="QuoteCard"
@@ -114,12 +179,7 @@ export const RemotionRoot: React.FC = () => (
       fps={quoteDefaults.fps}
       durationInFrames={quoteDefaults.durationInFrames}
       defaultProps={quoteDefaults}
-      calculateMetadata={({ props }) => ({
-        width: props.width,
-        height: props.height,
-        fps: props.fps,
-        durationInFrames: props.durationInFrames,
-      })}
+      calculateMetadata={calculateMetadata}
     />
     <Composition
       id="OutroCard"
@@ -129,12 +189,7 @@ export const RemotionRoot: React.FC = () => (
       fps={outroDefaults.fps}
       durationInFrames={outroDefaults.durationInFrames}
       defaultProps={outroDefaults}
-      calculateMetadata={({ props }) => ({
-        width: props.width,
-        height: props.height,
-        fps: props.fps,
-        durationInFrames: props.durationInFrames,
-      })}
+      calculateMetadata={calculateMetadata}
     />
     {/* 备选版式：同一套 props，AI 和用户都可以换 */}
     <Composition
@@ -145,12 +200,7 @@ export const RemotionRoot: React.FC = () => (
       fps={titleDefaults.fps}
       durationInFrames={titleDefaults.durationInFrames}
       defaultProps={titleDefaults}
-      calculateMetadata={({ props }) => ({
-        width: props.width,
-        height: props.height,
-        fps: props.fps,
-        durationInFrames: props.durationInFrames,
-      })}
+      calculateMetadata={calculateMetadata}
     />
     <Composition
       id="ChapterSplit"
@@ -160,12 +210,7 @@ export const RemotionRoot: React.FC = () => (
       fps={chapterDefaults.fps}
       durationInFrames={chapterDefaults.durationInFrames}
       defaultProps={chapterDefaults}
-      calculateMetadata={({ props }) => ({
-        width: props.width,
-        height: props.height,
-        fps: props.fps,
-        durationInFrames: props.durationInFrames,
-      })}
+      calculateMetadata={calculateMetadata}
     />
     <Composition
       id="OutroMinimal"
@@ -175,12 +220,90 @@ export const RemotionRoot: React.FC = () => (
       fps={outroDefaults.fps}
       durationInFrames={outroDefaults.durationInFrames}
       defaultProps={outroDefaults}
-      calculateMetadata={({ props }) => ({
-        width: props.width,
-        height: props.height,
-        fps: props.fps,
-        durationInFrames: props.durationInFrames,
-      })}
+      calculateMetadata={calculateMetadata}
+    />
+    {/* 人物/实体名条：新闻评论里「谁在说话」比空镜更准确 */}
+    <Composition
+      id="PersonCard"
+      component={PersonCard}
+      width={personDefaults.width}
+      height={personDefaults.height}
+      fps={personDefaults.fps}
+      durationInFrames={personDefaults.durationInFrames}
+      defaultProps={personDefaults}
+      calculateMetadata={calculateMetadata}
+    />
+    {/* 变体：同一组件换排版，用独立 id 让后端按白名单选 */}
+    <Composition
+      id="PersonCardHero"
+      component={PersonCard}
+      width={personDefaults.width}
+      height={personDefaults.height}
+      fps={personDefaults.fps}
+      durationInFrames={personDefaults.durationInFrames}
+      defaultProps={{ ...personDefaults, variant: "hero" as const }}
+      calculateMetadata={calculateMetadata}
+    />
+    <Composition
+      id="PersonCardCompact"
+      component={PersonCard}
+      width={personDefaults.width}
+      height={personDefaults.height}
+      fps={personDefaults.fps}
+      durationInFrames={personDefaults.durationInFrames}
+      defaultProps={{ ...personDefaults, variant: "compact" as const }}
+      calculateMetadata={calculateMetadata}
+    />
+    <Composition
+      id="CompareCardStacked"
+      component={CompareCard}
+      width={compareDefaults.width}
+      height={compareDefaults.height}
+      fps={compareDefaults.fps}
+      durationInFrames={compareDefaults.durationInFrames}
+      defaultProps={{ ...compareDefaults, variant: "stacked" as const }}
+      calculateMetadata={calculateMetadata}
+    />
+    <Composition
+      id="StatCardSplit"
+      component={StatCard}
+      width={statDefaults.width}
+      height={statDefaults.height}
+      fps={statDefaults.fps}
+      durationInFrames={statDefaults.durationInFrames}
+      defaultProps={{ ...statDefaults, variant: "split" as const }}
+      calculateMetadata={calculateMetadata}
+    />
+    {/* 新闻评论信息卡：对比 / 时间线 / 数据 */}
+    <Composition
+      id="CompareCard"
+      component={CompareCard}
+      width={compareDefaults.width}
+      height={compareDefaults.height}
+      fps={compareDefaults.fps}
+      durationInFrames={compareDefaults.durationInFrames}
+      defaultProps={compareDefaults}
+      calculateMetadata={calculateMetadata}
+    />
+    <Composition
+      id="TimelineCard"
+      component={TimelineCard}
+      width={timelineDefaults.width}
+      height={timelineDefaults.height}
+      fps={timelineDefaults.fps}
+      durationInFrames={timelineDefaults.durationInFrames}
+      defaultProps={timelineDefaults}
+      calculateMetadata={calculateMetadata}
+    />
+    <Composition
+      id="StatCard"
+      component={StatCard}
+      width={statDefaults.width}
+      height={statDefaults.height}
+      fps={statDefaults.fps}
+      durationInFrames={statDefaults.durationInFrames}
+      defaultProps={statDefaults}
+      calculateMetadata={calculateMetadata}
     />
     {/* 透明字幕层：输出 VP9 + alpha，合流时 overlay 到成片上 */}
     <Composition
@@ -191,12 +314,7 @@ export const RemotionRoot: React.FC = () => (
       fps={subtitleDefaults.fps}
       durationInFrames={subtitleDefaults.durationInFrames}
       defaultProps={subtitleDefaults}
-      calculateMetadata={({ props }) => ({
-        width: props.width,
-        height: props.height,
-        fps: props.fps,
-        durationInFrames: props.durationInFrames,
-      })}
+      calculateMetadata={calculateMetadata}
     />
   </>
 );

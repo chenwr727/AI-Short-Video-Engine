@@ -10,8 +10,6 @@ export interface AppConfig {
   DASHSCOPE_WORKSPACE_ID?: string;
   PIXABAY_API_KEY?: string;
   PEXELS_API_KEY?: string;
-  VIDEO_WIDTH?: string;
-  VIDEO_HEIGHT?: string;
   FPS?: string;
   TTS_SPEED?: string;
   TITLE_DURATION?: string;
@@ -35,8 +33,6 @@ export const DEFAULTS: AppConfig = {
   PIXABAY_API_KEY: "",
   PEXELS_API_KEY: "",
   MATERIAL_MIN_DURATION: "10",
-  VIDEO_WIDTH: "1080",
-  VIDEO_HEIGHT: "1920",
   FPS: "24",
   TTS_SPEED: "1.1",
   TRANSITION_DURATION: "0.5",
@@ -53,6 +49,7 @@ export const DEFAULTS: AppConfig = {
   CAMERA_MOTION: "6",
   COLOR_GRADE: "5",
   TRANSITION_STYLE: "mixed",
+  VARIATION_SEED: "",
   VISION_SELECT: "1",
   SHOTS_PER_PARAGRAPH: "2",
   QUOTE_FALLBACK: "1",

@@ -22,7 +22,7 @@ Field reference (environment variables take precedence over the file, which is h
 | Footage | `VISION_SELECT` | Let the model pick clips from thumbnails, default 1; falls back to text-only selection when the model cannot take images |
 | Footage | `SHOTS_PER_PARAGRAPH` | Shots per segment, 1–3, default 2; cuts land on sentence boundaries, 1 = one clip for the whole segment |
 | Footage | `QUOTE_FALLBACK` | 1 = fall back to a quote card when a segment has no usable footage (default); 0 = fail the task instead |
-| Video | `VIDEO_WIDTH` / `VIDEO_HEIGHT` / `FPS` / `TTS_SPEED` | Defaults: 1080×1920 / 24 fps / 1.1× speed |
+| Video | `FPS` / `TTS_SPEED` | Defaults: 24 fps / 1.1× speed. Resolution is not configured here — pick it from the resolution dropdown on the Material page (1080×1920 / 720×1280) |
 | Video | `CAMERA_MOTION` | Camera move strength 0–10, default 6; push-in / pull-out / pan rotate per segment, 0 = static frame |
 | Video | `COLOR_GRADE` | Grade strength 0–10, default 5; unifies contrast / saturation / vignette / grain, 0 = no grading |
 | Video | `TRANSITION_DURATION` | Transition length in seconds, default 0.5; set 0 to disable |

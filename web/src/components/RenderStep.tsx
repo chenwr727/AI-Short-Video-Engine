@@ -203,7 +203,14 @@ export function RenderStep(props: RenderStepProps) {
       <div className="panel-scroll">
         <StageList stages={stages} />
 
-        <LogPanel logs={task.logs} stages={stageIds} collapsible expanded={layout.logOpen} tall={layout.logOpen} />
+        <LogPanel
+          logs={task.logs}
+          stages={stageIds}
+          since={task.runStartedAt}
+          collapsible
+          expanded={layout.logOpen}
+          tall={layout.logOpen}
+        />
 
         {showAudio && layout.showResult && task.audio && <AudioBoard manifest={task.audio} />}
 

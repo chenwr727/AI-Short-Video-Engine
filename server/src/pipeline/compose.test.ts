@@ -3,8 +3,16 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import type { AudioManifest, Transcript } from "../types.js";
-import { clipSignature, isComposedOutput, planParagraphs, shotDurations } from "./compose.js";
+import type { AppConfig } from "../config.js";
+import type { AudioManifest, CardSpec, MaterialManifest, TaskContext, Transcript } from "../types.js";
+import {
+  clipSignature,
+  composeFingerprint,
+  infoCardKey,
+  isComposedOutput,
+  planParagraphs,
+  shotDurations,
+} from "./compose.js";
 
 const TIMELINE = { titleDuration: 1.6, interval: 0.2, padLead: 0, padTail: 0 };
 
@@ -213,4 +221,133 @@ test("参数变了旧成片就不该复用", () => {
   assert.equal(isComposedOutput(output, "fp-old"), false);
 
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+/**
+ * 回归：信息卡挂在素材清单上，早先成片指纹只收 videoPath，
+ * 于是「素材页换了卡」指纹不变，点生成直接命中旧成片 —— 用户看到的是「换了没反应」。
+ */
+test("素材页换了信息卡，成片就不该复用", () => {
+  const ctx = {
+    input: "主题",
+    options: { width: 1080, height: 1920 },
+    workspace: path.join(os.tmpdir(), "aisv-ws"),
+    signal: new AbortController().signal,
+    log: () => {},
+    markStage: () => {},
+  } as unknown as TaskContext;
+  const cfg = { TRANSITION_DURATION: "0.5", CAMERA_MOTION: "6", COLOR_GRADE: "5" } as unknown as AppConfig;
+  const transcript = transcriptOf([{ speaker: "小简", contents: ["第一句"] }]);
+  const audio = audioOf([2]);
+
+  const materialWith = (infoCard?: CardSpec): MaterialManifest =>
+    ({
+      source: "pexels",
+      items: [{ id: 1, paragraph: 1, url: "https://example.com/a.mp4", duration: 4, searchTerms: [], infoCard }],
+    }) as unknown as MaterialManifest;
+
+  const cardWith = (patch: Partial<CardSpec> = {}): CardSpec => ({
+    id: "info-1",
+    kind: "info",
+    compositionId: "PersonCard",
+    title: "川普",
+    label: "人物",
+    accent: "#ff5a3c",
+    durationSec: 5,
+    ...patch,
+  });
+
+  const plain = composeFingerprint(ctx, transcript, audio, materialWith(), null, cfg, 24);
+  const withCard = composeFingerprint(ctx, transcript, audio, materialWith(cardWith()), null, cfg, 24);
+  const withOtherCard = composeFingerprint(
+    ctx,
+    transcript,
+    audio,
+    materialWith(cardWith({ title: "黄仁勋" })),
+    null,
+    cfg,
+    24,
+  );
+  // 换抽帧预览图不影响成片画面（透明信息层不带底图），不该白跑一遍
+  const withOtherStill = composeFingerprint(
+    ctx,
+    transcript,
+    audio,
+    materialWith(cardWith({ bgImage: "data:image/jpeg;base64,AAAA" })),
+    null,
+    cfg,
+    24,
+  );
+
+  assert.notEqual(plain, withCard);
+  assert.notEqual(withCard, withOtherCard);
+  assert.equal(withCard, withOtherStill);
+});
+
+/**
+ * 回归：片尾时长不在成片指纹里。
+ *
+ * 早先 `intro` 收的是 OUTRO_DURATION、`outro` 只收标题与账号 —— 片尾时长
+ * 整个没进指纹。用户把片尾从 0 改成 3 秒，指纹不变，点生成直接命中旧成片，
+ * 表现就是「改了没反应」。片头时长靠 titleDuration 单独收录，没漏。
+ */
+test("片尾时长改动必须让成片指纹变（否则改了没反应）", () => {
+  const ctx = {
+    input: "主题",
+    options: { width: 1080, height: 1920 },
+    workspace: path.join(os.tmpdir(), "aisv-ws"),
+    signal: new AbortController().signal,
+    log: () => {},
+    markStage: () => {},
+  } as unknown as TaskContext;
+  const base = { TRANSITION_DURATION: "0.5", CAMERA_MOTION: "6", COLOR_GRADE: "5" } as unknown as AppConfig;
+  const transcript = transcriptOf([{ speaker: "小简", contents: ["第一句"] }]);
+  const audio = audioOf([2]);
+  const material = {
+    source: "pexels",
+    items: [{ id: 1, paragraph: 1, url: "https://example.com/a.mp4", duration: 4, searchTerms: [] }],
+  } as unknown as MaterialManifest;
+
+  const fp = (patch: Record<string, unknown>) =>
+    composeFingerprint(ctx, transcript, audio, material, null, { ...base, ...patch } as unknown as AppConfig, 24);
+
+  const plain = fp({});
+  assert.notEqual(fp({ OUTRO_DURATION: "3" }), plain, "改片尾时长后指纹应变化");
+  assert.notEqual(fp({ OUTRO_TITLE: "下期见" }), plain, "改片尾文案后指纹应变化");
+  assert.notEqual(fp({ TITLE_DURATION: "2.5" }), plain, "改片头时长后指纹应变化");
+  assert.notEqual(fp({ CHAPTER_CARD: "1" }), plain, "打开章节卡后指纹应变化");
+  assert.notEqual(fp({ CHAPTER_DURATION: "4" }), plain, "改章节卡时长后指纹应变化");
+
+  // 片头与片尾各自独立：改一个不该被另一个的值顶替
+  assert.notEqual(fp({ TITLE_DURATION: "2.5" }), fp({ OUTRO_DURATION: "3" }));
+  assert.notEqual(fp({ TITLE_DURATION: "2.5" }), fp({ TITLE_DURATION: "2.5", OUTRO_DURATION: "3" }));
+});
+
+/**
+ * 信息卡的渲染产物路径不能进指纹。
+ *
+ * 线上表现：工作区被复制或迁移后，stillPath 里的绝对路径变了，
+ * 画面其实一模一样，成片却全部重合成一遍。
+ */
+test("信息卡指纹不因工作区路径变化而变", () => {
+  const spec = {
+    id: "info-1-PersonCard",
+    kind: "info",
+    compositionId: "PersonCard",
+    paragraph: 1,
+    title: "黄仁勋",
+    label: "人物",
+    accent: "#ff5a3c",
+    durationSec: 5,
+    fingerprint: "abc123",
+    bgImage: "data:image/jpeg;base64," + "x".repeat(1000),
+    stillPath: "D:/ws-a/cards/info-1.png",
+  } as unknown as Parameters<typeof infoCardKey>[0];
+
+  const moved = { ...spec, stillPath: "D:/ws-b/cards/info-1.png" } as typeof spec;
+  assert.equal(infoCardKey(spec), infoCardKey(moved), "换工作区不该让指纹变");
+
+  // 但参数指纹变了必须变 —— 否则改了卡面却没重渲
+  const changed = { ...spec, fingerprint: "def456" } as typeof spec;
+  assert.notEqual(infoCardKey(spec), infoCardKey(changed), "改卡面参数后指纹应变化");
 });

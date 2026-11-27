@@ -2,6 +2,8 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
+    <!-- 与页面 color-scheme 一致，避免 <select> 弹层先画一帧黑底 -->
+    <meta name="color-scheme" content="light" />
     <title>设置</title>
     <style>
       :root {
@@ -470,32 +472,6 @@
           <summary>画面</summary>
           <div class="body">
             <div class="field">
-              <label class="lbl">宽</label>
-              <div class="with-unit">
-                <input
-                  type="text"
-                  data-key="VIDEO_WIDTH"
-                  placeholder="1080"
-                  data-num="360,3840"
-                  data-unit="px"
-                  data-int="1"
-                />
-              </div>
-            </div>
-            <div class="field">
-              <label class="lbl">高</label>
-              <div class="with-unit">
-                <input
-                  type="text"
-                  data-key="VIDEO_HEIGHT"
-                  placeholder="1920"
-                  data-num="360,3840"
-                  data-unit="px"
-                  data-int="1"
-                />
-              </div>
-            </div>
-            <div class="field">
               <label class="lbl">帧率</label>
               <div class="with-unit">
                 <input type="text" data-key="FPS" placeholder="24" data-num="1,120" data-unit="fps" data-int="1" />
@@ -576,6 +552,14 @@
                 <input type="text" data-key="TRANSITION_STYLE" placeholder="mixed" data-text="1" />
               </div>
             </div>
+            <div class="field">
+              <label class="lbl"
+                >外观种子<span class="hint">留空 = 按剧本标题自动派生。决定运镜方向与转场顺序的洗牌：不同选题自动不同观感，同一条重跑结果一致；填固定值可强制复用某一套观感</span></label
+              >
+              <div class="with-unit">
+                <input type="text" data-key="VARIATION_SEED" placeholder="留空自动" data-text="1" />
+              </div>
+            </div>
           </div>
         </details>
 
@@ -583,10 +567,12 @@
           <summary>版式卡</summary>
           <div class="body">
             <label class="check"
-              ><input type="checkbox" data-key="CARDS_ENABLED" /> 素材确认后多一步「版式确认」（AI 给片头 / 章节 / 片尾选模板写文案，需要 remotion/ 依赖；下方三个开关都不开时按片头时长与过场卡时长出片头 + 章节卡）</label
+              ><input type="checkbox" data-key="CARDS_ENABLED" /> 启用版式卡（AI 给片头 / 章节 / 片尾选模板写文案，需要 remotion/ 依赖；关掉则成片不含任何卡片，下方几个开关随之失效。三个开关都不开时按片头时长与过场卡时长出片头 + 章节卡）</label
             >
             <div class="field">
-              <label class="lbl">卡片主色<span class="hint">#rrggbb，AI 只在这个色板里挑</span></label>
+              <label class="lbl"
+                >卡片主色<span class="hint">#rrggbb，版式卡只在这个色板里挑；信息卡直接用它当主色，对比卡右栏自动取相反的冷暖色</span></label
+              >
               <div class="with-unit">
                 <input type="text" data-key="CARD_ACCENT" placeholder="#ff5a3c" data-text="1" />
               </div>

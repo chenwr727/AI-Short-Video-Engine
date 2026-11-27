@@ -12,6 +12,7 @@ import {
   type AppConfig,
 } from "../config.js";
 import { ensureDir } from "../paths.js";
+import { seedFrom, shuffledIndex } from "./variation.js";
 import { prepareBgm } from "../services/bgm.js";
 import { runFfmpeg } from "../services/ffmpeg.js";
 import { ensureSfx } from "../services/sfx.js";
@@ -23,7 +24,7 @@ import {
   renderQuote,
   renderSubtitleLayer,
 } from "../services/remotion.js";
-import { ensureCardVideo } from "./cards.js";
+import { ensureCardLayer, ensureCardVideo } from "./cards.js";
 import { transcriptFingerprint } from "./tts.js";
 import { probeVideo } from "../services/probe.js";
 import { buildAss, charsPerLine, layoutCueText, type SubtitleCue } from "../services/subtitle.js";
@@ -106,9 +107,27 @@ function transitionMode(cfg: AppConfig): TransitionMode {
   return (cfg.TRANSITION_STYLE ?? "").trim().toLowerCase() === "mixed" ? "mixed" : "fade";
 }
 
-/** 片段签名只关心开关与强度，运镜方向由段落序号决定 */
-function lookKey(look: LookOptions): string {
-  return `motion:${look.motion};grade:${look.grade}`;
+/**
+ * 这条视频的外观种子。
+ *
+ * 默认由剧本标题派生：不同选题得到不同的运镜/转场序列，
+ * 同一条视频重跑结果完全一致（缓存仍然有效）。
+ * 标题相同但想换一套观感时，在配置里设 VARIATION_SEED 覆盖。
+ */
+function variationSeed(cfg: AppConfig, transcript: Transcript): number {
+  const manual = (cfg.VARIATION_SEED ?? "").trim();
+  if (manual) return seedFrom(manual);
+  return seedFrom(`${transcript.title}|${transcript.paragraphs.length}`);
+}
+
+/**
+ * 把「观感强度 + 种子」压成片段签名用的短串。
+ *
+ * 种子必须进去：运镜方向由「种子洗牌 + 段落序号」决定，
+ * 换种子就换方向，不重渲会命中上一条视频的片段缓存。
+ */
+function lookKey(look: LookOptions, seed: number): string {
+  return `motion:${look.motion};grade:${look.grade}${seed ? `;seed:${seed}` : ""}`;
 }
 
 /**
@@ -116,7 +135,14 @@ function lookKey(look: LookOptions): string {
  * 输入先预放大 MOTION_PAD 倍，所以 zoom=1 时仍是原构图。
  * on 最大到 frames-1，缩放值永远落在 [1, maxZoom) 内，不必额外 clamp。
  */
-function motionChain(plan: ParagraphPlan, width: number, height: number, fps: number, level: number): string | null {
+function motionChain(
+  plan: ParagraphPlan,
+  width: number,
+  height: number,
+  fps: number,
+  level: number,
+  seed: number,
+): string | null {
   if (level <= 0) return null;
 
   const frames = Math.max(1, Math.round(plan.duration * fps));
@@ -126,8 +152,9 @@ function motionChain(plan: ParagraphPlan, width: number, height: number, fps: nu
   const centerX = "iw/2-(iw/zoom/2)";
   const centerY = "ih/2-(ih/zoom/2)";
 
-  // 按段落轮换，避免整片只有一种运动方向
-  switch (plan.index % 4) {
+  // 按种子洗牌后取用：同一段保持稳定（缓存有效），不同视频的序列不同
+  const pick = shuffledIndex(plan.index, 4, seed);
+  switch (pick) {
     case 1:
       return `zoompan=z='1+${rate.toFixed(6)}*on':x='${centerX}':y='${centerY}':${tail}`;
     case 2:
@@ -151,10 +178,10 @@ function gradeChain(level: number): string[] {
   return chain;
 }
 
-/** mixed 模式下按序号轮换转场，fade 模式保持单一淡入淡出 */
-function xfadeStyle(mode: TransitionMode, index: number): string {
+/** mixed 模式下按种子洗牌轮换转场，fade 模式保持单一淡入淡出 */
+function xfadeStyle(mode: TransitionMode, index: number, seed: number): string {
   if (mode !== "mixed") return "fade";
-  return XFADE_MIXED[(index - 1) % XFADE_MIXED.length] ?? "fade";
+  return XFADE_MIXED[shuffledIndex(index, XFADE_MIXED.length, seed)] ?? "fade";
 }
 
 /** 0 表示自动 */
@@ -505,15 +532,26 @@ async function renderParagraph(
   materialPaths: string[],
   clipsDir: string,
   onProgress: (ratio: number) => void,
+  /** 整段就是一张信息卡（没有素材）：它已是最终画面，不该再被运镜推拉 */
+  isCard = false,
+  /** 透明信息层（VP9 alpha）：叠在素材上，素材的运镜保持不变 */
+  overlayLayer?: string,
+  /** 外观种子：决定运镜方向，不同视频洗牌结果不同 */
+  seed = 0,
 ): Promise<string> {
   const cfg = loadConfig();
   const fps = ctx.options.fps > 0 ? ctx.options.fps : num(cfg.FPS, 24);
   const { width, height } = ctx.options;
   const look = lookOptions(cfg);
+  // 卡片不叠加运镜和调色：静态设计图被 zoompan 每秒重采样并放大 1.15 倍再裁回，
+  // 文字边缘会持续「蠕动」，观感就是抖
+  const effective = isCard ? { ...look, motion: 0, grade: 0 } : look;
 
   const clipFile = path.join(clipsDir, `${plan.index}.mp4`);
   const sigFile = path.join(clipsDir, `${plan.index}.mp4${CLIP_SIG_SUFFIX}`);
-  const signature = clipSignature(plan, materialPaths, width, height, fps, lookKey(look));
+  const signature = clipSignature(plan, materialPaths, width, height, fps, lookKey(effective, seed));
+  // 叠了信息层的片段，签名还要带上图层：换了卡片内容必须重渲
+  const fullSignature = overlayLayer ? `${signature}|layer:${path.basename(overlayLayer)}` : signature;
 
   if (fs.existsSync(clipFile) && fs.statSync(clipFile).size > 0) {
     let cached = "";
@@ -522,7 +560,7 @@ async function renderParagraph(
     } catch {
       // 无签名视为不匹配
     }
-    if (cached === signature) {
+    if (cached === fullSignature) {
       ctx.log(`复用已渲染片段 ${path.basename(clipFile)}`);
       return clipFile;
     }
@@ -539,10 +577,12 @@ async function renderParagraph(
   for (const sentence of plan.sentences) {
     args.push("-i", path.join(ctx.workspace, sentence.file));
   }
+  // 信息层放最后：透明层必须显式用 libvpx-vp9 解码，否则 alpha 平面丢失
+  if (overlayLayer) args.push("-c:v", "libvpx-vp9", "-i", overlayLayer);
 
   // 运镜需要推近余量：先放大到 1.15 倍再缩回目标尺寸，避免推近时露出边缘
-  const scaledWidth = look.motion > 0 ? Math.round((width * MOTION_PAD) / 2) * 2 : width;
-  const scaledHeight = look.motion > 0 ? Math.round((height * MOTION_PAD) / 2) * 2 : height;
+  const scaledWidth = effective.motion > 0 ? Math.round((width * MOTION_PAD) / 2) * 2 : width;
+  const scaledHeight = effective.motion > 0 ? Math.round((height * MOTION_PAD) / 2) * 2 : height;
   const baseChain = [
     `scale=${scaledWidth}:${scaledHeight}:force_original_aspect_ratio=increase:flags=lanczos`,
     `crop=${scaledWidth}:${scaledHeight}`,
@@ -552,13 +592,13 @@ async function renderParagraph(
 
   // 运镜与调色作用于整段（拼接之后），保证跨镜头连续
   const postChain: string[] = [];
-  const motion = motionChain(plan, width, height, fps, look.motion);
+  const motion = motionChain(plan, width, height, fps, effective.motion, seed);
   if (motion) {
     postChain.push(motion);
     // zoompan 会重算像素比，后续叠加字幕层依赖 SAR
     postChain.push("setsar=1");
   }
-  postChain.push(...gradeChain(look.grade));
+  postChain.push(...gradeChain(effective.grade));
 
   const filters: string[] = [];
   if (shots.length === 1) {
@@ -571,6 +611,21 @@ async function renderParagraph(
     }
     filters.push(`${shots.map((_, i) => `[s${i}]`).join("")}concat=n=${shots.length}:v=1:a=0[vcat]`);
     filters.push(`[vcat]${postChain.join(",")}[v]`);
+  }
+
+  /*
+   * 信息层叠加：素材照常走完缩放/运镜/调色，再把透明的信息层盖上去。
+   *
+   * 这样底图是真正的素材视频（带运镜），而不是抽出来的一帧静图 ——
+   * 之前把素材压成静帧再让 Remotion 渲染，等于主动丢弃了动态画面。
+   * 索引 = 素材数 + 句子数：overlay 放在所有输入的最后。
+   */
+  let videoOut = "v";
+  if (overlayLayer) {
+    const overlayIndex = shots.length + plan.sentences.length;
+    filters.push(`[${overlayIndex}:v]format=yuva420p[olraw]`);
+    filters.push(`[v][olraw]overlay=0:0:format=auto[vol]`);
+    videoOut = "vol";
   }
 
   const audioLabels: string[] = [];
@@ -596,7 +651,7 @@ async function renderParagraph(
     "-filter_complex",
     filters.join(";"),
     "-map",
-    "[v]",
+    `[${videoOut}]`,
     "-map",
     "[apad]",
     "-t",
@@ -630,7 +685,7 @@ async function renderParagraph(
   });
 
   // 成功后才写签名，失败或被取消的片段不当作缓存
-  fs.writeFileSync(sigFile, signature, "utf-8");
+  fs.writeFileSync(sigFile, fullSignature, "utf-8");
   return clipFile;
 }
 
@@ -656,6 +711,8 @@ interface MergeOptions {
   transitionMode: TransitionMode;
   /** 每个转场对应的风格；缺省时按 transitionMode 轮换 */
   transitionStyles?: string[];
+  /** 外观种子：决定转场顺序的洗牌结果 */
+  seed?: number;
   output: string;
   encode: string[];
   bgm: string | null;
@@ -725,6 +782,7 @@ async function mergeWithTransitions(options: MergeOptions): Promise<void> {
     transition,
     transitionMode: mode,
     transitionStyles,
+    seed = 0,
     output,
     encode,
     bgm,
@@ -754,7 +812,7 @@ async function mergeWithTransitions(options: MergeOptions): Promise<void> {
   for (let k = 1; k < clips.length; k++) {
     const offset = Math.max(0, elapsed - fade);
     transitionOffsets.push(offset);
-    const style = transitionStyles?.[k - 1] ?? xfadeStyle(mode, k);
+    const style = transitionStyles?.[k - 1] ?? xfadeStyle(mode, k, seed);
     filters.push(
       `[${videoLabel}][v${k}]xfade=transition=${style}:duration=${fade.toFixed(3)}:offset=${offset.toFixed(3)}[vx${k}]`,
     );
@@ -920,6 +978,32 @@ function outputStamp(output: string): string {
 }
 
 /**
+ * 素材段上的信息卡也进指纹：换卡、改文案都要重合成。
+ *
+ * 但 bgImage 要排除 —— 它是素材抽帧的数据 URI（几十 KB），只喂「预览静帧」；
+ * 真正进成片的是活的素材，透明信息层不带底图。把它算进来会让指纹随抽帧抖动。
+ * 键名排序后再拼，避免同一份 spec 因字段顺序不同算出两个指纹。
+ */
+/**
+ * 信息卡在指纹里的表示：只收「决定画面」的字段。
+ *
+ * 排除三类：
+ *   bgImage / videoPath / stillPath —— 渲染产物与底图，不是输入。
+ *   bgImage 是 200KB+ 的 data URI；两个路径带工作区绝对路径，
+ *   换工作区（另存、迁移）就会让指纹变，画面其实一模一样。
+ * 真正代表画面的是 fingerprint（参数指纹），它已经在这里面。
+ * 键名排序后再拼，避免同一份 spec 因字段顺序不同算出两个指纹。
+ */
+export function infoCardKey(spec: CardSpec | undefined): string {
+  if (!spec) return "";
+  const derived = new Set(["bgImage", "videoPath", "stillPath"]);
+  const entries = Object.entries(spec)
+    .filter(([key]) => !derived.has(key))
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  return JSON.stringify(entries);
+}
+
+/**
  * 成片指纹：把「影响成片的一切输入」压成一个短串。
  *
  * 以前只比对文件大小与 mtime，等于只认「文件还是那个文件」，
@@ -955,6 +1039,7 @@ export function composeFingerprint(
       item.videoPath ?? "",
       item.fallback ? "fallback" : "real",
       (item.shots ?? []).map((shot) => shot.videoPath ?? "").join(","),
+      infoCardKey(item.infoCard),
     ]),
     // 版式：卡片清单和每张卡的指纹，换卡必然重合成
     cards: (cards?.items ?? []).map((spec) => [spec.id, spec.kind, spec.fingerprint ?? "", spec.durationSec]),
@@ -968,14 +1053,17 @@ export function composeFingerprint(
       titleDuration: numberOrZero(cfg.TITLE_DURATION, 0),
       motion: Math.min(MAX_MOTION_LEVEL, numberOrZero(cfg.CAMERA_MOTION, 0)),
       grade: Math.min(MAX_MOTION_LEVEL, numberOrZero(cfg.COLOR_GRADE, 0)),
+      // 种子决定运镜方向与转场顺序，换了必须重合成
+      variationSeed: variationSeed(cfg, transcript),
       bgm: options.bgmEnabled ?? bool(cfg.BGM_ENABLED, true),
       bgmVolume: options.bgmVolume ?? numberOrZero(cfg.BGM_VOLUME, BGM_VOLUME),
       bgmFile: (options.bgmFile ?? "").trim(),
       bgmFade: [numberOrZero(cfg.AUDIO_FADE_IN, 0), numberOrZero(cfg.AUDIO_FADE_OUT, 0)],
       videoFade: [numberOrZero(cfg.VIDEO_FADE_IN, 0), numberOrZero(cfg.VIDEO_FADE_OUT, 0)],
       sfx: bool(cfg.SFX_ENABLED, true) ? numberOrZero(cfg.SFX_VOLUME, 0.2) : "off",
-      intro: [bool(cfg.INTRO_ENABLED, false), numberOrZero(cfg.OUTRO_DURATION, 0)],
-      outro: [(cfg.OUTRO_TITLE ?? "").trim(), (cfg.OUTRO_HANDLE ?? "").trim()],
+      // 片头/片尾/章节：开关与各自时长，任一改动都要重合成
+      intro: [bool(cfg.INTRO_ENABLED, false), numberOrZero(cfg.TITLE_DURATION, 0)],
+      outro: [(cfg.OUTRO_TITLE ?? "").trim(), (cfg.OUTRO_HANDLE ?? "").trim(), numberOrZero(cfg.OUTRO_DURATION, 0)],
       chapter: [bool(cfg.CHAPTER_CARD, false), numberOrZero(cfg.CHAPTER_DURATION, 2)],
     },
   };
@@ -1017,6 +1105,8 @@ export async function runComposeStage(
 
   const cfg = loadConfig();
   const fps = ctx.options.fps > 0 ? ctx.options.fps : num(cfg.FPS, 24);
+  // 观感种子：决定运镜方向与转场顺序，让连续几条视频不撞脸
+  const seed = variationSeed(cfg, transcript);
   // 参数一变，旧成片就不再是「这次的成片」，必须重合成
   const fingerprint = composeFingerprint(ctx, transcript, audio, material, cards, cfg, fps);
 
@@ -1058,7 +1148,7 @@ export async function runComposeStage(
   // 清单里已定好片头/章节/片尾，这里只负责渲染与拼接
   const cardChapters = new Map<number, CardSpec>();
   for (const item of cards?.items ?? []) {
-    if (item.kind === "chapter" && item.paragraph) cardChapters.set(item.paragraph, item);
+    if (item.paragraph !== undefined && item.kind === "chapter") cardChapters.set(item.paragraph, item);
   }
   const cardTotal = transcript.paragraphs.length;
 
@@ -1197,7 +1287,7 @@ export async function runComposeStage(
 
   /** 片段入列时顺带记下它与前一片段之间的转场风格 */
   const addClip = (file: string, style?: string, cues: SubtitleCue[] | null = null): void => {
-    if (clips.length > 0) transitionStyles.push(style ?? xfadeStyle(mode, clips.length));
+    if (clips.length > 0) transitionStyles.push(style ?? xfadeStyle(mode, clips.length, seed));
     clips.push(file);
     cueSets.push(cues);
   };
@@ -1211,15 +1301,61 @@ export async function runComposeStage(
     const materialItem = material.items.find((item) => item.paragraph === plan.index) ?? material.items[i];
     if (!materialItem) throw new Error(`第 ${plan.index} 段缺少素材`);
 
-    // 有素材就正常渲染；没素材或文件丢了就出设计卡，不中断整条流水线
     const materialPaths: string[] = [];
-    if (materialItem.fallback || !materialItem.videoPath || !fs.existsSync(materialItem.videoPath)) {
-      materialPaths.push(await renderFallbackCard(ctx, plan, clipsDir, fps));
-    } else {
-      materialPaths.push(
-        materialItem.videoPath,
-        ...(materialItem.shots ?? []).map((shot) => shot.videoPath).filter((file) => fs.existsSync(file)),
-      );
+    /*
+     * 这一段的画面可能是实拍，也可能叠了一层信息。
+     *
+     * 有素材时不替换画面：素材照常渲染（保留运镜），信息层做成透明 VP9 叠上去。
+     * 只有素材缺失时才退化成「纯卡片整段替代」——那种情况卡片自己就是最终画面。
+     */
+    const infoSpec = materialItem.infoCard;
+    let overlayLayer: string | undefined;
+    let cardAsWhole = false;
+
+    if (infoSpec) {
+      const hasMaterial =
+        !materialItem.fallback && Boolean(materialItem.videoPath) && fs.existsSync(materialItem.videoPath ?? "");
+      ctx.markStage("compose", "running", `第 ${i + 1} 段信息层`);
+      /*
+       * 信息层要跟着旁白逐条上屏：把本段的分句时间交给它，
+       * 卡片上的要点各自算出「第几秒出现」。分句时间本来就为字幕算过，直接用。
+       */
+      const sentences = plan.sentences.map((sentence) => ({ text: sentence.text, start: sentence.start }));
+
+      if (hasMaterial) {
+        // 叠层：素材当底，信息层透明覆盖
+        const layerPath = await ensureCardLayer(ctx, infoSpec, cardTotal, plan.duration, sentences);
+        if (layerPath) {
+          overlayLayer = layerPath;
+          ctx.log(`第 ${plan.index} 段叠加信息层「${infoSpec.title}」（${infoSpec.compositionId}）`);
+        } else {
+          missingCards++;
+          ctx.log(`第 ${plan.index} 段信息层没渲染出来，本段只用实拍`, "warn");
+        }
+      } else {
+        // 没有可用素材：整段用卡片顶上（卡片自带背景）
+        const file = await ensureCardVideo(ctx, infoSpec, cardTotal, plan.duration, sentences);
+        if (file) {
+          materialPaths.push(file);
+          cardAsWhole = true;
+          ctx.log(`第 ${plan.index} 段无素材，用信息卡「${infoSpec.title}」整段替代`);
+        } else {
+          missingCards++;
+          ctx.log(`第 ${plan.index} 段信息卡没渲染出来，回退实拍`, "warn");
+        }
+      }
+    }
+
+    // 没有整段卡片时才挑素材：有素材就正常渲染，没素材就出设计卡兜底
+    if (materialPaths.length === 0) {
+      if (materialItem.fallback || !materialItem.videoPath || !fs.existsSync(materialItem.videoPath)) {
+        materialPaths.push(await renderFallbackCard(ctx, plan, clipsDir, fps));
+      } else {
+        materialPaths.push(
+          materialItem.videoPath,
+          ...(materialItem.shots ?? []).map((shot) => shot.videoPath).filter((file) => fs.existsSync(file)),
+        );
+      }
     }
 
     // 过场卡插在本段之前，后续片段整体右移即可，音频与字幕都在各自片段内部
@@ -1275,13 +1411,22 @@ export async function runComposeStage(
     );
 
     let lastPercent = -1;
-    const clip = await renderParagraph(ctx, plan, materialPaths, clipsDir, (ratio) => {
-      const percent = Math.floor((ratio * 100) / 10) * 10;
-      if (percent !== lastPercent) {
-        lastPercent = percent;
-        ctx.markStage("compose", "running", `第 ${plan.index}/${plans.length} 段 ${percent}%`);
-      }
-    });
+    const clip = await renderParagraph(
+      ctx,
+      plan,
+      materialPaths,
+      clipsDir,
+      (ratio) => {
+        const percent = Math.floor((ratio * 100) / 10) * 10;
+        if (percent !== lastPercent) {
+          lastPercent = percent;
+          ctx.markStage("compose", "running", `第 ${plan.index}/${plans.length} 段 ${percent}%`);
+        }
+      },
+      cardAsWhole,
+      overlayLayer,
+      seed,
+    );
     addClip(clip, afterCard ? "fade" : undefined, plan.cues);
     afterCard = false;
   }
@@ -1408,6 +1553,7 @@ export async function runComposeStage(
     transition,
     transitionMode: mode,
     transitionStyles,
+    seed,
     output,
     encode,
     bgm,

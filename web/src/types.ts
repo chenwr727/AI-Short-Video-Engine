@@ -147,6 +147,10 @@ export interface MaterialInfo {
 export interface MaterialItem extends MaterialInfo {
   paragraph: number;
   searchTerms: string[];
+  /** 这一段配了信息卡；有素材时叠在实拍上，没素材才整段替代画面 */
+  infoCard?: CardSpec;
+  /** 没检索到可用素材，合成时改用设计卡 */
+  fallback?: boolean;
 }
 
 export interface MaterialManifest {
@@ -257,6 +261,8 @@ export interface TaskState {
     ttsEngine: string;
     voice: string;
     materialSource: string;
+    /** 素材匹配后是否配信息卡；旧任务没有这个字段，按开启处理 */
+    autoInfoCards?: boolean;
     width: number;
     height: number;
     fps: number;
@@ -283,4 +289,6 @@ export interface TaskState {
   error: string | null;
   createdAt: string;
   updatedAt: string;
+  /** 最近一次重跑阶段的时刻（毫秒），用于清掉上一轮的日志 */
+  runStartedAt?: number;
 }

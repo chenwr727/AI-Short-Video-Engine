@@ -1,4 +1,9 @@
 :root {
+  /*
+   * 声明浅色配色，否则 Chromium 会把 <option> 弹层按深色兜底先画一帧黑底，
+   * 再刷成正常颜色 —— 表现就是「点开下拉先闪一下黑」。
+   */
+  color-scheme: light;
   --bg: #f4f7fb;
   --card: #ffffff;
   --border: #e3e9f2;
@@ -549,6 +554,131 @@ body.electron.mac .tb-inner {
   padding-right: 34px;
 }
 
+/*
+ * 下拉弹层由系统绘制，不继承 select 的背景。
+ * 不显式指定时部分 Chromium/Electron 版本会先按深色系统主题画一帧黑底，
+ * 再刷成白色 —— 用户看到的就是「点开先黑一下」。
+ */
+.field select option {
+  background-color: #ffffff;
+  color: #16202f;
+}
+
+/*
+ * 自绘下拉（components/Dropdown.tsx）。
+ * 原生 <select> 的弹层由 Chromium 自己绘制，color-scheme / option 背景改不动它的
+ * 绘制顺序，深色系统主题下点开仍有概率先黑一帧。这里改成自己的 DOM，
+ * 第一帧就是最终样式。
+ */
+
+.dropdown-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  height: 40px;
+  box-sizing: border-box;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  padding: 0 12px;
+  font-size: 14px;
+  font-family: inherit;
+  text-align: left;
+  color: var(--text);
+  background: #fbfdff;
+  cursor: pointer;
+  outline: none;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s,
+    background 0.15s;
+}
+
+.dropdown-trigger:hover:not(:disabled) {
+  border-color: #bfcde3;
+}
+
+.dropdown-trigger.is-open,
+.dropdown-trigger:focus-visible {
+  border-color: #7aa6f7;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(47, 111, 237, 0.12);
+}
+
+.dropdown-trigger:disabled {
+  color: #93a0b4;
+  background: #f4f7fc;
+  cursor: not-allowed;
+}
+
+.dropdown-value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 用边框拼箭头，和原来 select 的背景三角一致，不引图标字体 */
+.dropdown-caret {
+  flex: none;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid #7b88a0;
+  transition: transform 0.15s;
+}
+
+.dropdown-trigger.is-open .dropdown-caret {
+  transform: rotate(180deg);
+}
+
+.dropdown-menu {
+  position: fixed;
+  z-index: 1000;
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow:
+    0 10px 28px rgba(20, 32, 50, 0.14),
+    0 2px 6px rgba(20, 32, 50, 0.08);
+}
+
+.dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 7px;
+  font-size: 14px;
+  font-family: inherit;
+  text-align: left;
+  color: #16202f;
+  background: transparent;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.dropdown-item:hover {
+  background: #eff4fd;
+}
+
+/* 键盘高亮：与「当前已选中」分开，方向键移动时用这个 */
+.dropdown-item.is-highlighted {
+  background: #dfeaff;
+}
+
+.dropdown-item.is-active {
+  color: var(--brand);
+  font-weight: 600;
+  background: #e8f0fe;
+}
+
 .field textarea:focus,
 .field select:focus,
 .text-input:focus {
@@ -579,6 +709,83 @@ body.electron.mac .tb-inner {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+/* 生成配置一行四项：片头 → 素材来源 → 分辨率 → 信息卡 */
+.row.row-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+/**
+ * 片头/章节/片尾三个秒数挤在同一个 field 里：
+ * 合并到素材页后这一列只有 1/4 宽度，三个输入框平分，不再各占一个 field。
+ */
+.card-sec-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.card-sec-row .text-input {
+  text-align: center;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+/*
+ * 生成配置的一行四项要对齐。
+ *
+ * 第一列标签里带了「0 = 不出」的小字，会把标签撑得比其它列高，
+ * 于是输入框整体下移、和右边的下拉框错开。这里把标签行固定成单行高度，
+ * 小字改用绝对定位贴到右侧，四列的控件就都落在同一条基线上。
+ */
+.config-flow .field {
+  margin-bottom: 0;
+  min-width: 0;
+}
+
+.config-flow .field > label {
+  position: relative;
+  display: block;
+  height: 18px;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 52px;
+}
+
+/* 标签里的小字说明（如「0 = 不出」）贴右，不参与行高计算 */
+.config-flow .field > label .hint {
+  position: absolute;
+  right: 0;
+  top: 0;
+  margin: 0;
+  font-size: 11.5px;
+  font-weight: 400;
+  line-height: 18px;
+  color: var(--muted);
+}
+
+/* 四个控件等高：输入框和下拉框的内边距本来就一致，这里兜底 */
+.config-flow .field > select,
+.config-flow .field > .card-sec-row {
+  height: 40px;
+  box-sizing: border-box;
+}
+
+.config-flow .field > .card-sec-row .text-input {
+  height: 100%;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.config-flow .field-hint {
+  display: block;
+  margin-top: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* 复选框 + 文字 */
 .check {
   display: flex;
@@ -591,6 +798,34 @@ body.electron.mac .tb-inner {
 .check input {
   width: 15px;
   height: 15px;
+}
+
+/**
+ * 带说明的勾选项：标题一行、说明另起一行并缩进到与文字左缘对齐。
+ * 说明塞在同一行会把复选框挤到文字中间，看着像禁用状态。
+ */
+.check.check-block {
+  align-items: center;
+  cursor: pointer;
+}
+
+.check.check-block span {
+  font-weight: 600;
+}
+
+/* 说明缩进到与复选框右侧文字左缘对齐：15px 复选框 + 8px gap */
+.check-block + .field-hint {
+  display: block;
+  margin-top: 4px;
+  margin-left: 23px;
+}
+
+/**
+ * 配置区里的一组相关控件（控件 + 它自己的说明）。
+ * 组与组之间留白，说明只跟着本组，不会看起来像在讲下一组的开关。
+ */
+.field-group + .field-group {
+  margin-top: 16px;
 }
 
 /* 输入框与「选择…」按钮并排 */
@@ -1502,6 +1737,164 @@ body.electron.mac .tb-inner {
 
 /* 素材确认 */
 
+/**
+ * 版式与素材按成片播放顺序混排的网格。
+ *
+ * 片头 → 第 1 段 → 第 2 段前的章节卡 → 第 2 段 → … → 片尾，
+ * 全部同宽同高，读起来就是成片的播放顺序。
+ */
+.timeline-grid {
+  display: grid;
+  /*
+   * 竖屏 9:16 的格子按列宽算会很高，3 列横向排开反而一屏看不全几段。
+   * 这里把列宽收窄到 200–260px，竖屏格子约 360–460px 高，
+   * 一行 3 个正好一屏能看到一整段（章节卡 + 素材 + 信息卡）。
+   */
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 14px;
+  /*
+   * stretch 让同一行的格子等高、底边对齐。
+   * 段落分隔条是通栏的，自己占满一行，不受影响。
+   */
+  align-items: stretch;
+  margin-bottom: 14px;
+}
+
+/* 宽屏仍固定 3 列，和配置区的 4 列错开，读起来有层次 */
+@media (min-width: 1180px) {
+  .timeline-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 780px) {
+  .timeline-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.timeline-tile {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  overflow: hidden;
+  /*
+   * 同行等高。
+   * 视频框虽然统一成 200px，但下面信息栏的字数不一样（素材那格有 tags、
+   * 版式卡只有标题），格子高度会差 30–40px，同一行底部参差不齐。
+   * 让每格撑满所在行，底边就对齐了。
+   */
+  height: 100%;
+}
+
+/* 版式卡和素材卡要能一眼分开 */
+.timeline-tile.is-card {
+  border-color: #cfe0fb;
+  background: #f8fbff;
+}
+
+.timeline-tile.is-card.kind-intro {
+  border-color: #bcd6ff;
+  background: #f4f9ff;
+}
+
+.timeline-tile.is-card.kind-outro {
+  border-color: #bfe9e2;
+  background: #f4fdfb;
+}
+
+/*
+ * 视频框高度统一由 --tile-media-h 决定，素材 / 信息卡 / 版式卡共用一档。
+ * 要整体调高调低只改这一个变量。
+ */
+:root {
+  --tile-media-h: 300px;
+}
+
+/*
+ * 框高定死，宽度按画幅比例算出来再居中，这样框和画面同形，没有多余黑边。
+ *
+ * 只写 width:100% + contain 时竖屏画面在 430px 宽的格子里只能撑到 169px，
+ * 左右各留 130px 纯黑。这里宽度 = 高 × 9/16，框本身就是竖的。
+ * 横屏用 16/9，算出来通常超过列宽，所以补 max-width:100%。
+ */
+.timeline-tile .material-video {
+  height: var(--tile-media-h);
+  width: calc(var(--tile-media-h) * 9 / 16);
+  max-width: 100%;
+  margin-inline: auto;
+  /* 覆盖通用 .material-video 的 260px 上限与 9/16 比例 */
+  max-height: none;
+  aspect-ratio: auto;
+  object-fit: contain;
+  display: block;
+  background: #0e1622;
+}
+
+.timeline-tile.is-landscape .material-video {
+  height: var(--tile-media-h);
+  width: calc(var(--tile-media-h) * 16 / 9);
+  max-width: 100%;
+  margin-inline: auto;
+  max-height: none;
+  aspect-ratio: auto;
+  object-fit: contain;
+  background: #0e1622;
+}
+
+/*
+ * 段落分隔：每段素材 + 它前面的章节卡 + 它上面的信息卡算一组。
+ * 3 列网格按行拍平后段落边界看不出，这里用一条通栏标题把段分开。
+ */
+.timeline-para {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 8px 12px;
+  border-left: 3px solid var(--brand);
+  border-radius: 8px;
+  background: linear-gradient(90deg, #eef4ff 0%, #f7faff 60%, #ffffff00 100%);
+  font-size: 13px;
+  font-weight: 700;
+  color: #2b3a52;
+}
+
+.timeline-para:first-child {
+  margin-top: 0;
+}
+
+.timeline-para .para-num {
+  flex: none;
+  min-width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.timeline-para .para-hint {
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.timeline-tile .material-info {
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
 .material-list {
   display: flex;
   flex-direction: column;
@@ -1515,6 +1908,55 @@ body.electron.mac .tb-inner {
   gap: 10px;
 }
 
+/* 结果区顶部的操作条：对整批素材/信息卡的批量操作 */
+.material-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #f6f9fd;
+}
+
+.material-toolbar-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #46566d;
+}
+
+/**
+ * 素材 + 信息卡并排：
+ * 这一段最终画面是「素材叠信息层」，两张卡并排才看得懂它们的关系
+ * （左边是活的底图，右边是叠上去的那层）。
+ */
+.material-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+/* 窄屏放不下两张并排，退回上下 */
+@media (max-width: 900px) {
+  .material-pair {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 静帧还在生成时的占位，避免出现裂图 */
+.card-still-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #6b7a90;
+  background: #eef3fa;
+}
+
 .material-card {
   display: grid;
   grid-template-columns: 200px 1fr;
@@ -1525,6 +1967,11 @@ body.electron.mac .tb-inner {
   background: #fbfdff;
 }
 
+/*
+ * 通用样式，只给不在时间线格子里的视频用（候选预览等）。
+ * 时间线格子的尺寸由 .timeline-tile .material-video 显式覆盖，
+ * 这里保留默认值不影响格子。
+ */
 .material-video {
   width: 100%;
   max-height: 260px;
@@ -1573,190 +2020,10 @@ body.electron.mac .tb-inner {
   font-size: 13px;
 }
 
-/* 版式确认：卡片缩略图 + 文案 + 操作 */
-.card-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-bottom: 14px;
-}
-
-.card-block {
-  display: grid;
-  grid-template-columns: 160px 1fr;
-  gap: 14px;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: #fbfdff;
-}
-
-.card-media {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  aspect-ratio: 9 / 16;
-  border-radius: 10px;
-  background: #0b1220;
-}
-
-.card-media img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-/* 静帧垫在播放器下面，播放器量到尺寸后自然盖住它 */
-.card-poster {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-}
-
-.card-media-fallback {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-  padding: 12px;
-  font-size: 14px;
-  font-weight: 700;
-  text-align: center;
-}
-
-.card-info {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-}
-
-.card-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.card-accent {
-  width: 12px;
-  height: 12px;
-  margin-left: auto;
-  border-radius: 50%;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
-}
-
-.card-title {
-  font-size: 15px;
-  font-weight: 700;
-  line-height: 1.5;
-  word-break: break-word;
-}
-
-.card-handle {
-  font-size: 12.5px;
-  color: var(--muted);
-}
-
-.card-actions {
-  display: flex;
-  gap: 8px;
-  margin-top: auto;
-  padding-top: 6px;
-}
-
-.card-actions .secondary {
-  padding: 7px 14px;
-  font-size: 13px;
-}
-
-@media (max-width: 720px) {
-  .card-block {
-    grid-template-columns: 120px 1fr;
-  }
-}
-
-.card-form {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.card-form .field {
-  margin-bottom: 0;
-}
-
-.card-form .field input {
-  width: 100%;
-  padding: 8px 10px;
-  border: 1px solid var(--border-strong);
-  border-radius: 10px;
-  font-family: inherit;
-  font-size: 13.5px;
-  color: var(--text);
-  background: #fbfdff;
-  outline: none;
-}
-
-.card-form .field input:focus {
-  border-color: #7aa6f7;
-  background: #fff;
-  box-shadow: 0 0 0 3px rgba(47, 111, 237, 0.12);
-}
-
-.card-presets {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
 /* 版式参数里的时长输入：与字幕字号那种窄输入框保持一致 */
 .panel-config .field input[type="number"].text-input {
   max-width: 120px;
 }
-
-.chip {
-  padding: 5px 12px;
-  border: 1px solid var(--border-strong);
-  border-radius: 999px;
-  font-size: 12.5px;
-  color: #4a5a70;
-  background: #fff;
-  cursor: pointer;
-}
-
-.chip.on {
-  border-color: #2f6fed;
-  color: #2f6fed;
-  background: rgba(47, 111, 237, 0.08);
-  font-weight: 600;
-}
-
-.card-swatches {
-  display: flex;
-  gap: 8px;
-}
-
-.swatch {
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border: 2px solid transparent;
-  border-radius: 50%;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
-  cursor: pointer;
-}
-
-.swatch.on {
-  border-color: #1b2433;
-  transform: scale(1.08);
-}
-
 .candidates {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
@@ -2058,8 +2325,23 @@ body.electron.mac .tb-inner {
 /* 1024 以上并排，820 以下单列 */
 @media (max-width: 820px) {
   .row,
-  .row-3 {
+  .row-3,
+  .row-4 {
     grid-template-columns: 1fr;
+  }
+
+  /* 整列改成单列后，三个秒数仍有足够宽度并排 */
+  .card-sec-row {
+    max-width: 260px;
+  }
+
+  /* 单列时每个字段重新留出下方间距，否则四组控件会粘在一起 */
+  .config-flow .field {
+    margin-bottom: 12px;
+  }
+
+  .config-flow .field-hint {
+    white-space: normal;
   }
 
   .field textarea.textarea-main {

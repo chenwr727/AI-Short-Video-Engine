@@ -1,4 +1,5 @@
 import type { Meta } from "../types";
+import { Dropdown } from "./Dropdown";
 import type { FormState } from "./stepTypes";
 
 /** 脚本风格与角色名 */
@@ -21,18 +22,13 @@ export function ScriptOptions({
     <div className="row row-3">
       <div className="field">
         <label htmlFor="prompt-source">脚本风格</label>
-        <select
+        <Dropdown
           id="prompt-source"
           value={form.promptSource}
-          onChange={(event) => onChange({ promptSource: event.target.value })}
+          options={(meta?.promptSources ?? []).map((option) => ({ value: option.id, label: option.label }))}
+          onChange={(next) => onChange({ promptSource: next })}
           disabled={disabled}
-        >
-          {meta?.promptSources.map((option) => (
-            <option key={option.id} value={option.id}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+        />
         {/* 占位保持高度，避免切换风格时跳动 */}
         <span className="field-hint">{style?.description ?? "　"}</span>
       </div>

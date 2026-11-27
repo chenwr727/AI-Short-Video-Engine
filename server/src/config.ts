@@ -17,8 +17,6 @@ export interface AppConfig {
   DASHSCOPE_WS_URL: string;
   PIXABAY_API_KEY: string;
   PEXELS_API_KEY: string;
-  VIDEO_WIDTH: string;
-  VIDEO_HEIGHT: string;
   FPS: string;
   TTS_SPEED: string;
   MATERIAL_MIN_DURATION: string;
@@ -48,6 +46,12 @@ export interface AppConfig {
   COLOR_GRADE: string;
   /** fade = 统一淡入淡出，mixed = 按段落轮换转场 */
   TRANSITION_STYLE: string;
+  /**
+   * 外观种子，留空 = 按剧本标题自动派生。
+   * 决定运镜方向与转场顺序的洗牌结果：不填则不同选题自动得到不同观感，
+   * 同一条视频重跑结果一致；填固定值可以强制复用某一套观感。
+   */
+  VARIATION_SEED: string;
   /** 1 = 用缩略图让模型看画面选片，0 = 只按标签文本选 */
   VISION_SELECT: string;
   /** 每段镜头数 1-3，1 = 整段只用一条素材 */
@@ -91,8 +95,6 @@ export const DEFAULTS: AppConfig = {
   DASHSCOPE_WS_URL: "",
   PIXABAY_API_KEY: "",
   PEXELS_API_KEY: "",
-  VIDEO_WIDTH: "1080",
-  VIDEO_HEIGHT: "1920",
   FPS: "24",
   TTS_SPEED: "1.1",
   MATERIAL_MIN_DURATION: "10",
@@ -110,6 +112,7 @@ export const DEFAULTS: AppConfig = {
   CAMERA_MOTION: "6",
   COLOR_GRADE: "5",
   TRANSITION_STYLE: "mixed",
+  VARIATION_SEED: "",
   VISION_SELECT: "1",
   SHOTS_PER_PARAGRAPH: "2",
   QUOTE_FALLBACK: "1",
@@ -202,7 +205,6 @@ export function numberOrZero(value: string, fallback: number): number {
   return Number.isFinite(n) && n >= 0 ? n : fallback;
 }
 
-/** 留空用 fallback */
 /** 卡片可选主色，主色之外只允许这几个，避免出现荧光色 */
 const CARD_EXTRA_ACCENTS = ["#3b82f6", "#22c55e", "#eab308", "#a855f7", "#f97316"];
 

@@ -1,5 +1,6 @@
 import type {
   CardPrefs,
+  CardSpec,
   Health,
   MaterialInfo,
   Meta,
@@ -37,6 +38,8 @@ export interface GeneratePayload {
   ttsEngine: string;
   voice: string;
   materialSource: string;
+  /** 素材匹配完成后顺带配信息卡；缺省 true */
+  autoInfoCards?: boolean;
   resolution: string;
 }
 
@@ -123,6 +126,8 @@ export interface ConfirmPayload {
     /** 配音语速，1 = 原速 */
     ttsSpeed?: number;
     materialSource?: string;
+    /** 素材匹配后是否配信息卡 */
+    autoInfoCards?: boolean;
     resolution?: string;
   };
 }
@@ -154,17 +159,18 @@ export async function regenerateTts(patch: ConfirmPayload["options"] = {}): Prom
   return data.state;
 }
 
-/** 提交手动换过的段与分辨率 */
+/** 提交手动换过的段与分辨率；cardPrefs 是素材页里选的片头/章节/片尾参数 */
 export async function confirmMaterial(
   items: (MaterialInfo & { paragraph: number })[] = [],
   resolution?: string,
+  cardPrefs?: CardPrefs,
 ): Promise<TaskState> {
   const data = await request<{ state: TaskState }>(
     "/task/material",
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ items, resolution }),
+      body: JSON.stringify({ items, resolution, cardPrefs }),
     },
     "确认素材失败",
   );
@@ -190,37 +196,64 @@ export function materialPreviewUrl(paragraph: number, version?: string): string 
   return `${BASE}/material/${paragraph}${version ? `?v=${encodeURIComponent(version)}` : ""}`;
 }
 
+/**
+ * 把某段画面换成信息卡。
+ * template 留空由模型判断该段适合哪种卡；指定时按该模板生成。
+ */
+export async function applyInfoCard(paragraph: number, template?: string): Promise<TaskState> {
+  const data = await request<{ card: CardSpec; state: TaskState }>(
+    "/task/material/info-card",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paragraph, template }),
+    },
+    "生成信息卡失败",
+  );
+  return data.state;
+}
+
+/** 撤掉信息卡，回到实拍素材 */
+export async function clearInfoCard(paragraph: number): Promise<TaskState> {
+  const data = await request<{ state: TaskState }>(
+    "/task/material/info-card/clear",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paragraph }),
+    },
+    "撤销信息卡失败",
+  );
+  return data.state;
+}
+
+/** 一键配置结果：哪几段配上了、哪几段跳过、哪几段失败 */
+export interface AutoInfoCardResult {
+  applied: number[];
+  skipped: number[];
+  failed: { paragraph: number; reason: string }[];
+  state: TaskState;
+}
+
+/**
+ * 一键配置信息卡：逐段判断哪几段适合，适合的自动生成。
+ * overwrite = 连已有的也重做（会重新调 AI，慢一些）。
+ */
+export async function applyInfoCardsAuto(overwrite = false): Promise<AutoInfoCardResult> {
+  return request<AutoInfoCardResult>(
+    "/task/material/info-card/auto",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ overwrite }),
+    },
+    "一键配置信息卡失败",
+  );
+}
+
 /** 卡片静帧；指纹变了 URL 也变，避免浏览器吃旧图 */
 export function cardStillUrl(id: string, fingerprint?: string): string {
   return `${BASE}/card/${encodeURIComponent(id)}/still${fingerprint ? `?v=${fingerprint}` : ""}`;
-}
-
-/** 首次生成版式；prefs 为页面上先选好的配色与章节时长，缺省则跟随 AI 与配置 */
-export async function generateCards(prefs: CardPrefs = {}): Promise<TaskState> {
-  const data = await request<{ state: TaskState }>(
-    "/task/cards/generate",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(prefs),
-    },
-    "生成版式失败",
-  );
-  return data.state;
-}
-
-/** 整份版式重做；prefs 缺省时沿用服务端记住的选择 */
-export async function regenerateCards(prefs: CardPrefs = {}): Promise<TaskState> {
-  const data = await request<{ state: TaskState }>(
-    "/task/cards/regenerate",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(prefs),
-    },
-    "生成版式失败",
-  );
-  return data.state;
 }
 
 /** 换一张：text = AI 重写文案，accent = 换配色 */
@@ -237,67 +270,9 @@ export async function rewriteCard(id: string, mode: "text" | "accent"): Promise<
   return data.state;
 }
 
-/** 手动改一张卡：文案、角标、时长、配色 */
-export async function updateCard(
-  id: string,
-  patch: {
-    title?: string;
-    label?: string;
-    accent?: string;
-    durationSec?: number;
-    handle?: string;
-    compositionId?: string;
-  },
-): Promise<TaskState> {
-  const data = await request<{ state: TaskState }>(
-    "/task/cards/update",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, ...patch }),
-    },
-    "保存卡片失败",
-  );
-  return data.state;
-}
-
-/** 批量应用：统一配色 / 各类时长（0 = 去掉这类卡） */
-export async function batchCards(patch: CardPrefs): Promise<TaskState> {
-  const data = await request<{ state: TaskState }>(
-    "/task/cards/batch",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(patch),
-    },
-    "批量修改失败",
-  );
-  return data.state;
-}
-
-/** 删掉一张卡 */
-export async function removeCard(id: string): Promise<TaskState> {
-  const data = await request<{ state: TaskState }>(
-    "/task/cards/remove",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
-    },
-    "删除卡片失败",
-  );
-  return data.state;
-}
-
-/** 确认版式，进入成片预览 */
-export async function confirmCards(): Promise<TaskState> {
-  const data = await request<{ state: TaskState }>("/task/cards", { method: "POST" }, "确认版式失败");
-  return data.state;
-}
-
 /** 分辨率一起传，检索才按新画幅筛选 */
 export async function matchMaterial(
-  patch: { materialSource?: string; resolution?: string; force?: boolean } = {},
+  patch: { materialSource?: string; resolution?: string; autoInfoCards?: boolean; force?: boolean } = {},
 ): Promise<TaskState> {
   const data = await request<{ state: TaskState }>(
     "/task/material/match",

@@ -1,23 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  batchCards,
   cancelTask,
-  confirmCards,
   confirmMaterial,
   confirmScript,
   getHealth,
   matchMaterial,
-  generateCards,
-  regenerateCards,
-  removeCard,
-  retryTask,
-  rewriteCard,
-  updateCard,
   getMeta,
   getTask,
   regenerateScript,
   regenerateTts,
   renderVideo,
+  retryTask,
   startGenerate,
   subscribeTask,
   type RenderPatch,
@@ -43,7 +36,6 @@ import { InputStep } from "./components/InputStep";
 import { ScriptStep } from "./components/ScriptStep";
 import { RenderSetupStep } from "./components/RenderSetupStep";
 import { MaterialStep } from "./components/MaterialStep";
-import { CardStep, type CardDraft } from "./components/CardStep";
 import { RenderStep } from "./components/RenderStep";
 import { ResultStep } from "./components/ResultStep";
 import type { FormState, RenderFormState } from "./components/stepTypes";
@@ -152,10 +144,13 @@ export default function App() {
     ttsSpeed: 0,
     materialSource: "",
     resolution: "",
+    autoInfoCards: true,
     voices: {},
   });
   // 手动换过的素材，切换步骤不丢
   const [materialPicks, setMaterialPicks] = useState<Record<number, MaterialInfo>>({});
+  /** 版式参数：合并后在素材页配置，确认素材时一并落库 */
+  const [cardPrefs, setCardPrefs] = useState<CardPrefs>({});
   // 走到过的最远一步，无任务进度时步骤条靠它
   const [maxStep, setMaxStep] = useState(0);
   const bodyRef = useRef<HTMLDivElement | null>(null);
@@ -246,13 +241,15 @@ export default function App() {
   // 回填任务已有的来源与分辨率，仅填空值
   useEffect(() => {
     if (!task) return;
-    const { width, height, materialSource, ttsEngine, ttsSpeed } = task.options;
+    const { width, height, materialSource, ttsEngine, ttsSpeed, autoInfoCards } = task.options;
     setRenderForm((prev) => ({
       ...prev,
       ttsEngine: prev.ttsEngine || ttsEngine,
       ttsSpeed: prev.ttsSpeed || ttsSpeed,
       materialSource: prev.materialSource || materialSource,
       resolution: prev.resolution || `${width}x${height}`,
+      // 旧任务没有这个字段，缺省按开启处理
+      autoInfoCards: autoInfoCards !== false,
     }));
   }, [task]);
 
@@ -371,6 +368,7 @@ export default function App() {
         ttsEngine: renderForm.ttsEngine,
         voice: Object.values(renderForm.voices)[0] ?? renderEngine?.voices[0]?.id ?? "",
         materialSource: renderForm.materialSource,
+        autoInfoCards: renderForm.autoInfoCards !== false,
         resolution: renderForm.resolution,
       });
       ignoreTaskRef.current = false;
@@ -396,6 +394,7 @@ export default function App() {
           ttsSpeed: renderForm.ttsSpeed,
           voices: renderForm.voices,
           materialSource: renderForm.materialSource,
+          autoInfoCards: renderForm.autoInfoCards !== false,
           resolution: renderForm.resolution,
         },
       });
@@ -413,78 +412,20 @@ export default function App() {
     setBusy(true);
     setError("");
     try {
-      const state = await confirmMaterial(items, renderForm.resolution);
+      /*
+       * 版式已并进素材页：后端在确认素材时按 cardPrefs 生成并确认版式，
+       * 所以这里只提交参数，返回的状态就已经是 material_ready。
+       */
+      const state = await confirmMaterial(items, renderForm.resolution, cardPrefs);
       setTask(state);
       setMaterialPicks({});
       setFollowing(true);
-      // 开了版式阶段就先去确认卡片，否则直达成片预览
-      setPhase(hasCards(state) ? "cards" : "result");
+      setPhase("result");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
-  }
-
-  /** 统一 busy 与报错；失败返回 undefined，调用方自己判断 */
-  async function withBusy<T>(job: () => Promise<T>): Promise<T | undefined> {
-    setBusy(true);
-    setError("");
-    try {
-      return await job();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      return undefined;
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function onConfirmCards() {
-    const state = await withBusy(confirmCards);
-    if (!state) return;
-    setTask(state);
-    setFollowing(true);
-    setPhase("result");
-  }
-
-  async function onGenerateCards(prefs: CardPrefs = {}) {
-    const state = await withBusy(() => generateCards(prefs));
-    if (!state) return;
-    setTask(state);
-    setFollowing(true);
-    setPhase("cards");
-  }
-
-  async function onRegenerateCards(prefs: CardPrefs = {}) {
-    const state = await withBusy(() => regenerateCards(prefs));
-    if (!state) return;
-    setTask(state);
-    setFollowing(true);
-    setPhase("cards");
-  }
-
-  async function onRewriteCard(id: string, mode: "text" | "accent") {
-    const state = await withBusy(() => rewriteCard(id, mode));
-    if (state) setTask(state);
-  }
-
-  /** 保存失败要回 false，卡片表单才知道别关 */
-  async function onUpdateCard(id: string, patch: CardDraft): Promise<boolean> {
-    const state = await withBusy(() => updateCard(id, patch));
-    if (!state) return false;
-    setTask(state);
-    return true;
-  }
-
-  async function onBatchCards(patch: CardPrefs) {
-    const state = await withBusy(() => batchCards(patch));
-    if (state) setTask(state);
-  }
-
-  async function onRemoveCard(id: string) {
-    const state = await withBusy(() => removeCard(id));
-    if (state) setTask(state);
   }
 
   function confirmDiscard(message: string): boolean {
@@ -527,6 +468,7 @@ export default function App() {
         await matchMaterial({
           materialSource: renderForm.materialSource,
           resolution: renderForm.resolution,
+          autoInfoCards: renderForm.autoInfoCards !== false,
           force,
         }),
       );
@@ -890,26 +832,11 @@ export default function App() {
             meta={meta}
             form={renderForm}
             onFormChange={onRenderFormChange}
-            nextLabel={cardsMode ? "下一步：版式确认" : undefined}
-          />
-        )}
-
-        {phase === "cards" && task && (
-          <CardStep
-            task={task}
-            busy={busy}
-            error={error}
-            meta={meta}
-            onGenerate={(prefs) => void onGenerateCards(prefs)}
-            onRegenerate={(prefs) => void onRegenerateCards(prefs)}
-            onRewrite={(id, mode) => void onRewriteCard(id, mode)}
-            onUpdate={onUpdateCard}
-            onBatch={(patch) => void onBatchCards(patch)}
-            onRemove={(id) => void onRemoveCard(id)}
-            onConfirm={() => void onConfirmCards()}
-            onRetry={onRetry}
-            onCancel={() => void onCancel()}
-            onBack={() => goBack("material")}
+            onStateChange={setTask}
+            cardPrefs={cardPrefs}
+            onCardPrefsChange={(patch) => setCardPrefs((prev) => ({ ...prev, ...patch }))}
+            cards={task.cards}
+            cardDefaults={meta?.cardDefaults}
           />
         )}
 
@@ -923,7 +850,7 @@ export default function App() {
               busy={busy}
               error={error}
               meta={meta}
-              onBack={() => goBack(cardsMode ? "cards" : "material")}
+              onBack={() => goBack("material")}
               onRestart={onRestart}
               onRender={(patch) => void onRender(patch)}
               onPickMusic={bridge()?.pickMusic ? onPickMusic : undefined}
@@ -935,11 +862,11 @@ export default function App() {
               busy={busy}
               error={error}
               stageIds={COMPOSE_STAGE_IDS}
-              onBack={() => goBack(cardsMode ? "cards" : "material")}
+              onBack={() => goBack("material")}
               onRestart={onRestart}
               onRetry={onRetry}
               onCancel={() => void onCancel()}
-              onNext={() => goNext(cardsMode ? "cards" : "material")}
+              onNext={() => goNext("material")}
               title="合成视频"
               desc="分段渲染 → 拼接 → 混音，完成后自动切到成片。"
             />

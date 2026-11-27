@@ -190,6 +190,7 @@ export function ResultStep(props: ResultStepProps) {
         <LogPanel
           logs={task.logs}
           stages={COMPOSE_STAGE_IDS}
+          since={task.runStartedAt}
           collapsible
           expanded={layout.logOpen}
           tall={layout.logOpen}

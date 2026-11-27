@@ -84,8 +84,8 @@ export function metaPayload(cfg: AppConfig = loadConfig()) {
     ttsEngines: ttsEngines(cfg),
     ttsSpeed: num(cfg.TTS_SPEED, 1.1),
     render: {
-      // 0 表示自动，换算成具体 px 返回
-      subtitleFontSize: numberOrZero(cfg.SUBTITLE_FONT_SIZE, 0) || autoSubtitleFontSize(num(cfg.VIDEO_WIDTH, 1080)),
+      // 0 表示自动，换算成具体 px 返回；竖屏基准宽度固定 1080
+      subtitleFontSize: numberOrZero(cfg.SUBTITLE_FONT_SIZE, 0) || autoSubtitleFontSize(1080),
       bgmEnabled: bool(cfg.BGM_ENABLED, true),
       bgmVolume: numberOrZero(cfg.BGM_VOLUME, 0.1),
     },

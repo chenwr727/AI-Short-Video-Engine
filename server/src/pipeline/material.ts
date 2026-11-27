@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { bool, loadConfig, num, numberOrZero } from "../config.js";
@@ -25,6 +26,11 @@ const REQUEST_INTERVAL = 400;
 const VISION_MAX_IMAGES = 12;
 /** 新素材少于这个数就放宽到已用过的候选，避免越往后越没得选 */
 const MIN_FRESH_CANDIDATES = 6;
+/**
+ * 一个检索词至少带来这么多新候选才算有收获。
+ * 实测同段 5 个词高度重叠（第 1 个占 61%），低于这个数说明后面的词在重复劳动。
+ */
+const MIN_GAIN_PER_TERM = 3;
 
 function sleep(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -99,41 +105,96 @@ function fallbackTerms(content: string): string[] {
   return phrases.length > 0 ? phrases : [content.slice(0, 12) || "video"];
 }
 
-/** 每段生成 5 个检索词，落盘 _terms.json */
-async function generateTerms(ctx: TaskContext, transcript: Transcript): Promise<string[][]> {
+/**
+ * 每段生成 5 个检索词，落盘 _terms.json。
+ *
+ * 画幅和时长必须告诉模型：图库里同一句话横屏结果远多于竖屏，
+ * 不说明就会拿到一堆 3840×2160，成片只能裁掉大半画面。
+ * Pixabay 把 `vertical` 当筛选词而不是普通关键词（实测带这个词的检索
+ * 竖屏占比从 0% 涨到 35~70%，总结果还多 4~5 倍），所以竖屏任务要让它进词。
+ */
+async function generateTerms(ctx: TaskContext, transcript: Transcript, audio?: AudioManifest): Promise<string[][]> {
   const file = path.join(ctx.workspace, TERMS_FILE);
+  const prompt = loadSearchTermsPrompt();
+  /*
+   * 检索词带提示词指纹：改了 material.json 里的规则（画幅约束、时长约束）后，
+   * 老工作区若还复用旧 _terms.json，新规则永远不生效 —— 用户会以为改了提示词没反应。
+   * 旧格式是裸的 string[][]，没有指纹，一律当作过期重生成。
+   */
+  const promptStamp = termsPromptStamp();
   if (fs.existsSync(file)) {
-    ctx.log("复用检索词（_terms.json）");
-    return JSON.parse(fs.readFileSync(file, "utf-8")) as string[][];
+    try {
+      const cached = JSON.parse(fs.readFileSync(file, "utf-8")) as { prompt?: string; terms?: string[][] } | string[][];
+      if (!Array.isArray(cached) && cached.prompt === promptStamp && Array.isArray(cached.terms)) {
+        ctx.log("复用检索词（_terms.json）");
+        return cached.terms;
+      }
+    } catch {
+      // 坏文件按过期处理
+    }
+    ctx.log("检索词提示词有更新，重新生成检索词", "warn");
   }
 
-  const prompt = loadSearchTermsPrompt();
+  const portrait = ctx.options.height > ctx.options.width;
   const payload = transcript.paragraphs.map((paragraph, index) => ({
     id: index + 1,
     content: paragraph.dialogues.map((d) => `${d.speaker}：${d.contents.join("")}`).join("\n"),
+    // 这段配音多长：词要能让模型判断「一条素材够不够铺满」
+    seconds: Math.round((audio?.paragraphs[index]?.duration ?? 0) * 10) / 10,
   }));
+
+  /** 画幅上下文的开场白，拼在提示词前面 */
+  const frameBrief = portrait
+    ? [
+        "本次成片是【竖屏 9:16】。",
+        "图库检索时 `vertical`（或 vertical video）是画幅筛选词，不是普通关键词 —— 把它放进检索词能显著提高竖屏命中率，",
+        "所以每个检索词都应以 `vertical` 开头，后面再接具体画面主体。",
+        "例如：`vertical press conference`、`vertical stock chart close up`、`vertical businessman walking`。",
+      ].join("\n")
+    : [
+        "本次成片是【横屏 16:9】。",
+        "图库横屏素材本来就是多数，不需要额外加画幅词，直接写具体画面即可。",
+        "例如：`press conference`、`stock chart close up`、`businessman walking`。",
+      ].join("\n");
+
+  const fullPrompt = `${frameBrief}\n\n${prompt}`;
 
   const collected = new Map<number, string[]>();
 
-  // 整批问一次，模型可能只回一部分
-  for (let attempt = 1; attempt <= 2 && collected.size === 0; attempt++) {
-    const answer = await chat(prompt, JSON.stringify(payload), {
-      json: true,
+  /*
+   * 整批问一次，模型经常只回前一两段。
+   *
+   * 根因不是模型吝啬，是 `response_format: json_object` 在这个服务端上会把
+   * 长数组截断：实测 6 段请求，json_object 模式只吐 182 字符 / 1 段
+   * （completion_tokens 却是 1282），同一请求去掉 json_object 就给全了
+   * 1112 字符 / 6 段。所以这里**不用 json_object**，直接让模型输出裸数组，
+   * 再自己从文本里抽 JSON —— 提示词本来就要求「直接输出数组、不要代码块」。
+   */
+  const covered = () => payload.filter((item) => (collected.get(item.id)?.length ?? 0) >= 5).length;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    if (covered() >= Math.ceil(payload.length * 0.5)) break;
+    const answer = await chat(fullPrompt, JSON.stringify(payload), {
       signal: ctx.signal,
-      temperature: 0.6,
+      temperature: attempt === 1 ? 0.6 : 0.3,
+      maxTokens: 4096,
     });
-    for (const [id, terms] of parseTermsMap(answer)) collected.set(id, terms);
-    if (collected.size === 0) ctx.log(`检索词格式不符，重试 ${attempt}/2`, "warn");
+    for (const [id, terms] of parseTermsMap(answer)) {
+      if ((collected.get(id)?.length ?? 0) < 5) collected.set(id, terms);
+    }
+    const done = covered();
+    if (done < payload.length) {
+      ctx.log(`检索词只覆盖 ${done}/${payload.length} 段，${attempt < 3 ? "整批重试" : "改为逐段补问"}`, "warn");
+    }
   }
 
   // 缺的段逐段补问
   const missing = payload.filter((item) => (collected.get(item.id)?.length ?? 0) < 5);
   for (const item of missing) {
     if (ctx.signal.aborted) throw new DOMException("已取消", "AbortError");
-    const answer = await chat(prompt, JSON.stringify([item]), {
-      json: true,
+    const answer = await chat(fullPrompt, JSON.stringify([item]), {
       signal: ctx.signal,
       temperature: 0.6,
+      maxTokens: 1024,
     });
     // 单段提问时 id 可能是 1，也可能是真实段号
     const parsed = parseTermsMap(answer);
@@ -143,20 +204,75 @@ async function generateTerms(ctx: TaskContext, transcript: Transcript): Promise<
 
   const terms = payload.map((item) => {
     const got = collected.get(item.id);
-    if (got && got.length > 0) return got.slice(0, 5);
+    if (got && got.length > 0) return fitOrientation(got.slice(0, 5), portrait);
     ctx.log(`第 ${item.id} 段拿不到英文检索词，改用台词关键词`, "warn");
     return fallbackTerms(item.content);
   });
 
-  fs.writeFileSync(file, JSON.stringify(terms, null, 2), "utf-8");
-  ctx.log(`检索词已生成：${terms.length} 段 × ${terms[0]?.length ?? 0} 个`);
+  fs.writeFileSync(file, JSON.stringify({ prompt: promptStamp, terms }, null, 2), "utf-8");
+  const sample = terms[0]?.[0] ?? "";
+  ctx.log(`检索词已生成：${terms.length} 段 × ${terms[0]?.length ?? 0} 个（示例：${sample}）`);
   return terms;
+}
+
+/**
+ * 兜底纠正画幅词与词长。
+ *
+ * 提示词已经要求模型加 `vertical` 并控制长度，但模型偶尔会漏：
+ * 漏一个 `vertical` 就等于丢掉大部分竖屏候选，词太长又会把 `vertical`
+ * 的筛选效果稀释掉（实测 4 词以上竖屏占比掉到 5~10%）。所以这里按画幅硬修一次。
+ */
+export function fitOrientation(terms: string[], portrait: boolean): string[] {
+  return terms.map((term) => {
+    const words = term
+      .toLowerCase()
+      .replace(/\bvertical\b/gi, " ")
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter(Boolean);
+    if (words.length === 0) return term;
+
+    if (!portrait) {
+      // 横屏：去掉 vertical，最多留 4 个词
+      return words.slice(0, 4).join(" ");
+    }
+
+    /*
+     * 竖屏：vertical + 最多 2 个实义词 = 3 个单词。
+     * 取前两个词而不是随机挑，因为提示词要求「中心词在前、修饰在后」。
+     */
+    return ["vertical", ...words.slice(0, 2)].join(" ");
+  });
 }
 
 interface SelectOutcome {
   item: MaterialInfo | null;
-  /** 视觉模型不可用，本次任务不再尝试看图 */
-  visionFailed: boolean;
+  /**
+   * 视觉选片**永久**不可用（模型不支持图片输入）。
+   * 只有这种情况才该关掉后续所有段的看图；
+   * 偶发的超时、限流、返回格式异常都只影响当前段。
+   */
+  visionUnsupported: boolean;
+}
+
+/**
+ * 判断视觉选片失败是不是「这个模型根本看不了图」。
+ *
+ * 两者后果完全不同：不支持图片意味着后面每段都会白跑一次 240 秒超时的请求，
+ * 必须立刻关掉；而超时、限流、返回格式错都是临时的，关掉就等于让后面所有段落
+ * 都退化成标签选片 —— 而 Pexels 根本不返回标签，那样等于盲选。
+ */
+export function isVisionUnsupported(error: unknown): boolean {
+  const message = (error instanceof Error ? error.message : String(error)).toLowerCase();
+  return [
+    "does not support image",
+    "image input",
+    "vision",
+    "multimodal",
+    "invalid content type",
+    "image_url",
+    "unsupported media",
+  ].some((needle) => message.includes(needle));
 }
 
 /** 旧 _videos.json 与 Pexels（无标签）都没有 relevance，按贴合处理 */
@@ -248,7 +364,13 @@ async function visionSelect(
   return picked;
 }
 
-/** 让模型挑选语义最贴合的候选：先看图，看图不可用时退回标签文本 */
+/**
+ * 让模型挑选语义最贴合的候选：先看图，看图不可用时退回标签文本。
+ *
+ * `visionUnsupported` 只在「模型不支持图片」时为真 —— 那是模型能力问题，
+ * 后面每段再试都是白等一次 240 秒超时。临时错误（超时/限流/格式）不关，
+ * 下一段继续尝试，避免一次抖动就让整条视频退化成盲选。
+ */
 async function aiSelect(
   ctx: TaskContext,
   content: string,
@@ -256,20 +378,24 @@ async function aiSelect(
   audioLength: number,
   allowVision: boolean,
 ): Promise<SelectOutcome> {
-  if (candidates.length === 0) return { item: null, visionFailed: false };
+  if (candidates.length === 0) return { item: null, visionUnsupported: false };
 
   if (allowVision) {
     try {
       const picked = await visionSelect(ctx, content, candidates, audioLength);
-      if (picked) return { item: picked, visionFailed: false };
+      if (picked) return { item: picked, visionUnsupported: false };
       ctx.log("视觉选片没有给出可用画面，回退到标签选片", "warn");
     } catch (error) {
       if (ctx.signal.aborted) throw error;
+      const unsupported = isVisionUnsupported(error);
+      const reason = error instanceof Error ? error.message : String(error);
       ctx.log(
-        `视觉选片不可用，本次任务改用标签选片：${error instanceof Error ? error.message : String(error)}`,
+        unsupported
+          ? `模型不支持图片输入，本次任务改用标签选片：${reason}`
+          : `本段视觉选片失败，先退回标签选片，下一段继续尝试看图：${reason}`,
         "warn",
       );
-      return { item: null, visionFailed: true };
+      return { item: null, visionUnsupported: unsupported };
     }
   }
 
@@ -291,17 +417,17 @@ async function aiSelect(
     };
     const answer = await chat(prompt, JSON.stringify(payload), { json: true, signal: ctx.signal, temperature: 0.3 });
     const json = extractJsonObject(answer);
-    if (!json) return { item: null, visionFailed: false };
+    if (!json) return { item: null, visionUnsupported: false };
 
     const data = JSON.parse(json) as { selected_ids?: unknown };
     const ids = Array.isArray(data.selected_ids) ? data.selected_ids : [];
     const picked = takeFromOrdered(candidates, ids, audioLength);
-    if (picked) return { item: picked, visionFailed: false };
+    if (picked) return { item: picked, visionUnsupported: false };
   } catch (error) {
     if (ctx.signal.aborted) throw error;
     ctx.log(`AI 选片失败，改用时长匹配：${error instanceof Error ? error.message : String(error)}`, "warn");
   }
-  return { item: null, visionFailed: false };
+  return { item: null, visionUnsupported: false };
 }
 
 interface PickedMaterial {
@@ -350,9 +476,28 @@ function isAspectClose(item: MaterialInfo, width: number, height: number): boole
   return Math.abs(ratio - target) / target <= 0.35;
 }
 
-/** 来源、画幅、时长门槛、选片方式、镜头数任一变化都要重新匹配 */
-function materialSignature(options: GenerateOptions, minDuration: number, vision: boolean, shots: number): string {
-  return JSON.stringify([options.materialSource, options.width, options.height, minDuration, vision, shots]);
+/** 检索词提示词指纹：改了 material.json 里的规则，旧素材清单必须作废 */
+function termsPromptStamp(): string {
+  return createHash("sha1").update(loadSearchTermsPrompt()).digest("hex").slice(0, 12);
+}
+
+/** 来源、画幅、时长门槛、选片方式、镜头数、检索词规则任一变化都要重新匹配 */
+function materialSignature(
+  options: GenerateOptions,
+  minDuration: number,
+  vision: boolean,
+  shots: number,
+  termsStamp: string,
+): string {
+  return JSON.stringify([
+    options.materialSource,
+    options.width,
+    options.height,
+    minDuration,
+    vision,
+    shots,
+    termsStamp,
+  ]);
 }
 
 /** 没素材的占位项，合成阶段会换成设计卡 */
@@ -448,11 +593,28 @@ export async function searchCandidates(
   const take = (): MaterialInfo[] =>
     [...candidates].sort((a, b) => relevanceOf(b) - relevanceOf(a)).slice(0, MAX_CANDIDATES);
 
-  // 第一轮每个词搜一遍，避免候选集中
+  /*
+   * 逐个词搜，按新增候选数决定要不要继续。
+   *
+   * 同一段的 5 个词高度重叠（`vertical stock chart` 与 `vertical trading floor`
+   * 结果重合 9/20），连续两个词没带来新候选就说明这组词到头了 ——
+   * 继续翻页也是重复劳动，把剩下的词留给用户点「换一个」时用。
+   */
+  let barren = 0;
   for (const term of terms) {
     if (ctx.signal.aborted) throw new DOMException("已取消", "AbortError");
     if (candidates.length >= MAX_CANDIDATES) return take();
+
+    const before = candidates.length;
     await searchTerm(term);
+    const gained = candidates.length - before;
+
+    barren = gained < MIN_GAIN_PER_TERM ? barren + 1 : 0;
+    if (barren >= 2) {
+      ctx.log(`连续两个检索词几乎没带来新素材（当前 ${candidates.length} 个），停止继续检索`, "warn");
+      break;
+    }
+
     await sleep(REQUEST_INTERVAL, ctx.signal);
   }
 
@@ -468,11 +630,18 @@ export async function searchCandidates(
   return take();
 }
 
-/** 匹配素材，阶段收尾由调用方负责 */
+/**
+ * 匹配素材，阶段收尾由调用方负责。
+ *
+ * `onItem` 在每段素材下载完成后立刻回调，让上层能「完成一段就露一段」，
+ * 而不是等整条跑完 1 分多钟才见到第一段。回调里的异常不会中断匹配 ——
+ * 它只是进度通知，不该拖垮主流程。
+ */
 export async function runMaterialStage(
   ctx: TaskContext,
   transcript: Transcript,
   audio: AudioManifest,
+  onItem?: (item: MaterialItem, done: number, total: number) => void | Promise<void>,
 ): Promise<MaterialManifest> {
   const source = ctx.options.materialSource;
   const cfg = loadConfig();
@@ -485,6 +654,7 @@ export async function runMaterialStage(
     num(cfg.MATERIAL_MIN_DURATION, 10),
     bool(cfg.VISION_SELECT, true),
     shotsPerParagraph,
+    termsPromptStamp(),
   );
   const manifestFile = path.join(ctx.workspace, VIDEOS_FILE);
   if (fs.existsSync(manifestFile)) {
@@ -498,11 +668,21 @@ export async function runMaterialStage(
   }
 
   ctx.markStage("material", "running");
-  const terms = await generateTerms(ctx, transcript);
+  const terms = await generateTerms(ctx, transcript, audio);
   const used = new Set<string>();
   const items: MaterialItem[] = [];
   // 模型不支持图片输入时只失败一次，后续段落不再重试
   let allowVision = bool(cfg.VISION_SELECT, true);
+
+  /** 上报一段的成果；通知失败不算匹配失败 */
+  const report = async (item: MaterialItem): Promise<void> => {
+    if (!onItem) return;
+    try {
+      await onItem(item, items.length, transcript.paragraphs.length);
+    } catch {
+      // 进度通知与素材无关，吞掉
+    }
+  };
 
   for (let pi = 0; pi < transcript.paragraphs.length; pi++) {
     const paragraph = transcript.paragraphs[pi];
@@ -518,7 +698,9 @@ export async function runMaterialStage(
     if (candidates.length === 0) {
       if (quoteFallback) {
         ctx.log(`第 ${pi + 1} 段没有检索到素材，改用设计卡`, "warn");
-        items.push(fallbackItem(pi + 1, paragraphTerms));
+        const placeholder = fallbackItem(pi + 1, paragraphTerms);
+        items.push(placeholder);
+        await report(placeholder);
         continue;
       }
       throw new Error(`第 ${pi + 1} 段没有检索到可用素材（关键词没搜到，或时长/画幅不达标）`);
@@ -534,9 +716,12 @@ export async function runMaterialStage(
     const content = paragraph.dialogues.map((d) => `${d.speaker}：${d.contents.join("")}`).join("\n");
     const preferred = pool.filter((c) => isAspectClose(c, ctx.options.width, ctx.options.height));
 
-    // 视觉选片优先，模型不支持图片时本次任务自动退回标签选片
+    /*
+     * 视觉选片优先。只有「模型不支持图片」才把后续段落的看图关掉；
+     * 临时失败（超时/限流/格式错）不影响下一段继续尝试。
+     */
     const selection = await aiSelect(ctx, content, pool, audioLength, allowVision);
-    if (selection.visionFailed) allowVision = false;
+    if (selection.visionUnsupported) allowVision = false;
     let picked: PickedMaterial | null = selection.item ? fromAiPick(selection.item, audioLength, used) : null;
     picked ??= chooseMaterial(preferred, pool, audioLength, used);
     // 全都用过时允许复用，画面重复好过中断流程
@@ -544,7 +729,9 @@ export async function runMaterialStage(
     if (!picked) {
       if (quoteFallback) {
         ctx.log(`第 ${pi + 1} 段没有可选素材，改用设计卡`, "warn");
-        items.push(fallbackItem(pi + 1, paragraphTerms));
+        const placeholder = fallbackItem(pi + 1, paragraphTerms);
+        items.push(placeholder);
+        await report(placeholder);
         continue;
       }
       throw new Error(`第 ${pi + 1} 段没有可用素材`);
@@ -579,7 +766,9 @@ export async function runMaterialStage(
     if (!picked || !videoPath) {
       if (quoteFallback) {
         ctx.log(`第 ${pi + 1} 段素材下载全部失败（已试 ${failedCount} 个），改用设计卡`, "warn");
-        items.push(fallbackItem(pi + 1, paragraphTerms));
+        const placeholder = fallbackItem(pi + 1, paragraphTerms);
+        items.push(placeholder);
+        await report(placeholder);
         continue;
       }
       throw new Error(`第 ${pi + 1} 段素材下载失败（已尝试 ${failedCount} 个候选）`);
@@ -612,16 +801,19 @@ export async function runMaterialStage(
       }
     }
 
-    items.push({
+    const finished: MaterialItem = {
       ...item,
       videoPath,
       paragraph: pi + 1,
       searchTerms: paragraphTerms,
       shots: shots.length > 0 ? shots : undefined,
-    });
+    };
+    items.push(finished);
     if (shots.length > 0) {
       ctx.log(`第 ${pi + 1} 段共 ${shots.length + 1} 个镜头`);
     }
+    // 这一段素材落地了，立刻让上层露出来，不必等整条跑完
+    await report(finished);
   }
 
   const manifest: MaterialManifest = { source, signature, items };

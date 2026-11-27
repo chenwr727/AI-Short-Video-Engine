@@ -126,6 +126,7 @@ export function ScriptStep(props: ScriptStepProps) {
           <LogPanel
             logs={task.logs}
             stages={SCRIPT_STAGE_IDS}
+            since={task.runStartedAt}
             collapsible
             expanded={layout.logOpen}
             tall={layout.logOpen}

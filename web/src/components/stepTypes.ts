@@ -13,5 +13,7 @@ export interface RenderFormState {
   ttsSpeed: number;
   materialSource: string;
   resolution: string;
+  /** 素材匹配完成后顺带配信息卡；缺省 true */
+  autoInfoCards?: boolean;
   voices: Record<string, string>;
 }
