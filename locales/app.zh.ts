@@ -1,0 +1,28 @@
+/** app 命名空间的中文字典，也是这一组键的真源。 */
+export const app = {
+  busy: "任务正在运行，等它停下来或先取消。",
+  composeTitle: "合成视频",
+  connecting: "正在连接后端…",
+  dismiss: "关闭提示",
+  name: "AI 短视频生成器",
+  noContent: "还没有内容：先回上一步填入链接或正文。",
+  noLlmKey: "还没配置 LLM API Key：在「设置 → 首选项…」（Ctrl+,）里填好即可生效。",
+  resume: "已恢复上次的任务（{time} · {status}），停在「{step}」",
+  settingsHint: "Ctrl+, 首选项",
+  settingsHintMac: "⌘, 首选项",
+  "status.awaiting_cards": "等待确认版式",
+  "status.awaiting_material": "等待确认素材",
+  "status.awaiting_script": "等待确认剧本",
+  "status.cancelled": "已取消",
+  "status.cards_ready": "版式已确认",
+  "status.completed": "已完成",
+  "status.failed": "失败",
+  "status.idle": "空闲",
+  "status.material_ready": "素材就绪",
+  "status.running": "生成中",
+  "status.script_confirmed": "剧本已确认",
+  "status.tts_ready": "配音完成",
+  tagline: "链接 → 剧本 → 配音 → 素材 → 成片，全流程自动跑",
+} satisfies Record<string, string>;
+
+export type AppKey = keyof typeof app;

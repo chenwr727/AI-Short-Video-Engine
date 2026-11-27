@@ -3,6 +3,17 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildLocales } from "../../scripts/build-locales.mjs";
+
+/*
+ * 先清掉 ELECTRON_RUN_AS_NODE。
+ *
+ * 它的本意是让 Electron 以纯 node 模式启动，但残留在 shell 环境里时，
+ * 本脚本 spawn 的任何 node 子进程都会直接 EPERM 失败 —— 报错只写
+ * 「spawnSync <node.exe> EPERM」，看不出真正原因，非常难查。
+ * 必须在第一次 spawn 之前删，放在循环里就晚了。
+ */
+delete process.env.ELECTRON_RUN_AS_NODE;
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const desktop = path.resolve(here, "..");
@@ -16,6 +27,18 @@ const slimRemotion = process.argv.includes("--slim") || process.env.AISV_REMOTIO
 const tscCli = path.join(desktop, "node_modules", "typescript", "bin", "tsc");
 
 const steps = [
+  {
+    name: "locales",
+    // 语言包以仓库根的 locales/ 为真源，编译成 assets/locales.json 供原生页面读取。
+    // 直接调用而不是起子进程：少一次 spawn，在被限制创建进程的环境里也更稳。
+    run: () => {
+      const problems = buildLocales();
+      if (problems.length) {
+        for (const p of problems) console.error(`  ${p}`);
+        process.exitCode = 1;
+      }
+    },
+  },
   {
     name: "web",
     // Windows 下需经 cmd/s 才能解析 pnpm.cmd
@@ -65,6 +88,23 @@ function describe(code) {
 for (const step of steps) {
   console.log(`\n[build] ▶ ${step.name}`);
   const started = Date.now();
+
+  // 有些步骤直接在本进程里跑，不起子进程
+  if (step.run) {
+    try {
+      step.run();
+    } catch (error) {
+      console.error(`\n[build] ✗ ${step.name} 失败：${error instanceof Error ? error.message : error}`);
+      process.exit(1);
+    }
+    if (process.exitCode) {
+      console.error(`\n[build] ✗ ${step.name} 失败`);
+      process.exit(1);
+    }
+    console.log(`[build] ✓ ${step.name}（${((Date.now() - started) / 1000).toFixed(1)}s）`);
+    continue;
+  }
+
   const r = spawnSync(step.cmd, step.args, {
     cwd: desktop,
     stdio: "inherit",

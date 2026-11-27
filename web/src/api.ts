@@ -1,3 +1,5 @@
+import { currentLanguage, t } from "./i18n";
+import type { MessageKey } from "./i18n";
 import type {
   CardPrefs,
   CardSpec,
@@ -13,21 +15,35 @@ import type {
 
 const BASE = "/api";
 
-async function request<T>(path: string, init?: RequestInit, errMsg = "请求失败"): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, init);
+/**
+ * 带上界面语言，后端据此返回对应语言的提示。
+ *
+ * 合并而不是覆盖调用方传的 headers：多数请求只要 Content-Type，
+ * 但 GET 类请求压根不带 headers，这里统一补齐最省事。
+ */
+function withLanguage(init?: RequestInit): RequestInit {
+  const headers = new Headers(init?.headers);
+  headers.set("Accept-Language", currentLanguage() === "en" ? "en" : "zh-CN");
+  return { ...init, headers };
+}
+
+async function request<T>(path: string, init?: RequestInit, errKey: MessageKey = "error.request"): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, withLanguage(init));
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(body.error ?? `${errMsg}：${res.status}`);
+    // 分隔符跟着语言走，不然英文界面里会混进一个中文全角冒号
+    const sep = currentLanguage() === "en" ? ": " : "：";
+    throw new Error(body.error ?? `${t(errKey)}${sep}${res.status}`);
   }
   return (await res.json()) as T;
 }
 
 export function getHealth(): Promise<Health> {
-  return request<Health>("/health", undefined, "无法连接后端");
+  return request<Health>("/health", undefined, "error.backend");
 }
 
 export function getMeta(): Promise<Meta> {
-  return request<Meta>("/meta", undefined, "获取配置项失败");
+  return request<Meta>("/meta", undefined, "error.configList");
 }
 
 export interface GeneratePayload {
@@ -49,13 +65,13 @@ export interface PromptCatalog {
 }
 
 export function getPrompts(): Promise<PromptCatalog> {
-  return request<PromptCatalog>("/prompts", undefined, "读取提示词失败");
+  return request<PromptCatalog>("/prompts", undefined, "error.promptsRead");
 }
 
 /** 详情带内置默认值，用来对比与恢复 */
 export function getPrompt(file: string, key: string): Promise<PromptValue> {
   const query = `?file=${encodeURIComponent(file)}&key=${encodeURIComponent(key)}`;
-  return request<PromptValue>(`/prompts/one${query}`, undefined, "读取提示词失败");
+  return request<PromptValue>(`/prompts/one${query}`, undefined, "error.promptsRead");
 }
 
 export async function savePrompt(file: string, key: string, value: string): Promise<PromptValue> {
@@ -66,7 +82,7 @@ export async function savePrompt(file: string, key: string, value: string): Prom
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ file, key, value }),
     },
-    "保存提示词失败",
+    "error.promptsSave",
   );
 }
 
@@ -78,12 +94,12 @@ export async function resetPrompt(file: string, key: string): Promise<PromptValu
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ file, key }),
     },
-    "恢复默认失败",
+    "error.promptsReset",
   );
 }
 
 export async function getTask(): Promise<TaskState | null> {
-  const data = await request<{ state: TaskState | null }>("/task", undefined, "获取任务失败");
+  const data = await request<{ state: TaskState | null }>("/task", undefined, "error.taskGet");
   return data.state;
 }
 
@@ -95,7 +111,7 @@ export async function startGenerate(payload: GeneratePayload): Promise<TaskState
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     },
-    "创建任务失败",
+    "error.taskCreate",
   );
   return data.state;
 }
@@ -113,7 +129,7 @@ export async function regenerateScript(patch: {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(patch),
     },
-    "重新生成剧本失败",
+    "error.scriptRegen",
   );
   return data.state;
 }
@@ -140,7 +156,7 @@ export async function confirmScript(payload: ConfirmPayload): Promise<TaskState>
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     },
-    "确认剧本失败",
+    "error.scriptConfirm",
   );
   return data.state;
 }
@@ -154,7 +170,7 @@ export async function regenerateTts(patch: ConfirmPayload["options"] = {}): Prom
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ options: patch }),
     },
-    "重新生成配音失败",
+    "error.ttsRegen",
   );
   return data.state;
 }
@@ -172,7 +188,7 @@ export async function confirmMaterial(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ items, resolution, cardPrefs }),
     },
-    "确认素材失败",
+    "error.materialConfirm",
   );
   return data.state;
 }
@@ -186,7 +202,7 @@ export async function searchMaterial(paragraph: number, terms?: string[]): Promi
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ paragraph, terms }),
     },
-    "检索候选素材失败",
+    "error.candidates",
   );
   return data.candidates;
 }
@@ -208,7 +224,7 @@ export async function applyInfoCard(paragraph: number, template?: string): Promi
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ paragraph, template }),
     },
-    "生成信息卡失败",
+    "error.infoCard",
   );
   return data.state;
 }
@@ -222,7 +238,7 @@ export async function clearInfoCard(paragraph: number): Promise<TaskState> {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ paragraph }),
     },
-    "撤销信息卡失败",
+    "error.infoCardClear",
   );
   return data.state;
 }
@@ -247,7 +263,7 @@ export async function applyInfoCardsAuto(overwrite = false): Promise<AutoInfoCar
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ overwrite }),
     },
-    "一键配置信息卡失败",
+    "error.infoCardAuto",
   );
 }
 
@@ -265,7 +281,7 @@ export async function rewriteCard(id: string, mode: "text" | "accent"): Promise<
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, mode }),
     },
-    "换版式失败",
+    "error.cardSwap",
   );
   return data.state;
 }
@@ -281,7 +297,7 @@ export async function matchMaterial(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(patch),
     },
-    "匹配素材失败",
+    "error.match",
   );
   return data.state;
 }
@@ -303,19 +319,19 @@ export async function renderVideo(patch: RenderPatch): Promise<TaskState> {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(patch),
     },
-    "生成成片失败",
+    "error.render",
   );
   return data.state;
 }
 
 /** 沿用原工作目录，已完成阶段命中缓存 */
 export async function retryTask(): Promise<TaskState> {
-  const data = await request<{ state: TaskState }>("/task/retry", { method: "POST" }, "重试失败");
+  const data = await request<{ state: TaskState }>("/task/retry", { method: "POST" }, "error.retry");
   return data.state;
 }
 
 export async function cancelTask(): Promise<TaskState> {
-  const data = await request<{ state: TaskState }>("/task/cancel", { method: "POST" }, "取消失败");
+  const data = await request<{ state: TaskState }>("/task/cancel", { method: "POST" }, "error.cancel");
   return data.state;
 }
 

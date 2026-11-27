@@ -1,37 +1,30 @@
-:root {
-  /*
-   * 声明浅色配色，否则 Chromium 会把 <option> 弹层按深色兜底先画一帧黑底，
-   * 再刷成正常颜色 —— 表现就是「点开下拉先闪一下黑」。
-   */
-  color-scheme: light;
-  --bg: #f4f7fb;
-  --card: #ffffff;
-  --border: #e3e9f2;
-  --border-strong: #d5dfee;
-  --text: #16202f;
-  --muted: #67748a;
-  --brand: #2f6fed;
-  --brand-2: #19b6a4;
-  --brand-soft: #eef4ff;
-  --ok: #0f9d58;
-  --bad: #d9453d;
-  --radius: 16px;
-  /* 滚动槽宽度，不滚动的区块需同量预留 */
-  --scrollbar: 10px;
-  --shadow-sm: 0 1px 2px rgba(16, 32, 64, 0.05);
-  --shadow-md: 0 18px 40px -28px rgba(16, 32, 64, 0.45);
-  font-family:
-    "Segoe UI",
-    "Microsoft YaHei",
-    system-ui,
-    -apple-system,
-    sans-serif;
-  color: var(--text);
-  background: var(--bg);
-}
+@import "./styles/tokens.css";
+
+/*
+ * 全局壳与通用控件。
+ *
+ * 约定：
+ *   - 颜色一律取 styles/tokens.css 的 --aisv-* 变量，不写死色值。
+ *   - 圆角只用 --aisv-radius-*，不用 10px / 14px 这种脱离尺度的数。
+ *   - 层次靠「发丝描边 + 极淡柔光」，不用重阴影。
+ */
 
 * {
   box-sizing: border-box;
+}
+
+html,
+#root {
+  height: 100%;
+}
+
+/*
+ * html 也要上底色。
+ * 只给 body 上色时，页头那种「半透明 + 模糊」的元素后面没有已绘制的像素，
+ * 深色模式下顶部会透出白色。
+ */
+html {
+  background: var(--aisv-bg-base);
 }
 
 body {
@@ -39,17 +32,64 @@ body {
   height: 100%;
   /* 整个窗口固定，只有 .app-body 滚动 */
   overflow: hidden;
-  background:
-    radial-gradient(1100px 520px at 10% -10%, #dbe8ff 0%, rgba(219, 232, 255, 0) 62%),
-    radial-gradient(900px 460px at 92% -6%, #d8f7f0 0%, rgba(216, 247, 240, 0) 58%), var(--bg);
-  background-attachment: fixed;
+  font-family: var(--aisv-font-text);
+  font-size: var(--aisv-font-size);
+  line-height: var(--aisv-line);
+  color: var(--aisv-label-primary);
+  background: var(--aisv-bg-base);
   -webkit-font-smoothing: antialiased;
+  /* 主题切换时底色渐变过去，不要硬跳 */
+  transition:
+    background-color var(--aisv-t-base) var(--aisv-ease),
+    color var(--aisv-t-base) var(--aisv-ease);
 }
 
-html,
-#root {
-  height: 100%;
+/* ---------- 滚动条：轨道透明，只有滑块有色 ---------- */
+
+/*
+ * 滑块用 transparent 边框 + content-box 裁切，视觉宽度 = 4px，
+ * 实际占位 10px。直接画 4px 会在圆形拐角处糊成一线，且贴着内容不好点。
+ */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
 }
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: var(--aisv-radius-pill);
+  background: var(--aisv-scrollbar-thumb);
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--aisv-scrollbar-thumb-hover);
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ---------- 焦点：统一 2px 强调色环，鼠标点击不显形 ---------- */
+
+:focus-visible {
+  outline: 2px solid var(--aisv-accent);
+  outline-offset: 2px;
+}
+
+/* 输入类控件自己用边框表达焦点，不要叠环 */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+}
+
+/* ---------- 应用壳 ---------- */
 
 .app {
   display: flex;
@@ -67,12 +107,12 @@ body.electron .tb-inner {
   max-width: none;
 }
 
-/* 页头 + 步骤条：常驻顶部，随页面背景 */
+/* 页头 + 步骤条：常驻顶部 */
 .app-top {
   flex: none;
   padding: 20px 0 18px;
   /* 补上滚动槽，右边缘才与卡片对齐 */
-  padding-right: var(--scrollbar);
+  padding-right: var(--aisv-scrollbar-width);
 }
 
 /* 让开 36px 标题栏，再留一段间距 */
@@ -99,23 +139,15 @@ body.electron .app-top {
   scrollbar-gutter: stable;
 }
 
-.app-body::-webkit-scrollbar {
-  width: var(--scrollbar);
-}
+/* ---------- 顶栏：桌面端当作标题栏 ---------- */
 
-.app-body::-webkit-scrollbar-thumb {
-  border: 3px solid transparent;
-  border-radius: 8px;
-  background-clip: content-box;
-  background-color: rgba(120, 137, 160, 0.45);
-}
-
-.app-body::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(120, 137, 160, 0.7);
-}
-
-/* 顶栏：桌面端当作标题栏，只承载菜单与拖拽区 */
-
+/*
+ * 顶栏不加 backdrop-filter。
+ *
+ * 父级一旦有 backdrop-filter 就形成新的 backdrop root，子元素（菜单弹层）
+ * 的模糊只能采样到父级这层很薄的背景，采不到页面内容 —— 菜单会变成一片
+ * 灰白的雾。顶栏本来就压在页面最上沿，背后没有内容可透，不模糊也看不出来。
+ */
 .titlebar {
   position: fixed;
   top: 0;
@@ -126,8 +158,7 @@ body.electron .app-top {
   align-items: center;
   height: 36px;
   padding: 0;
-  background: rgba(244, 247, 251, 0.88);
-  backdrop-filter: blur(10px);
+  background: var(--aisv-bg-base);
   -webkit-app-region: drag;
 }
 
@@ -151,7 +182,7 @@ body.electron.mac .tb-inner {
   padding-right: 24px;
 }
 
-/* 页头：品牌区与任务状态 */
+/* ---------- 页头 ---------- */
 
 .header {
   display: flex;
@@ -167,17 +198,21 @@ body.electron.mac .tb-inner {
   min-width: 0;
 }
 
+/*
+ * 品牌标记：中性实心块承载图标。
+ * 强调色留给「主操作」和「当前位置」，logo 不参与抢注意力 ——
+ * 否则一屏里三处蓝色，反而看不出该点哪。
+ */
 .brand-mark {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
+  width: 36px;
+  height: 36px;
   flex: none;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #3b7bf0, #19b6a4);
-  color: #fff;
-  box-shadow: 0 8px 18px -10px rgba(47, 111, 237, 0.9);
+  border-radius: var(--aisv-radius-md);
+  background: var(--aisv-label-primary);
+  color: var(--aisv-bg-base);
 }
 
 .brand-text {
@@ -186,16 +221,17 @@ body.electron.mac .tb-inner {
 
 .header h1 {
   font-size: 20px;
-  line-height: 1.2;
+  line-height: 1.25;
   margin: 0;
-  letter-spacing: 0.2px;
+  font-weight: 600;
+  letter-spacing: -0.1px;
 }
 
 .brand-sub {
   display: block;
-  margin-top: 3px;
-  font-size: 12px;
-  color: var(--muted);
+  margin-top: 2px;
+  font-size: var(--aisv-font-size-xs);
+  color: var(--aisv-label-tertiary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -209,63 +245,74 @@ body.electron.mac .tb-inner {
   margin-left: auto;
 }
 
-/* 环境状态：全局信息常驻页头 */
+/* ---------- 环境状态 ---------- */
 
 .env {
   position: relative;
 }
 
+/* 胶囊：没有边框，靠浅填充和底色区分 */
 .env-pill {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 5px 12px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.9);
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border: none;
+  border-radius: var(--aisv-radius-pill);
+  background: var(--aisv-bg-layer-3);
   font-family: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--muted);
+  font-size: var(--aisv-font-size-xs);
+  font-weight: 500;
+  color: var(--aisv-label-secondary);
   white-space: nowrap;
   cursor: pointer;
   transition:
-    border-color 0.15s,
-    background 0.15s,
-    color 0.15s;
+    background var(--aisv-t-base) var(--aisv-ease),
+    color var(--aisv-t-base) var(--aisv-ease);
 }
 
-.env-pill:hover {
-  background: #fff;
-  border-color: var(--border-strong);
+@media (hover: hover) {
+  .env-pill:hover {
+    background: var(--aisv-hover-solid);
+    color: var(--aisv-label-primary);
+  }
 }
 
-/* 徽标只在缺项时出现，固定告警色 */
+/* 缺项时用告警色的淡填充，不用红框 */
 .env-pill.bad {
-  color: #91312b;
-  background: #fff2f1;
-  border-color: #f6d5d2;
+  color: var(--aisv-warn-label);
+  background: color-mix(in srgb, var(--aisv-warn) 12%, transparent);
 }
 
+/* 徽标红点，只有缺项时才出现 */
+.dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* 浮层：半透明 + 模糊，圆形大圆角，发丝描边 */
 .env-pop {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
   z-index: 30;
-  width: 292px;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: #fff;
-  box-shadow: var(--shadow-sm), var(--shadow-md);
+  width: 300px;
+  padding: 6px;
+  border-radius: var(--aisv-radius-lg);
+  background: var(--aisv-menu-fill);
+  backdrop-filter: var(--aisv-menu-filter);
+  box-shadow: var(--aisv-elevation-prominent);
 }
 
 .env-pop-head {
-  margin-bottom: 8px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--muted);
-  letter-spacing: 0.4px;
+  padding: 8px 8px 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--aisv-label-tertiary);
 }
 
 .env-list {
@@ -282,35 +329,32 @@ body.electron.mac .tb-inner {
   flex-wrap: wrap;
   align-items: baseline;
   gap: 6px;
-  padding: 7px 8px;
-  border-radius: 8px;
-  font-size: 12.5px;
+  padding: 8px;
+  border-radius: var(--aisv-radius-md);
+  font-size: var(--aisv-font-size-sm);
 }
 
+/* 就绪/缺失不用整块上色，只在左侧点一下，读起来更安静 */
 .env-item.missing {
-  background: #fff6f5;
-}
-
-.env-item.ok {
-  background: #f6fbf8;
+  background: color-mix(in srgb, var(--aisv-bad) 6%, transparent);
 }
 
 .env-name {
   flex: 1 1 auto;
   min-width: 0;
-  font-weight: 600;
-  color: var(--text);
+  font-weight: 500;
+  color: var(--aisv-label-primary);
 }
 
 .env-state {
   flex: none;
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--ok);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--aisv-ok);
 }
 
 .env-item.missing .env-state {
-  color: var(--bad);
+  color: var(--aisv-bad);
 }
 
 /* 说明文字换到下一行 */
@@ -318,32 +362,31 @@ body.electron.mac .tb-inner {
   flex: 0 0 100%;
   font-size: 11.5px;
   line-height: 1.6;
-  color: var(--muted);
+  color: var(--aisv-label-tertiary);
 }
 
 .env-settings {
   width: 100%;
-  margin-top: 10px;
-  padding: 8px 12px;
-  border: 1px solid var(--border-strong);
-  border-radius: 9px;
-  background: #fff;
+  margin-top: 4px;
+  height: 34px;
+  border: none;
+  border-radius: var(--aisv-radius-md);
+  background: var(--aisv-hover);
   font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text);
+  font-size: var(--aisv-font-size-sm);
+  font-weight: 500;
+  color: var(--aisv-label-primary);
   cursor: pointer;
-  transition:
-    background 0.15s,
-    border-color 0.15s;
+  transition: background var(--aisv-t-base) var(--aisv-ease);
 }
 
-.env-settings:hover {
-  background: #f5f9ff;
-  border-color: #b9cdea;
+@media (hover: hover) {
+  .env-settings:hover {
+    background: var(--aisv-active);
+  }
 }
 
-/* 菜单栏 */
+/* ---------- 菜单栏 ---------- */
 
 .menubar {
   display: flex;
@@ -357,73 +400,104 @@ body.electron.mac .tb-inner {
 }
 
 .menu-btn {
-  padding: 4px 9px;
+  height: 24px;
+  padding: 0 8px;
   border: none;
-  border-radius: 5px;
+  border-radius: var(--aisv-radius-sm);
   background: transparent;
   font-family: inherit;
-  font-size: 13px;
+  font-size: var(--aisv-font-size-sm);
   line-height: 20px;
-  color: #4a5a72;
+  color: var(--aisv-label-secondary);
   cursor: pointer;
   transition:
-    background 0.15s,
-    color 0.15s;
+    background var(--aisv-t-fast) var(--aisv-ease),
+    color var(--aisv-t-fast) var(--aisv-ease);
 }
 
-.menu-btn:hover,
+@media (hover: hover) {
+  .menu-btn:hover {
+    background: var(--aisv-hover);
+    color: var(--aisv-label-primary);
+  }
+}
+
+/* 展开时保持填充，但文字不染成强调色 —— 高亮的是「位置」不是「状态」 */
 .menu-btn.open {
-  background: rgba(47, 111, 237, 0.1);
-  color: var(--brand);
+  background: var(--aisv-active);
+  color: var(--aisv-label-primary);
 }
 
+/*
+ * 菜单卡：
+ *   - 6px 内边距，行是 34px 高、左右 8px 内缩的圆角块（hover 时整行铺满）
+ *   - 半透明面 + 40px 模糊，背后内容会透出一点
+ *   - 发丝描边画在阴影里，所以 border: 0，卡片不会比行宽 1px
+ */
 .menu-pop {
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% + 4px);
   left: 0;
   z-index: 30;
   display: flex;
   flex-direction: column;
-  min-width: 236px;
-  padding: 5px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: #fff;
-  box-shadow: var(--shadow-sm), var(--shadow-md);
+  min-width: 208px;
+  padding: 4px;
+  border: none;
+  border-radius: var(--aisv-radius-lg);
+  background: var(--aisv-menu-fill);
+  backdrop-filter: var(--aisv-menu-filter);
+  box-shadow: var(--aisv-elevation-prominent);
+  /* 展开时轻微上浮淡入，时长压到 0.1s，不影响连点 */
+  animation: menu-in var(--aisv-t-fast) var(--aisv-ease);
 }
 
-/* 项之间靠 hover 分隔，留 gap 会让分组线悬空 */
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+}
+
 .menu-item {
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 7px 9px;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 8px;
   border: none;
-  border-radius: 7px;
+  border-radius: var(--aisv-radius-md);
   background: transparent;
   font-family: inherit;
-  font-size: 13px;
-  color: var(--text);
+  font-size: var(--aisv-font-size-sm);
+  line-height: 20px;
+  color: var(--aisv-label-primary);
   text-align: left;
   cursor: pointer;
   white-space: nowrap;
+  transition: background var(--aisv-t-fast) var(--aisv-ease);
 }
 
+/* 鼠标和键盘共用同一份高亮：键盘移动时焦点就是行本身 */
 .menu-item:hover,
 .menu-item.active {
-  background: var(--brand-soft);
-  color: var(--brand);
+  background: var(--aisv-hover);
+}
+
+.menu-item:focus-visible {
+  background: var(--aisv-hover);
+  outline: none;
 }
 
 .menu-icon {
   display: inline-flex;
   flex: none;
-  color: var(--muted);
-}
-
-.menu-item:hover .menu-icon,
-.menu-item.active .menu-icon {
-  color: var(--brand);
+  width: 14px;
+  height: 14px;
+  align-items: center;
+  justify-content: center;
+  color: var(--aisv-label-secondary);
 }
 
 /* 撑满剩余宽度，把快捷键提示推到最右 */
@@ -433,80 +507,146 @@ body.electron.mac .tb-inner {
 
 .menu-hint {
   flex: none;
-  padding-left: 14px;
-  font-size: 11.5px;
+  margin-left: auto;
+  padding-left: 16px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
-  color: var(--muted);
+  color: var(--aisv-label-caption);
 }
 
-/* 不可撤销的项用红字红图标 */
+/* 不可撤销的项用状态红，悬停也铺红底 */
 .menu-item.menu-danger {
-  color: var(--bad);
+  color: var(--aisv-bad);
 }
 
 .menu-item.menu-danger .menu-icon {
-  color: var(--bad);
+  color: var(--aisv-bad);
 }
 
 .menu-item.menu-danger:hover,
 .menu-item.menu-danger.active {
-  background: rgba(217, 69, 61, 0.09);
-  color: var(--bad);
+  background: var(--aisv-hover-danger);
 }
 
+/* 分隔线：0.5px，两端与会行内容对齐 */
 .menu-sep {
-  height: 1px;
-  margin: 4px 6px;
-  background: var(--border);
+  height: 0.5px;
+  margin: 3px 8px;
+  background: var(--aisv-border-l2);
 }
 
-.pill {
-  padding: 5px 11px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.8);
+/* ---------- 外观切换（浏览器里没有菜单栏，用这个兜住） ---------- */
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--aisv-radius-md);
+  background: var(--aisv-bg-layer-3);
+}
+
+.theme-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: var(--aisv-radius-sm);
+  background: transparent;
+  font-family: inherit;
   font-size: 12px;
-  font-weight: 600;
-  color: var(--muted);
+  line-height: 1;
+  color: var(--aisv-label-tertiary);
+  cursor: pointer;
+  transition:
+    background var(--aisv-t-fast) var(--aisv-ease),
+    color var(--aisv-t-fast) var(--aisv-ease);
+}
+
+@media (hover: hover) {
+  .theme-btn:hover {
+    color: var(--aisv-label-primary);
+  }
+}
+
+/* 选中项浮起来：和分段控件一样，用「抬起的一块」表示当前位置 */
+.theme-btn.on {
+  background: var(--aisv-bg-layer-1);
+  color: var(--aisv-label-primary);
+  box-shadow: var(--aisv-elevation-soft);
+}
+
+/* 只给读屏用 */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- 胶囊 = 状态标签 ---------- */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 10px;
+  border: none;
+  border-radius: var(--aisv-radius-pill);
+  background: var(--aisv-bg-layer-3);
+  font-size: var(--aisv-font-size-xs);
+  font-weight: 500;
+  color: var(--aisv-label-secondary);
   white-space: nowrap;
 }
 
+/* 进行中/等待确认：强调色淡填充 */
 .pill.info {
-  color: var(--brand);
-  background: var(--brand-soft);
-  border-color: #d7e4ff;
+  color: var(--aisv-accent);
+  background: color-mix(in srgb, var(--aisv-accent) 10%, transparent);
 }
 
 .pill.ok {
-  color: #0b7a46;
-  background: #ecfbf3;
-  border-color: #c9ecd9;
+  color: var(--aisv-ok-strong);
+  background: color-mix(in srgb, var(--aisv-ok) 10%, transparent);
 }
 
 .pill.bad,
 .pill.error {
-  color: var(--bad);
-  background: #fff2f1;
-  border-color: #f6d5d2;
+  color: var(--aisv-bad);
+  background: color-mix(in srgb, var(--aisv-bad) 10%, transparent);
 }
 
-/* 卡片 */
+/* ---------- 卡片 ---------- */
 
+/*
+ * 卡片用「最亮的那一层 + 发丝描边」，不加投影。
+ * 大面积内容块保持平的，只有真正浮在页面上的东西（菜单、弹窗）才抬起来。
+ */
 .card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  background: var(--aisv-bg-layer-1);
+  border: none;
+  border-radius: var(--aisv-radius-lg);
   padding: 22px 24px;
-  box-shadow: var(--shadow-sm), var(--shadow-md);
+  box-shadow: var(--aisv-elevation-panel);
 }
 
 .card h2 {
   font-size: 15px;
-  margin: 0 0 14px;
-  color: var(--text);
+  font-weight: 600;
+  margin: 0 0 12px;
+  color: var(--aisv-label-primary);
 }
 
-/* 表单 */
+/* ---------- 表单 ---------- */
 
 .field {
   display: flex;
@@ -516,34 +656,42 @@ body.electron.mac .tb-inner {
 }
 
 .field label {
-  font-size: 12.5px;
-  font-weight: 600;
-  letter-spacing: 0.2px;
-  color: #5b6a80;
+  font-size: var(--aisv-font-size-sm);
+  font-weight: 400;
+  color: var(--aisv-label-primary);
 }
 
+/*
+ * 输入框：32–40px 高，l4 描边，focus 时边框换成强调色。
+ * 不铺白底阴影，靠边框表达可输入。
+ */
 .field textarea,
 .field select,
 .text-input {
   width: 100%;
-  border: 1px solid var(--border-strong);
-  border-radius: 10px;
-  padding: 10px 12px;
-  font-size: 14px;
+  border: 1px solid var(--aisv-border-l4);
+  border-radius: var(--aisv-radius-md);
+  padding: 8px 12px;
+  font-size: var(--aisv-font-size);
   font-family: inherit;
-  color: var(--text);
-  background: #fbfdff;
+  color: var(--aisv-label-primary);
+  background: var(--aisv-bg-layer-1);
   outline: none;
   transition:
-    border-color 0.15s,
-    box-shadow 0.15s,
-    background 0.15s;
+    border-color var(--aisv-t-base) var(--aisv-ease),
+    background var(--aisv-t-base) var(--aisv-ease);
+}
+
+.field textarea::placeholder,
+.text-input::placeholder {
+  color: var(--aisv-label-tertiary);
 }
 
 .field select {
   appearance: none;
   background-image:
-    linear-gradient(45deg, transparent 50%, #7b88a0 50%), linear-gradient(135deg, #7b88a0 50%, transparent 50%);
+    linear-gradient(45deg, transparent 50%, var(--aisv-label-tertiary) 50%),
+    linear-gradient(135deg, var(--aisv-label-tertiary) 50%, transparent 50%);
   background-position:
     calc(100% - 18px) 52%,
     calc(100% - 13px) 52%;
@@ -554,22 +702,32 @@ body.electron.mac .tb-inner {
   padding-right: 34px;
 }
 
-/*
- * 下拉弹层由系统绘制，不继承 select 的背景。
- * 不显式指定时部分 Chromium/Electron 版本会先按深色系统主题画一帧黑底，
- * 再刷成白色 —— 用户看到的就是「点开先黑一下」。
- */
+/* 下拉弹层由系统绘制，显式给底色，避免深色系统主题下先黑一帧 */
 .field select option {
-  background-color: #ffffff;
-  color: #16202f;
+  background-color: var(--aisv-bg-layer-1);
+  color: var(--aisv-label-primary);
 }
 
-/*
- * 自绘下拉（components/Dropdown.tsx）。
- * 原生 <select> 的弹层由 Chromium 自己绘制，color-scheme / option 背景改不动它的
- * 绘制顺序，深色系统主题下点开仍有概率先黑一帧。这里改成自己的 DOM，
- * 第一帧就是最终样式。
- */
+.field textarea:focus,
+.field select:focus,
+.text-input:focus {
+  border-color: var(--aisv-accent);
+}
+
+.field textarea {
+  min-height: 132px;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.field select:disabled,
+.text-input:disabled,
+.field textarea:disabled {
+  color: var(--aisv-label-tertiary);
+  background: var(--aisv-bg-layer-2);
+}
+
+/* ---------- 自绘下拉（components/Dropdown.tsx） ---------- */
 
 .dropdown-trigger {
   display: flex;
@@ -579,36 +737,35 @@ body.electron.mac .tb-inner {
   width: 100%;
   height: 40px;
   box-sizing: border-box;
-  border: 1px solid var(--border-strong);
-  border-radius: 10px;
+  border: 1px solid var(--aisv-border-l4);
+  border-radius: var(--aisv-radius-md);
   padding: 0 12px;
-  font-size: 14px;
+  font-size: var(--aisv-font-size);
   font-family: inherit;
   text-align: left;
-  color: var(--text);
-  background: #fbfdff;
+  color: var(--aisv-label-primary);
+  background: var(--aisv-bg-layer-1);
   cursor: pointer;
   outline: none;
   transition:
-    border-color 0.15s,
-    box-shadow 0.15s,
-    background 0.15s;
+    border-color var(--aisv-t-base) var(--aisv-ease),
+    background var(--aisv-t-base) var(--aisv-ease);
 }
 
-.dropdown-trigger:hover:not(:disabled) {
-  border-color: #bfcde3;
+@media (hover: hover) {
+  .dropdown-trigger:hover:not(:disabled) {
+    border-color: var(--aisv-border-selected);
+  }
 }
 
 .dropdown-trigger.is-open,
 .dropdown-trigger:focus-visible {
-  border-color: #7aa6f7;
-  background: #fff;
-  box-shadow: 0 0 0 3px rgba(47, 111, 237, 0.12);
+  border-color: var(--aisv-accent);
 }
 
 .dropdown-trigger:disabled {
-  color: #93a0b4;
-  background: #f4f7fc;
+  color: var(--aisv-label-tertiary);
+  background: var(--aisv-bg-layer-2);
   cursor: not-allowed;
 }
 
@@ -620,83 +777,63 @@ body.electron.mac .tb-inner {
   white-space: nowrap;
 }
 
-/* 用边框拼箭头，和原来 select 的背景三角一致，不引图标字体 */
+/* 用边框拼箭头，不引图标字体 */
 .dropdown-caret {
   flex: none;
   width: 0;
   height: 0;
   border-left: 4px solid transparent;
   border-right: 4px solid transparent;
-  border-top: 5px solid #7b88a0;
-  transition: transform 0.15s;
+  border-top: 5px solid var(--aisv-label-tertiary);
+  transition: transform var(--aisv-t-base) var(--aisv-ease);
 }
 
 .dropdown-trigger.is-open .dropdown-caret {
   transform: rotate(180deg);
 }
 
+/* 弹层与菜单卡同一套材质 */
 .dropdown-menu {
   position: fixed;
   z-index: 1000;
   max-height: 280px;
   overflow-y: auto;
   padding: 4px;
-  border: 1px solid var(--border-strong);
-  border-radius: 10px;
-  background: #ffffff;
-  box-shadow:
-    0 10px 28px rgba(20, 32, 50, 0.14),
-    0 2px 6px rgba(20, 32, 50, 0.08);
+  border: none;
+  border-radius: var(--aisv-radius-lg);
+  background: var(--aisv-menu-fill);
+  backdrop-filter: var(--aisv-menu-filter);
+  box-shadow: var(--aisv-elevation-prominent);
 }
 
 .dropdown-item {
   display: block;
   width: 100%;
-  padding: 8px 10px;
+  padding: 6px 8px;
   border: none;
-  border-radius: 7px;
-  font-size: 14px;
+  border-radius: var(--aisv-radius-md);
+  font-size: var(--aisv-font-size-sm);
+  line-height: 20px;
   font-family: inherit;
   text-align: left;
-  color: #16202f;
+  color: var(--aisv-label-primary);
   background: transparent;
   cursor: pointer;
   white-space: nowrap;
+  transition: background var(--aisv-t-fast) var(--aisv-ease);
 }
 
-.dropdown-item:hover {
-  background: #eff4fd;
-}
-
-/* 键盘高亮：与「当前已选中」分开，方向键移动时用这个 */
+.dropdown-item:hover,
 .dropdown-item.is-highlighted {
-  background: #dfeaff;
+  background: var(--aisv-hover);
 }
 
+/* 当前值用字重和勾示意，不额外上色 */
 .dropdown-item.is-active {
-  color: var(--brand);
   font-weight: 600;
-  background: #e8f0fe;
 }
 
-.field textarea:focus,
-.field select:focus,
-.text-input:focus {
-  border-color: #7aa6f7;
-  background: #fff;
-  box-shadow: 0 0 0 3px rgba(47, 111, 237, 0.12);
-}
-
-.field textarea {
-  min-height: 132px;
-  resize: vertical;
-  line-height: 1.6;
-}
-
-.field select:disabled {
-  color: #93a0b4;
-  background-color: #f4f7fc;
-}
+/* ---------- 栅格 ---------- */
 
 .row {
   display: grid;
@@ -762,7 +899,7 @@ body.electron.mac .tb-inner {
   font-size: 11.5px;
   font-weight: 400;
   line-height: 18px;
-  color: var(--muted);
+  color: var(--aisv-label-tertiary);
 }
 
 /* 四个控件等高：输入框和下拉框的内边距本来就一致，这里兜底 */
@@ -786,18 +923,26 @@ body.electron.mac .tb-inner {
   text-overflow: ellipsis;
 }
 
-/* 复选框 + 文字 */
+/* ---------- 复选框 ---------- */
+
 .check {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
-  color: var(--text);
+  font-size: var(--aisv-font-size-sm);
+  color: var(--aisv-label-primary);
 }
 
+/*
+ * 原生复选框跟随 accent-color，省掉一整套自绘。
+ * 尺寸统一 15px，深色模式由浏览器自动适配。
+ */
 .check input {
   width: 15px;
   height: 15px;
+  margin: 0;
+  accent-color: var(--aisv-button-primary-fill);
+  cursor: pointer;
 }
 
 /**
@@ -843,85 +988,106 @@ body.electron.mac .tb-inner {
   white-space: nowrap;
 }
 
-/* 按钮 */
+/* ---------- 按钮 ---------- */
 
+/*
+ * 主按钮 = 深色实心块（深色模式下反过来是白底黑字）。
+ * 不用彩色渐变：强调色留给链接和当前项，这样界面上只有一个视觉重心。
+ */
 .primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
-  padding: 11px 18px;
+  height: 36px;
+  padding: 0 16px;
   border: none;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #3b7bf0, #2f6fed);
-  color: #fff;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    transform 0.12s,
-    box-shadow 0.15s,
-    filter 0.15s;
-  box-shadow: 0 10px 22px -12px rgba(47, 111, 237, 0.85);
-}
-
-.primary:hover:not(:disabled) {
-  filter: brightness(1.04);
-  transform: translateY(-1px);
-  box-shadow: 0 14px 26px -14px rgba(47, 111, 237, 0.9);
-}
-
-.primary:active:not(:disabled) {
-  transform: translateY(0);
-}
-
-.primary:disabled {
-  background: #c3cede;
-  box-shadow: none;
-  cursor: not-allowed;
-}
-
-.secondary {
-  flex: none;
-  padding: 11px 18px;
-  border-radius: 10px;
-  border: 1px solid var(--border-strong);
-  background: #fff;
-  color: var(--text);
-  font-size: 14px;
+  border-radius: var(--aisv-radius-md);
+  background: var(--aisv-button-primary-fill);
+  color: var(--aisv-button-primary-label);
+  font-family: inherit;
+  font-size: var(--aisv-font-size);
   font-weight: 500;
   cursor: pointer;
   transition:
-    background 0.15s,
-    border-color 0.15s;
+    background var(--aisv-t-base) var(--aisv-ease),
+    opacity var(--aisv-t-base) var(--aisv-ease);
 }
 
-.secondary:hover:not(:disabled) {
-  background: #f5f9ff;
-  border-color: #b9cdea;
+@media (hover: hover) {
+  .primary:hover:not(:disabled) {
+    background: var(--aisv-button-primary-hover);
+  }
+}
+
+.primary:active:not(:disabled) {
+  opacity: 0.85;
+}
+
+.primary:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+/*
+ * 次要按钮 = 无底 + 发丝描边。
+ * 描边用 inset 阴影而不是 border，0.5px 在半像素屏上也不会糊。
+ */
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  height: 36px;
+  padding: 0 14px;
+  border: none;
+  border-radius: var(--aisv-radius-md);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--aisv-border-l3);
+  color: var(--aisv-label-primary);
+  font-family: inherit;
+  font-size: var(--aisv-font-size);
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background var(--aisv-t-base) var(--aisv-ease),
+    opacity var(--aisv-t-base) var(--aisv-ease);
+}
+
+@media (hover: hover) {
+  .secondary:hover:not(:disabled) {
+    background: var(--aisv-hover);
+  }
+}
+
+.secondary:active:not(:disabled) {
+  background: var(--aisv-active);
 }
 
 .secondary:disabled {
-  color: #9aa6b6;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
-/* 辅助文本与信息 */
+/* ---------- 辅助文本 ---------- */
 
 .hint {
   margin: 10px 0 0;
-  font-size: 12.5px;
-  color: var(--muted);
+  font-size: var(--aisv-font-size-sm);
+  color: var(--aisv-label-tertiary);
   line-height: 1.7;
 }
 
 /* 字段下方的补充说明，比 label 淡一档 */
 .field-hint {
-  font-size: 12px;
-  color: var(--muted);
+  font-size: var(--aisv-font-size-xs);
+  color: var(--aisv-label-tertiary);
   line-height: 1.6;
 }
 
 /* 拦截性提示用警示色 */
 .hint-warn {
-  color: #a76a12;
+  color: var(--aisv-warn-label);
 }
 
 .kv {
@@ -929,8 +1095,8 @@ body.electron.mac .tb-inner {
   justify-content: space-between;
   gap: 12px;
   padding: 8px 0;
-  border-bottom: 1px dashed var(--border);
-  font-size: 13px;
+  border-bottom: 0.5px solid var(--aisv-border-l2);
+  font-size: var(--aisv-font-size-sm);
 }
 
 .kv:last-child {
@@ -938,7 +1104,7 @@ body.electron.mac .tb-inner {
 }
 
 .kv .k {
-  color: var(--muted);
+  color: var(--aisv-label-tertiary);
   flex: none;
 }
 
@@ -949,33 +1115,24 @@ body.electron.mac .tb-inner {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
-  font-size: 12px;
+  font-family: var(--aisv-font-code);
+  font-size: var(--aisv-font-size-xs);
 }
 
-/* 徽标红点，只有缺项时才出现 */
-.dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--bad);
-  box-shadow: 0 0 0 3px rgba(217, 69, 61, 0.12);
-}
+/* ---------- 告警块 ---------- */
 
 .alert {
   margin-top: 14px;
-  padding: 11px 14px;
-  border-radius: 10px;
-  border: 1px solid #f6d5d2;
-  border-left: 3px solid var(--bad);
-  background: #fff5f4;
-  color: #91312b;
-  font-size: 13px;
+  padding: 10px 12px;
+  border-radius: var(--aisv-radius-md);
+  background: color-mix(in srgb, var(--aisv-bad) 8%, transparent);
+  color: var(--aisv-bad-label);
+  font-size: var(--aisv-font-size-sm);
   line-height: 1.7;
   white-space: pre-wrap;
 }
 
-/* 阶段进度 */
+/* ---------- 阶段进度 ---------- */
 
 .stages {
   list-style: none;
@@ -986,53 +1143,54 @@ body.electron.mac .tb-inner {
 .stage {
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 7px 10px;
-  border-radius: 9px;
-  font-size: 13px;
-  color: var(--muted);
+  gap: 8px;
+  min-height: 32px;
+  padding: 5px 8px;
+  border-radius: var(--aisv-radius-md);
+  font-size: var(--aisv-font-size-sm);
+  color: var(--aisv-label-tertiary);
 }
 
 .stage.running {
-  background: #f1f7ff;
-  color: var(--brand);
+  background: color-mix(in srgb, var(--aisv-accent) 8%, transparent);
+  color: var(--aisv-accent);
 }
 
 .stage-icon {
   width: 16px;
   flex: none;
   text-align: center;
-  font-size: 12px;
-  color: #b6c1d1;
+  font-size: 11px;
+  color: var(--aisv-label-caption);
 }
 
 .stage.running .stage-icon {
-  color: var(--brand);
+  color: var(--aisv-accent);
   animation: pulse 1.3s ease-in-out infinite;
 }
 
 .stage.done {
-  color: var(--text);
+  color: var(--aisv-label-primary);
 }
 
 .stage.done .stage-icon {
-  color: var(--ok);
+  color: var(--aisv-ok);
 }
 
 .stage.done .stage-label {
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .stage.failed {
-  color: var(--bad);
+  color: var(--aisv-bad);
 }
 
 .stage.failed .stage-icon {
-  color: var(--bad);
+  color: var(--aisv-bad);
 }
 
 .stage.skipped .stage-icon {
-  color: #c3ccd9;
+  color: var(--aisv-label-caption);
 }
 
 .stage-label {
@@ -1043,8 +1201,8 @@ body.electron.mac .tb-inner {
 /* min-width: 0 让文字可压缩，右侧耗时不被挤走 */
 .stage-msg {
   min-width: 0;
-  color: #96a1b1;
-  font-size: 12px;
+  color: var(--aisv-label-tertiary);
+  font-size: var(--aisv-font-size-xs);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1054,29 +1212,29 @@ body.electron.mac .tb-inner {
 .stage-cost {
   margin-left: auto;
   flex: none;
-  color: #a9b4c3;
+  color: var(--aisv-label-caption);
   font-size: 11.5px;
   font-variant-numeric: tabular-nums;
 }
 
 .stage.running .stage-cost {
-  color: #7f9bd6;
+  color: var(--aisv-accent);
 }
 
-/* 日志 */
+/* ---------- 日志 ---------- */
 
 .log {
   max-height: 220px;
   overflow: auto;
-  background: #f8fbff;
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  background: var(--aisv-bg-layer-2);
+  border: none;
+  border-radius: var(--aisv-radius-md);
   padding: 10px 12px;
-  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
-  font-size: 12px;
+  font-family: var(--aisv-font-code);
+  font-size: var(--aisv-font-size-xs);
   line-height: 1.75;
   margin-bottom: 14px;
-  box-shadow: inset 0 1px 2px rgba(16, 32, 64, 0.03);
+  color: var(--aisv-label-secondary);
 }
 
 /* 折叠后只占一行标题 */
@@ -1088,18 +1246,24 @@ body.electron.mac .tb-inner {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-height: 34px;
   cursor: pointer;
-  padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: #f8fbff;
-  color: var(--muted);
-  font-size: 12px;
+  padding: 0 12px;
+  border-radius: var(--aisv-radius-md);
+  background: var(--aisv-bg-layer-2);
+  color: var(--aisv-label-secondary);
+  font-size: var(--aisv-font-size-xs);
   user-select: none;
+  transition:
+    background var(--aisv-t-base) var(--aisv-ease),
+    color var(--aisv-t-base) var(--aisv-ease);
 }
 
-.log-details > summary:hover {
-  color: var(--text);
+@media (hover: hover) {
+  .log-details > summary:hover {
+    background: var(--aisv-hover-solid);
+    color: var(--aisv-label-primary);
+  }
 }
 
 .log-details[open] > summary {
@@ -1116,7 +1280,7 @@ body.electron.mac .tb-inner {
 }
 
 .log-time {
-  color: #a9b4c3;
+  color: var(--aisv-label-caption);
   flex: none;
 }
 
@@ -1125,17 +1289,25 @@ body.electron.mac .tb-inner {
 }
 
 .log-line.warn .log-text {
-  color: #a76a12;
+  color: var(--aisv-warn-label);
 }
 
 .log-line.error .log-text {
-  color: var(--bad);
+  color: var(--aisv-bad);
 }
 
-/* 剧本编辑 */
+.log-empty {
+  color: var(--aisv-label-caption);
+}
+
+.log-tall {
+  max-height: 340px;
+}
+
+/* ---------- 剧本编辑 ---------- */
 
 .paragraph {
-  border-top: 1px dashed var(--border);
+  border-top: 0.5px solid var(--aisv-border-l2);
   padding: 14px 0 6px;
 }
 
@@ -1148,15 +1320,15 @@ body.electron.mac .tb-inner {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: var(--aisv-font-size-xs);
   font-weight: 600;
-  color: var(--muted);
+  color: var(--aisv-label-tertiary);
   margin-bottom: 10px;
 }
 
 .paragraph-desc {
   font-weight: 400;
-  color: #9aa6b6;
+  color: var(--aisv-label-caption);
 }
 
 .dialogue {
@@ -1172,7 +1344,7 @@ body.electron.mac .tb-inner {
   margin: 0 0 12px;
   font-size: 15px;
   font-weight: 600;
-  color: var(--text);
+  color: var(--aisv-label-primary);
 }
 
 .dialogue-readonly {
@@ -1186,12 +1358,11 @@ body.electron.mac .tb-inner {
 .dialogue-readonly p {
   margin: 0;
   padding: 7px 11px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: #f8fafd;
-  font-size: 13px;
+  border-radius: var(--aisv-radius-md);
+  background: var(--aisv-bg-layer-2);
+  font-size: var(--aisv-font-size-sm);
   line-height: 1.65;
-  color: var(--text);
+  color: var(--aisv-label-primary);
   white-space: pre-wrap;
 }
 
@@ -1204,60 +1375,56 @@ body.electron.mac .tb-inner {
   height: 26px;
   margin-top: 7px;
   padding: 0;
-  border: 1px solid transparent;
-  border-radius: 7px;
+  border: none;
+  border-radius: var(--aisv-radius-sm);
   background: transparent;
-  color: #b3bdcc;
+  color: var(--aisv-label-caption);
   cursor: pointer;
   transition:
-    color 0.15s,
-    background 0.15s,
-    border-color 0.15s;
+    color var(--aisv-t-base) var(--aisv-ease),
+    background var(--aisv-t-base) var(--aisv-ease);
 }
 
-.line-del:hover:not(:disabled) {
-  color: var(--bad);
-  background: #fff2f1;
-  border-color: #f6d5d2;
+@media (hover: hover) {
+  .line-del:hover:not(:disabled) {
+    color: var(--aisv-bad);
+    background: var(--aisv-hover-danger);
+  }
 }
 
 .line-del:disabled {
-  opacity: 0.45;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
 .speaker {
-  font-size: 13px;
+  font-size: var(--aisv-font-size-sm);
   font-weight: 600;
-  color: var(--brand);
+  color: var(--aisv-label-secondary);
   padding-top: 9px;
   word-break: break-all;
 }
 
 .dialogue textarea {
   width: 100%;
-  border: 1px solid var(--border-strong);
-  border-radius: 10px;
-  padding: 9px 11px;
-  font-size: 14px;
+  border: 1px solid var(--aisv-border-l4);
+  border-radius: var(--aisv-radius-md);
+  padding: 8px 11px;
+  font-size: var(--aisv-font-size);
   line-height: 1.6;
   font-family: inherit;
-  background: #fbfdff;
+  color: var(--aisv-label-primary);
+  background: var(--aisv-bg-layer-1);
   resize: vertical;
   outline: none;
-  transition:
-    border-color 0.15s,
-    box-shadow 0.15s,
-    background 0.15s;
+  transition: border-color var(--aisv-t-base) var(--aisv-ease);
 }
 
 .dialogue textarea:focus {
-  border-color: #7aa6f7;
-  background: #fff;
-  box-shadow: 0 0 0 3px rgba(47, 111, 237, 0.12);
+  border-color: var(--aisv-accent);
 }
 
-/* 成片 */
+/* ---------- 成片 ---------- */
 
 /* 在滚动区里按内容高度排，不能裁切，否则视频只露出一条 */
 .panel-scroll > .panel-stage {
@@ -1284,9 +1451,9 @@ body.electron.mac .tb-inner {
   max-width: 100%;
   max-height: min(420px, 60vh);
   margin: 0 auto 14px;
-  border-radius: 12px;
-  background: #0b1220;
-  box-shadow: 0 16px 32px -24px rgba(11, 18, 32, 0.9);
+  border-radius: var(--aisv-radius-md);
+  background: var(--aisv-static-code-ink);
+  box-shadow: 0 16px 32px -24px rgb(11 18 32 / 90%);
 }
 
 /* 父容器高度 auto 时 100% 无参照，这里沿用 .player 的绝对上限 */
@@ -1298,7 +1465,7 @@ body.electron.mac .tb-inner {
   margin-bottom: 14px;
 }
 
-/* 配音试听 */
+/* ---------- 配音试听 ---------- */
 
 .audio-board {
   margin-bottom: 14px;
@@ -1310,18 +1477,20 @@ body.electron.mac .tb-inner {
   justify-content: space-between;
   gap: 10px;
   padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: #f7faff;
-  font-size: 12.5px;
-  color: var(--muted);
+  border-radius: var(--aisv-radius-md);
+  background: var(--aisv-bg-layer-2);
+  font-size: var(--aisv-font-size-xs);
+  color: var(--aisv-label-tertiary);
 }
 
+/*
+ * 段落块：整条背景从上到下铺满，标题行和句子行共用同一条左右内边距，
+ * 这样卡片标题、段落标题、「播放整段」按钮、句子都落在同一条边上。
+ */
 .audio-para {
   margin-top: 8px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: #fff;
+  border-radius: var(--aisv-radius-md);
+  background: var(--aisv-bg-layer-2);
   overflow: hidden;
 }
 
@@ -1332,7 +1501,7 @@ body.electron.mac .tb-inner {
   padding: 9px 12px;
   list-style: none;
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--aisv-font-size-sm);
 }
 
 .audio-para > summary::-webkit-details-marker {
@@ -1341,20 +1510,20 @@ body.electron.mac .tb-inner {
 
 .audio-para-title {
   font-weight: 600;
-  color: var(--text);
+  color: var(--aisv-label-primary);
 }
 
 .audio-para-meta {
   margin-right: auto;
-  font-size: 12px;
-  color: var(--muted);
+  font-size: var(--aisv-font-size-xs);
+  color: var(--aisv-label-tertiary);
 }
 
 .audio-lines {
   display: grid;
   gap: 6px;
   padding: 8px 12px 10px;
-  border-top: 1px dashed var(--border);
+  border-top: 0.5px solid var(--aisv-border-l2);
 }
 
 .audio-line {
@@ -1362,48 +1531,53 @@ body.electron.mac .tb-inner {
   grid-template-columns: 76px 1fr auto auto;
   gap: 10px;
   align-items: center;
-  font-size: 12.5px;
+  font-size: var(--aisv-font-size-xs);
 }
 
 .audio-text {
-  color: var(--text);
+  color: var(--aisv-label-primary);
   line-height: 1.5;
 }
 
 .audio-dur {
-  color: var(--muted);
+  color: var(--aisv-label-tertiary);
   font-variant-numeric: tabular-nums;
 }
 
 .play-btn {
-  padding: 4px 9px;
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  background: #fff;
+  height: 26px;
+  padding: 0 10px;
+  border: none;
+  border-radius: var(--aisv-radius-sm);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--aisv-border-l3);
   font-family: inherit;
-  font-size: 12px;
-  color: var(--brand);
+  font-size: var(--aisv-font-size-xs);
+  color: var(--aisv-label-primary);
   cursor: pointer;
   white-space: nowrap;
-  transition:
-    background 0.15s,
-    border-color 0.15s;
+  transition: background var(--aisv-t-base) var(--aisv-ease);
 }
 
-.play-btn:hover {
-  background: var(--brand-soft);
-  border-color: #c9dbfb;
+@media (hover: hover) {
+  .play-btn:hover {
+    background: var(--aisv-hover);
+  }
 }
 
-/* 步骤条 */
+/* ---------- 步骤条 ---------- */
 
+/*
+ * 步骤条不是一个「卡片」：它和页面同底，用一条细线贯穿，
+ * 当前步用实心深色圆点，已完成用打勾 + 强调色，未到达是灰色空心。
+ * 这样一眼能看出「走到哪了」，又不会在顶部压一大块色。
+ */
 .stepper-wrap {
   margin: 0 0 18px;
-  padding: 18px 22px 14px;
-  background: linear-gradient(180deg, #ffffff, #fbfdff);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-sm), var(--shadow-md);
+  padding: 16px 20px 12px;
+  background: var(--aisv-bg-layer-1);
+  border-radius: var(--aisv-radius-lg);
+  box-shadow: var(--aisv-elevation-panel);
 }
 
 .stepper {
@@ -1420,18 +1594,19 @@ body.electron.mac .tb-inner {
   justify-content: center;
 }
 
+/* 连接线走圆点背后：z-index 压在 .step-btn 之下，圆点自己盖住穿过来的那截 */
 .step-line {
   position: absolute;
-  top: 16px;
+  top: 15px;
   right: 50%;
   left: -50%;
-  height: 3px;
-  border-radius: 3px;
-  background: #e8eef8;
+  z-index: 0;
+  height: 1px;
+  background: var(--aisv-border-l3);
 }
 
 .step-line.on {
-  background: linear-gradient(90deg, #a9c6ff, #2f6fed);
+  background: var(--aisv-border-selected);
 }
 
 .step-btn {
@@ -1440,7 +1615,7 @@ body.electron.mac .tb-inner {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   padding: 0 6px;
   border: none;
   background: transparent;
@@ -1456,83 +1631,88 @@ body.electron.mac .tb-inner {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
-  border: 1px solid #dde5f1;
-  background: #fff;
-  /* 未到达的步骤也要能读清 */
-  color: #6b7c96;
-  font-size: 14px;
-  font-weight: 700;
+  border: 1px solid var(--aisv-border-l3);
+  /* 必须是实心底：它要盖住从背后穿过的连接线 */
+  background: var(--aisv-bg-layer-1);
+  color: var(--aisv-label-tertiary);
+  font-size: var(--aisv-font-size-sm);
+  font-weight: 600;
   transition:
-    background 0.18s,
-    color 0.18s,
-    box-shadow 0.18s,
-    transform 0.18s;
+    background var(--aisv-t-base) var(--aisv-ease),
+    border-color var(--aisv-t-base) var(--aisv-ease),
+    color var(--aisv-t-base) var(--aisv-ease);
 }
 
+/*
+ * 当前步：实心中性圆点。
+ * 不跟着主按钮上强调色 —— 步骤条是「你在哪」的指示，
+ * 不是操作；蓝点会和底部的蓝色主按钮抢同一份注意力。
+ */
 .step.active .step-dot {
-  background: linear-gradient(135deg, #3b7bf0, #2f6fed);
+  background: var(--aisv-label-primary);
   border-color: transparent;
-  color: #fff;
-  transform: translateY(-1px);
-  box-shadow:
-    0 0 0 4px rgba(47, 111, 237, 0.13),
-    0 10px 20px -10px rgba(47, 111, 237, 0.9);
+  color: var(--aisv-bg-base);
 }
 
-/* 排除当前页，蓝色高亮才不会被绿色盖掉 */
+/* 已完成：强调色边框 + 勾，不填满，避免和当前步抢注意力 */
 .step.done:not(.active) .step-dot {
-  background: linear-gradient(135deg, #2fc08f, #12a15c);
-  border-color: transparent;
-  color: #fff;
+  border-color: var(--aisv-accent);
+  color: var(--aisv-accent);
 }
 
 .step-label {
-  font-size: 13px;
-  font-weight: 700;
-  color: #8593a8;
+  font-size: var(--aisv-font-size-sm);
+  font-weight: 500;
+  color: var(--aisv-label-tertiary);
   white-space: nowrap;
 }
 
 .step.active .step-label {
-  color: var(--brand);
+  color: var(--aisv-label-primary);
+  font-weight: 600;
 }
 
 .step.done:not(.active) .step-label {
-  color: var(--text);
+  color: var(--aisv-label-secondary);
 }
 
 .step-desc {
   font-size: 11.5px;
-  /* 未到达的步骤对比度需够 */
-  color: #8494ac;
+  color: var(--aisv-label-caption);
   white-space: nowrap;
 }
 
 .step.active .step-desc {
-  color: #7f97c9;
+  color: var(--aisv-label-tertiary);
 }
 
-.step-btn:hover:not(:disabled) .step-dot {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 14px -8px rgba(47, 111, 237, 0.7);
+@media (hover: hover) {
+  .step-btn:hover:not(:disabled) .step-dot {
+    border-color: var(--aisv-border-selected);
+  }
 }
 
-/* 恢复任务的提示条，挂在步骤条下面 */
+/* ---------- 恢复任务提示条 ---------- */
 
+/*
+ * 提示条本身不铺色：它是一条信息，不是一个操作区。
+ * 用左侧色条 + 与页面同底，避免整条淡蓝色横穿页面。
+ */
 .resume-bar {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-top: 12px;
-  padding: 8px 10px 8px 14px;
-  border: 1px solid #d7e4ff;
-  border-radius: 10px;
-  background: #f2f7ff;
-  font-size: 12.5px;
-  color: #3c5785;
+  /* 与下面的卡片拉开距离，否则两者边线会贴在一起看不出层次 */
+  margin: 10px 0 16px;
+  padding: 7px 8px 7px 12px;
+  border-radius: var(--aisv-radius-md);
+  background: var(--aisv-bg-layer-2);
+  box-shadow: inset 2px 0 0 var(--aisv-accent);
+  font-size: var(--aisv-font-size-xs);
+  color: var(--aisv-label-secondary);
 }
 
 .resume-text {
@@ -1545,49 +1725,54 @@ body.electron.mac .tb-inner {
 .resume-btn {
   flex: none;
   margin-left: auto;
-  padding: 5px 12px;
-  border: 1px solid #b9cdea;
-  border-radius: 8px;
-  background: #fff;
+  height: 28px;
+  padding: 0 12px;
+  border: none;
+  border-radius: var(--aisv-radius-sm);
+  background: var(--aisv-button-primary-fill);
   font-family: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--brand);
+  font-size: var(--aisv-font-size-xs);
+  font-weight: 500;
+  color: var(--aisv-button-primary-label);
   cursor: pointer;
-  transition:
-    background 0.15s,
-    border-color 0.15s;
+  transition: background var(--aisv-t-base) var(--aisv-ease);
 }
 
-.resume-btn:hover {
-  background: #eaf2ff;
-  border-color: #9dbdea;
+@media (hover: hover) {
+  .resume-btn:hover {
+    background: var(--aisv-button-primary-hover);
+  }
 }
 
 .resume-close {
   flex: none;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--aisv-radius-sm);
   background: transparent;
   font-size: 15px;
   line-height: 1;
-  color: #8296b5;
+  color: var(--aisv-label-tertiary);
   cursor: pointer;
+  transition:
+    background var(--aisv-t-base) var(--aisv-ease),
+    color var(--aisv-t-base) var(--aisv-ease);
 }
 
-.resume-close:hover {
-  background: #e2ecff;
-  color: var(--brand);
+@media (hover: hover) {
+  .resume-close:hover {
+    background: var(--aisv-hover);
+    color: var(--aisv-label-primary);
+  }
 }
 
-/* 步骤面板 */
+/* ---------- 步骤面板 ---------- */
 
 .step-panel {
   margin: 0;
-  animation: rise 0.26s ease both;
+  animation: rise var(--aisv-t-slow) var(--aisv-ease) both;
 }
 
 .panel-head {
@@ -1611,19 +1796,21 @@ body.electron.mac .tb-inner {
 }
 
 .panel-head h2 {
-  margin: 0 0 5px;
+  margin: 0 0 4px;
   font-size: 17px;
-  letter-spacing: 0.2px;
+  font-weight: 600;
+  letter-spacing: -0.1px;
 }
 
 .panel-head .hint {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--aisv-font-size-sm);
 }
 
 .panel-actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   justify-content: flex-end;
   gap: 10px;
   margin-top: 18px;
@@ -1631,7 +1818,7 @@ body.electron.mac .tb-inner {
 
 .panel-actions .primary {
   width: auto;
-  min-width: 168px;
+  min-width: 160px;
 }
 
 /* 返回靠左，主操作靠右 */
@@ -1646,7 +1833,7 @@ body.electron.mac .tb-inner {
   margin-top: auto;
   align-items: center;
   padding-top: 16px;
-  border-top: 1px solid var(--border);
+  border-top: 0.5px solid var(--aisv-border-l2);
 }
 
 /* 下载链接借用按钮样式 */
@@ -1662,15 +1849,7 @@ body.electron.mac .tb-inner {
   text-decoration: none;
 }
 
-.log-tall {
-  max-height: 340px;
-}
-
-.log-empty {
-  color: #a9b4c3;
-}
-
-/* 配音设置 */
+/* ---------- 配音设置 ---------- */
 
 .voice-list {
   display: flex;
@@ -1678,9 +1857,8 @@ body.electron.mac .tb-inner {
   gap: 12px;
   margin-bottom: 18px;
   padding: 14px 16px;
-  border: 1px solid var(--border-strong);
-  border-radius: 12px;
-  background: #fbfdff;
+  border-radius: var(--aisv-radius-md);
+  background: var(--aisv-bg-layer-2);
 }
 
 .voice-row {
@@ -1690,7 +1868,7 @@ body.electron.mac .tb-inner {
 }
 
 .voice-row + .voice-row {
-  border-top: 1px dashed var(--border);
+  border-top: 0.5px solid var(--aisv-border-l2);
   padding-top: 12px;
 }
 
@@ -1698,25 +1876,26 @@ body.electron.mac .tb-inner {
   flex: 0 0 110px;
   overflow: hidden;
   padding-top: 0;
-  font-size: 14px;
+  font-size: var(--aisv-font-size);
   font-weight: 600;
-  color: var(--text);
+  color: var(--aisv-label-primary);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .voice-row select {
   flex: 1;
-  border: 1px solid var(--border-strong);
-  border-radius: 10px;
-  padding: 9px 34px 9px 12px;
-  font-size: 14px;
+  border: 1px solid var(--aisv-border-l4);
+  border-radius: var(--aisv-radius-md);
+  padding: 8px 34px 8px 12px;
+  font-size: var(--aisv-font-size);
   font-family: inherit;
-  color: var(--text);
-  background-color: #fff;
+  color: var(--aisv-label-primary);
+  background-color: var(--aisv-bg-layer-1);
   appearance: none;
   background-image:
-    linear-gradient(45deg, transparent 50%, #7b88a0 50%), linear-gradient(135deg, #7b88a0 50%, transparent 50%);
+    linear-gradient(45deg, transparent 50%, var(--aisv-label-tertiary) 50%),
+    linear-gradient(135deg, var(--aisv-label-tertiary) 50%, transparent 50%);
   background-position:
     calc(100% - 18px) 52%,
     calc(100% - 13px) 52%;
@@ -1725,17 +1904,14 @@ body.electron.mac .tb-inner {
     5px 5px;
   background-repeat: no-repeat;
   outline: none;
-  transition:
-    border-color 0.15s,
-    box-shadow 0.15s;
+  transition: border-color var(--aisv-t-base) var(--aisv-ease);
 }
 
 .voice-row select:focus {
-  border-color: #7aa6f7;
-  box-shadow: 0 0 0 3px rgba(47, 111, 237, 0.12);
+  border-color: var(--aisv-accent);
 }
 
-/* 素材确认 */
+/* ---------- 素材确认 ---------- */
 
 /**
  * 版式与素材按成片播放顺序混排的网格。
@@ -1776,9 +1952,9 @@ body.electron.mac .tb-inner {
 .timeline-tile {
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: #fff;
+  border-radius: var(--aisv-radius-md);
+  background: var(--aisv-bg-layer-1);
+  box-shadow: var(--aisv-elevation-panel);
   overflow: hidden;
   /*
    * 同行等高。
@@ -1789,20 +1965,24 @@ body.electron.mac .tb-inner {
   height: 100%;
 }
 
-/* 版式卡和素材卡要能一眼分开 */
+/*
+ * 版式卡和素材卡要能一眼分开。
+ * 不用彩色描边（在深色下会脏），改用「底色的层级差 + 左侧色条」。
+ */
 .timeline-tile.is-card {
-  border-color: #cfe0fb;
-  background: #f8fbff;
+  background: var(--aisv-bg-layer-2);
 }
 
 .timeline-tile.is-card.kind-intro {
-  border-color: #bcd6ff;
-  background: #f4f9ff;
+  box-shadow:
+    var(--aisv-elevation-panel),
+    inset 3px 0 0 var(--aisv-accent);
 }
 
 .timeline-tile.is-card.kind-outro {
-  border-color: #bfe9e2;
-  background: #f4fdfb;
+  box-shadow:
+    var(--aisv-elevation-panel),
+    inset 3px 0 0 var(--aisv-ok);
 }
 
 /*
@@ -1830,7 +2010,7 @@ body.electron.mac .tb-inner {
   aspect-ratio: auto;
   object-fit: contain;
   display: block;
-  background: #0e1622;
+  background: var(--aisv-static-code-ink);
 }
 
 .timeline-tile.is-landscape .material-video {
@@ -1841,7 +2021,7 @@ body.electron.mac .tb-inner {
   max-height: none;
   aspect-ratio: auto;
   object-fit: contain;
-  background: #0e1622;
+  background: var(--aisv-static-code-ink);
 }
 
 /*
@@ -1854,13 +2034,12 @@ body.electron.mac .tb-inner {
   align-items: center;
   gap: 10px;
   margin-top: 10px;
-  padding: 8px 12px;
-  border-left: 3px solid var(--brand);
-  border-radius: 8px;
-  background: linear-gradient(90deg, #eef4ff 0%, #f7faff 60%, #ffffff00 100%);
-  font-size: 13px;
-  font-weight: 700;
-  color: #2b3a52;
+  padding: 6px 12px;
+  border-radius: var(--aisv-radius-sm);
+  background: var(--aisv-bg-layer-2);
+  font-size: var(--aisv-font-size-sm);
+  font-weight: 600;
+  color: var(--aisv-label-primary);
 }
 
 .timeline-para:first-child {
@@ -1874,17 +2053,18 @@ body.electron.mac .tb-inner {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
-  background: var(--brand);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 700;
+  border-radius: var(--aisv-radius-xs);
+  /* 段落序号是标尺，不是操作，保持中性 */
+  background: var(--aisv-label-primary);
+  color: var(--aisv-bg-base);
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .timeline-para .para-hint {
   font-weight: 400;
-  font-size: 12px;
-  color: var(--muted);
+  font-size: var(--aisv-font-size-xs);
+  color: var(--aisv-label-tertiary);
 }
 
 .timeline-tile .material-info {
@@ -1914,16 +2094,15 @@ body.electron.mac .tb-inner {
   align-items: center;
   gap: 10px;
   margin-bottom: 12px;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: #f6f9fd;
+  padding: 6px 12px;
+  border-radius: var(--aisv-radius-md);
+  background: var(--aisv-bg-layer-2);
 }
 
 .material-toolbar-label {
-  font-size: 13px;
-  font-weight: 700;
-  color: #46566d;
+  font-size: var(--aisv-font-size-sm);
+  font-weight: 600;
+  color: var(--aisv-label-primary);
 }
 
 /**
@@ -1951,10 +2130,10 @@ body.electron.mac .tb-inner {
   justify-content: center;
   padding: 12px;
   text-align: center;
-  font-size: 12px;
+  font-size: var(--aisv-font-size-xs);
   line-height: 1.6;
-  color: #6b7a90;
-  background: #eef3fa;
+  color: var(--aisv-label-tertiary);
+  background: var(--aisv-bg-layer-3);
 }
 
 .material-card {
@@ -1962,9 +2141,8 @@ body.electron.mac .tb-inner {
   grid-template-columns: 200px 1fr;
   gap: 14px;
   padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: #fbfdff;
+  border-radius: var(--aisv-radius-md);
+  background: var(--aisv-bg-layer-2);
 }
 
 /*
@@ -1976,8 +2154,8 @@ body.electron.mac .tb-inner {
   width: 100%;
   max-height: 260px;
   aspect-ratio: 9 / 16;
-  border-radius: 10px;
-  background: #0b1220;
+  border-radius: var(--aisv-radius-sm);
+  background: var(--aisv-static-code-ink);
   object-fit: contain;
 }
 
@@ -1992,20 +2170,20 @@ body.electron.mac .tb-inner {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
-  font-weight: 700;
+  font-size: var(--aisv-font-size);
+  font-weight: 600;
 }
 
 .material-tags {
-  font-size: 12.5px;
-  color: #5b6a80;
+  font-size: var(--aisv-font-size-xs);
+  color: var(--aisv-label-tertiary);
   line-height: 1.6;
   word-break: break-word;
 }
 
 .material-meta {
-  font-size: 12px;
-  color: var(--muted);
+  font-size: var(--aisv-font-size-xs);
+  color: var(--aisv-label-tertiary);
 }
 
 .material-actions {
@@ -2016,22 +2194,23 @@ body.electron.mac .tb-inner {
 }
 
 .material-actions .secondary {
-  padding: 7px 14px;
-  font-size: 13px;
+  height: 30px;
+  padding: 0 12px;
+  font-size: var(--aisv-font-size-xs);
 }
 
 /* 版式参数里的时长输入：与字幕字号那种窄输入框保持一致 */
 .panel-config .field input[type="number"].text-input {
   max-width: 120px;
 }
+
 .candidates {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
   gap: 10px;
   padding: 10px;
-  border: 1px dashed var(--border-strong);
-  border-radius: 12px;
-  background: #f7faff;
+  border-radius: var(--aisv-radius-md);
+  background: var(--aisv-bg-layer-2);
 }
 
 .candidate {
@@ -2040,20 +2219,22 @@ body.electron.mac .tb-inner {
   gap: 5px;
   padding: 0 0 6px;
   overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: #fff;
+  border-radius: var(--aisv-radius-sm);
+  background: var(--aisv-bg-layer-1);
+  box-shadow: inset 0 0 0 1px var(--aisv-border-l2);
   cursor: pointer;
   transition:
-    border-color 0.15s,
-    box-shadow 0.15s,
-    transform 0.15s;
+    box-shadow var(--aisv-t-base) var(--aisv-ease),
+    transform var(--aisv-t-base) var(--aisv-ease);
 }
 
-.candidate:hover:not(:disabled) {
-  border-color: #b9cdea;
-  box-shadow: 0 10px 20px -16px rgba(16, 32, 64, 0.6);
-  transform: translateY(-1px);
+@media (hover: hover) {
+  .candidate:hover:not(:disabled) {
+    box-shadow:
+      inset 0 0 0 1px var(--aisv-border-selected),
+      0 6px 16px -12px rgb(16 32 64 / 60%);
+    transform: translateY(-1px);
+  }
 }
 
 .candidate img,
@@ -2062,14 +2243,16 @@ body.electron.mac .tb-inner {
   width: 100%;
   aspect-ratio: 9 / 16;
   object-fit: cover;
-  background: #eef3fb;
+  background: var(--aisv-bg-layer-3);
 }
 
 .candidate-meta {
   font-size: 11px;
-  color: var(--muted);
+  color: var(--aisv-label-tertiary);
   text-align: center;
 }
+
+/* ---------- 首屏表单 ---------- */
 
 /* 首屏表单单列到底 */
 .field textarea.textarea-main {
@@ -2110,14 +2293,29 @@ body.electron.mac .tb-inner {
   overflow-y: auto;
   /* 不把滚动传给外层 */
   overscroll-behavior: contain;
-  padding-right: 4px;
+}
+
+/*
+ * 滚动区在卡片内，滚动条会吃掉内容区右侧 10px，
+ * 于是内容比卡片标题、底部按钮各短一条 —— 看上去「没对齐」。
+ *
+ * 解法：卡片右侧多留 10px，滚动区用等宽负外边距整体右移，
+ * 滚动条正好落进补偿出来的空档，内容的右边缘就和标题对齐了。
+ */
+.card.step-panel:has(> .panel-scroll) {
+  padding-right: 34px;
+}
+
+.panel-fill .panel-scroll {
+  margin-right: -10px;
+  scrollbar-gutter: auto;
 }
 
 /* 参数区固定在滚动区之上 */
 .panel-fill > .panel-config {
   flex: none;
   padding-bottom: 12px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 0.5px solid var(--aisv-border-l2);
   margin-bottom: 14px;
 }
 
@@ -2136,17 +2334,18 @@ body.electron.mac .tb-inner {
   border: none;
   background: transparent;
   font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 700;
-  letter-spacing: 0.2px;
-  color: #5b6a80;
+  font-size: var(--aisv-font-size-xs);
+  font-weight: 600;
+  color: var(--aisv-label-secondary);
   text-align: left;
   cursor: pointer;
-  transition: color 0.15s;
+  transition: color var(--aisv-t-base) var(--aisv-ease);
 }
 
-.config-toggle:hover {
-  color: var(--brand);
+@media (hover: hover) {
+  .config-toggle:hover {
+    color: var(--aisv-label-primary);
+  }
 }
 
 .config-caret {
@@ -2154,8 +2353,8 @@ body.electron.mac .tb-inner {
   width: 10px;
   font-size: 10px;
   line-height: 1;
-  color: var(--muted);
-  transition: transform 0.15s;
+  color: var(--aisv-label-tertiary);
+  transition: transform var(--aisv-t-base) var(--aisv-ease);
 }
 
 .panel-config.is-collapsed .config-caret {
@@ -2172,37 +2371,22 @@ body.electron.mac .tb-inner {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12.5px;
+  font-size: var(--aisv-font-size-xs);
   font-weight: 400;
-  color: var(--muted);
+  color: var(--aisv-label-tertiary);
 }
 
 .config-action {
   flex: none;
   margin-left: auto;
   padding-left: 10px;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 500;
-  color: var(--brand);
+  color: var(--aisv-label-tertiary);
 }
 
 .config-body {
   padding-top: 12px;
-}
-
-.panel-fill .panel-scroll::-webkit-scrollbar {
-  width: 8px;
-}
-
-.panel-fill .panel-scroll::-webkit-scrollbar-thumb {
-  border: 2px solid transparent;
-  border-radius: 8px;
-  background-clip: content-box;
-  background-color: rgba(120, 137, 160, 0.4);
-}
-
-.panel-fill .panel-scroll::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(120, 137, 160, 0.68);
 }
 
 .field-head {
@@ -2215,7 +2399,7 @@ body.electron.mac .tb-inner {
 .field-count {
   flex: none;
   font-size: 11.5px;
-  color: var(--muted);
+  color: var(--aisv-label-caption);
   font-variant-numeric: tabular-nums;
 }
 
@@ -2232,11 +2416,11 @@ body.electron.mac .tb-inner {
 /* 操作行左侧说明文字占满整行 */
 .action-hint {
   margin-right: auto;
-  font-size: 12.5px;
-  color: var(--muted);
+  font-size: var(--aisv-font-size-xs);
+  color: var(--aisv-label-tertiary);
 }
 
-/* 底部状态栏，常驻路径类信息 */
+/* ---------- 底部状态栏 ---------- */
 
 .statusbar {
   flex: none;
@@ -2245,10 +2429,9 @@ body.electron.mac .tb-inner {
   gap: 8px;
   height: 30px;
   /* 两端与卡片边线对齐 */
-  padding: 0 var(--scrollbar) 0 0;
-  border-top: 1px solid var(--border);
+  padding: 0 var(--aisv-scrollbar-width) 0 0;
   font-size: 11.5px;
-  color: var(--muted);
+  color: var(--aisv-label-tertiary);
   white-space: nowrap;
   overflow: hidden;
 }
@@ -2262,27 +2445,27 @@ body.electron.mac .tb-inner {
 
 .sb-brand {
   flex: none;
-  font-weight: 700;
-  color: #5b6a80;
+  font-weight: 600;
+  color: var(--aisv-label-secondary);
 }
 
 .sb-muted {
   flex: none;
-  color: #93a0b4;
+  color: var(--aisv-label-caption);
 }
 
 .sb-sep {
   flex: none;
   width: 1px;
   height: 12px;
-  background: var(--border-strong);
+  background: var(--aisv-border-l2);
 }
 
 .sb-grow {
   flex: 1 1 auto;
 }
 
-/* 动效 */
+/* ---------- 动效 ---------- */
 
 @keyframes pulse {
   0%,
@@ -2308,13 +2491,16 @@ body.electron.mac .tb-inner {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .step-panel,
-  .stage.running .stage-icon {
-    animation: none;
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 
-/* 响应式 */
+/* ---------- 响应式 ---------- */
 
 @media (max-width: 900px) {
   .brand-sub {
@@ -2374,7 +2560,7 @@ body.electron.mac .tb-inner {
   }
 
   .stepper-wrap {
-    padding: 12px 20px 10px;
+    padding: 10px 18px 8px;
   }
 
   .card {
@@ -2400,9 +2586,7 @@ body.electron.mac .tb-inner {
   .statusbar .sb-muted:last-child {
     display: block;
   }
-}
 
-@media (max-width: 620px) {
   .app {
     padding: 0 16px;
   }
@@ -2434,7 +2618,7 @@ body.electron.mac .tb-inner {
   }
 
   .stepper-wrap {
-    padding: 14px 8px 10px;
+    padding: 12px 8px 8px;
   }
 
   .step-desc {
@@ -2442,17 +2626,17 @@ body.electron.mac .tb-inner {
   }
 
   .step-label {
-    font-size: 12px;
+    font-size: var(--aisv-font-size-xs);
   }
 
   .step-dot {
     width: 28px;
     height: 28px;
-    font-size: 13px;
+    font-size: var(--aisv-font-size-xs);
   }
 
   .step-line {
-    top: 14px;
+    top: 13px;
   }
 
   .voice-row {
@@ -2478,8 +2662,13 @@ body.electron.mac .tb-inner {
   }
 }
 
-/* 提示词编辑器 */
+/* ---------- 提示词编辑器 ---------- */
 
+/*
+ * 骨架照设置页：212px 导航 + 内容的两行网格，
+ * 第一行 54px 放标题和关闭钮，第二行放导航与内容。
+ * 两个窗口同一个形状，切换过去不会觉得是另一个程序。
+ */
 .pm-overlay {
   position: fixed;
   inset: 0;
@@ -2488,293 +2677,375 @@ body.electron.mac .tb-inner {
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(16, 32, 64, 0.34);
-  backdrop-filter: blur(2px);
+  background: var(--aisv-mask);
 }
 
-/* 独立窗口：整页就是编辑器，无遮罩 */
+/*
+ * 独立窗口的最外层。
+ *
+ * 这里不画圆角也不裁剪：里面的 .panel 自己已经有 28px 圆角，
+ * 外面再套一层会把 panel 的直角边露出来，看着像一道外框。
+ * 形状完全交给 .panel，这层只负责撑满窗口。
+ */
 .pm-window {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--card);
+  background: transparent;
 }
 
-/* 独立窗口的页面壳：去掉主界面的限宽与滚动 */
+/* 编辑器本体：撑满窗口，形状由里面的 .panel 决定 */
+.pm-standalone {
+  display: flex;
+  /*
+   * 直接挂在 #root（display: block）下面，flex 在这里不起作用，
+   * 必须自己给出确定高度，否则会被内容撑高、超出窗口后被裁掉。
+   */
+  height: 100%;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/*
+ * 无边框窗口：整页圆角，盒子不带背景，
+ * 让窗口透明边缘透出桌面，圆角外不会留方块。
+ *
+ * 全局给 html/body 上过 --aisv-bg-base（主窗口需要，模糊层要让底色先画），
+ * 但独立窗口是透明的：这里必须把这层底色撤掉，否则面板 28px 圆角外面
+ * 还铺着一整块方形的深色，看起来就像多了一圈外框。
+ */
+html:has(body.prompt-window) {
+  background: transparent;
+}
+
 body.prompt-window {
   overflow: hidden;
-  background: var(--card);
+  background: transparent;
 }
 
 body.prompt-window #root {
   height: 100%;
+  background: transparent;
 }
 
-body.prompt-window .pm-head {
-  /* 原生标题栏已占顶部，说明文字只留少量留白 */
-  padding-top: 14px;
+/* ---------- 面板骨架（与设置页一致） ---------- */
+
+.pm-standalone > .panel,
+.pm-overlay > .panel {
+  flex: 1 1 auto;
+  /* 父层已是确定高度，这里跟着撑满；不靠内容算高度，免得被 textarea 顶出去 */
+  min-height: 0;
+  position: relative;
+  display: grid;
+  grid-template-columns: 212px minmax(0, 1fr);
+  grid-template-rows: 54px minmax(0, 1fr);
+  grid-template-areas:
+    "title header"
+    "nav options";
+  background: var(--aisv-bg-layer-2);
+  border-radius: var(--aisv-radius-panel);
+  overflow: hidden;
 }
 
-.pm-dialog {
-  display: flex;
-  flex-direction: column;
+/* 覆盖层形态：限宽居中，别铺满整页 */
+.pm-overlay > .panel {
   width: min(1040px, 100%);
   max-height: 100%;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--card);
-  box-shadow: 0 28px 60px -30px rgba(16, 32, 64, 0.55);
+  border-radius: var(--aisv-radius-lg);
+  box-shadow: var(--aisv-elevation-prominent);
 }
 
-.pm-head {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 18px 20px 12px;
-  border-bottom: 1px solid var(--border);
-}
-
-.pm-head h2 {
-  margin: 0 0 4px;
-  font-size: 15px;
-}
-
-.pm-head .hint {
+/* 标题行：16/500，左内边距 24 与内容区文字对齐 */
+.pm-standalone .nav-title,
+.pm-overlay .nav-title {
+  grid-area: title;
   margin: 0;
-  max-width: 640px;
-}
-
-.pm-close {
-  margin-left: auto;
-  padding: 0;
-  width: 26px;
-  height: 26px;
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
+  padding: 22px 12px 8px 24px;
   font-size: 16px;
-  line-height: 1;
-  color: var(--muted);
-  background: #fff;
-  cursor: pointer;
+  line-height: 24px;
+  font-weight: 500;
+  color: var(--aisv-label-primary);
 }
 
-.pm-close:hover {
-  color: var(--text);
-  border-color: #b9c7db;
-}
-
-.pm-body {
-  display: grid;
-  grid-template-columns: 186px 1fr;
-  min-height: 0;
-  flex: 1 1 auto;
-}
-
-.pm-nav {
-  padding: 12px 10px;
-  overflow-y: auto;
-  border-right: 1px solid var(--border);
-  background: #fafcff;
-}
-
-.pm-group + .pm-group {
-  margin-top: 10px;
-}
-
-.pm-group-name {
-  padding: 4px 8px;
-  font-size: 11.5px;
-  font-weight: 700;
-  letter-spacing: 0.3px;
-  color: var(--muted);
-}
-
-.pm-nav-item {
+/* 顶栏：54 高，右侧放关闭 */
+.pm-standalone .header,
+.pm-overlay .header {
+  grid-area: header;
   display: flex;
   align-items: center;
-  gap: 6px;
-  width: 100%;
-  padding: 6px 8px;
+  gap: 4px;
+  height: 54px;
+  padding: 20px 14px 8px 10px;
+}
+
+.pm-standalone .header-spacer,
+.pm-overlay .header-spacer {
+  flex: 1;
+}
+
+.pm-standalone .icon-btn,
+.pm-overlay .icon-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   border: none;
-  border-radius: 8px;
-  font-size: 13px;
-  font-family: inherit;
-  text-align: left;
-  color: #3d4c63;
+  border-radius: var(--aisv-radius-sm);
   background: transparent;
+  color: var(--aisv-label-primary);
   cursor: pointer;
+  transition: background var(--aisv-t-fast) var(--aisv-ease);
 }
 
-.pm-nav-item:hover {
-  background: #eef4ff;
+@media (hover: hover) {
+  .pm-standalone .icon-btn:hover,
+  .pm-overlay .icon-btn:hover {
+    background: var(--aisv-hover);
+  }
 }
 
-.pm-nav-item.on {
-  font-weight: 600;
-  color: var(--brand);
-  background: rgba(47, 111, 237, 0.1);
-}
-
-.pm-dot {
-  margin-left: auto;
-  color: var(--brand);
-}
-
-.pm-main {
+/* 导航列：pad 10/12，无自身填充，透出面板底色 */
+.pm-standalone .nav,
+.pm-overlay .nav {
+  grid-area: nav;
+  min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  padding: 10px 12px 0;
+}
+
+.pm-standalone .nav-list,
+.pm-overlay .nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   min-height: 0;
-  padding: 16px 18px;
   overflow-y: auto;
+  /*
+   * 提示词项比设置页多，导航一定会滚动。
+   * 预留滚动条宽度，免得条子出现时把「写稿」整行挤窄一截。
+   */
+  scrollbar-gutter: stable;
+  padding-bottom: 10px;
+}
+
+/* 导航按「人设文件」分组：分组名是标签，不是可点的行 */
+.pm-standalone .nav-group,
+.pm-overlay .nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pm-standalone .nav-group + .nav-group,
+.pm-overlay .nav-group + .nav-group {
+  margin-top: 6px;
+}
+
+/*
+ * 分组名：只是给这一组条目一个归属提示，不该抢戏。
+ * 用 11px / 常规字重 / 更淡的灰度，读起来像个小标签，
+ * 视线自然落到下面的可点条目上。
+ */
+.pm-standalone .nav-group-name,
+.pm-overlay .nav-group-name {
+  padding: 4px 12px 2px;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 16px;
+  letter-spacing: 0.02em;
+  color: var(--aisv-label-caption);
+  user-select: none;
+}
+
+/* 导航格：36 高、r12、pad 7/16/7/12、gap 8、14/400 */
+.pm-standalone .nav-cell,
+.pm-overlay .nav-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 7px 16px 7px 12px;
+  border: none;
+  border-radius: var(--aisv-radius-md);
+  background: transparent;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 22px;
+  font-weight: 400;
+  color: var(--aisv-label-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--aisv-t-fast) var(--aisv-ease);
+}
+
+@media (hover: hover) {
+  .pm-standalone .nav-cell:hover,
+  .pm-overlay .nav-cell:hover {
+    background: var(--aisv-hover);
+  }
+}
+
+.pm-standalone .nav-cell.active,
+.pm-overlay .nav-cell.active {
+  background: var(--aisv-nav-active);
+}
+
+.pm-standalone .nav-label,
+.pm-overlay .nav-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* 已改过的小点，比整行变色安静 */
+.pm-standalone .nav-dot,
+.pm-overlay .nav-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--aisv-ok);
+}
+
+/* 内容区：左右 24 与标题行文字对齐，底部留出滚动余量 */
+.pm-standalone .options,
+.pm-overlay .options {
+  grid-area: options;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding: 0 24px 24px;
+  overflow-y: auto;
+  transition: opacity var(--aisv-t-fast) var(--aisv-ease);
+}
+
+/*
+ * 切换条目时详情还在路上。
+ *
+ * 不整块换成「加载中…」——那会把已有内容抽走再填回来，看起来是一闪。
+ * 只把当前内容压暗一点，值到了自动恢复，视觉上是连续的。
+ */
+.pm-standalone .options.busy,
+.pm-overlay .options.busy {
+  opacity: 0.55;
 }
 
 .pm-title {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13.5px;
-  font-weight: 700;
+  padding-top: 18px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 22px;
 }
 
 .pm-badge {
   padding: 1px 7px;
-  border-radius: 999px;
+  border-radius: var(--aisv-radius-pill);
   font-size: 11px;
-  font-weight: 600;
-  color: var(--brand);
-  background: rgba(47, 111, 237, 0.1);
+  font-weight: 500;
+  color: var(--aisv-accent);
+  background: color-mix(in srgb, var(--aisv-accent) 10%, transparent);
 }
 
 .pm-badge.muted {
-  color: var(--muted);
-  background: #eef1f6;
+  color: var(--aisv-label-tertiary);
+  background: var(--aisv-bg-layer-3);
 }
 
 .pm-desc {
-  margin: 0;
+  margin: 4px 0 0;
 }
 
-/* 字数压在文本框右上角，不占底部一行 */
-/* 字数在文本框外部的右上角，单独占一行 */
+/* 字数在文本框右下角，不占额外一行 */
 .pm-editor {
+  position: relative;
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 6px;
   min-height: 0;
+  padding-top: 14px;
 }
 
 .pm-count {
-  align-self: flex-end;
+  position: absolute;
+  /* 让开右侧滚动条那 10px，字数不要贴着条子 */
+  right: 22px;
+  bottom: 10px;
   font-size: 11.5px;
-  color: var(--muted);
-  /* 与文本框内文字的右边距对齐 */
-  padding-right: 2px;
+  line-height: 16px;
+  color: var(--aisv-label-caption);
+  /* 底下的文字滚过去也不挡鼠标，也不该被选中 */
   pointer-events: none;
+  user-select: none;
 }
 
+/* 文本框也是输入框那一套：圆角、同样边框、聚焦换 accent */
 .pm-textarea {
   flex: 1 1 auto;
   width: 100%;
-  min-height: 320px;
-  padding: 12px 14px;
-  border: 1px solid var(--border-strong);
-  border-radius: 10px;
-  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
-  font-size: 12.5px;
+  /*
+   * 窗口最矮 520，除去标题行和说明，编辑区还剩三百多；
+   * 这里只保一个很小的下限，让 flex 去决定实际高度，
+   * 否则长文本会把整个面板顶出窗口。
+   */
+  min-height: 120px;
+  /* 底部多留 30，免得最后一行字被字数压住 */
+  padding: 12px 14px 30px;
+  border: 1px solid var(--aisv-border-l4);
+  border-radius: var(--aisv-radius-md);
+  font-family: var(--aisv-font-code);
+  font-size: var(--aisv-font-size-xs);
   line-height: 1.7;
-  color: var(--text);
-  background: #fbfdff;
+  color: var(--aisv-label-primary);
+  background: var(--aisv-bg-layer-1);
   outline: none;
   resize: vertical;
+  transition: border-color var(--aisv-t-base) var(--aisv-ease);
 }
 
 .pm-textarea:focus {
-  border-color: #7aa6f7;
-  background: #fff;
-  box-shadow: 0 0 0 3px rgba(47, 111, 237, 0.12);
+  border-color: var(--aisv-accent);
 }
 
-/* 底栏与设置页一致：浅色分隔、白底、状态在左按钮在右 */
-.pm-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 11px 18px;
-  border-top: 1px solid var(--border);
-  background: #fff;
+/*
+ * 状态气泡：和设置页同一个位置、同一种安静程度。
+ *
+ * 提示词没有保存按钮了，这条只用来给一点反馈：
+ * 正在写 / 还没写完 / 刚写完。浮在右下角，不占布局。
+ */
+.pm-standalone .status,
+.pm-overlay .status {
+  position: absolute;
+  right: 24px;
+  bottom: 14px;
+  padding: 4px 10px;
+  border-radius: var(--aisv-radius-pill);
+  background: var(--aisv-bg-layer-3);
+  font-size: var(--aisv-font-size-xs);
+  color: var(--aisv-label-tertiary);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--aisv-t-base) var(--aisv-ease);
 }
 
-.pm-status {
-  margin-right: auto;
-  font-size: 12px;
-  color: var(--muted);
+.pm-standalone .status:not(:empty),
+.pm-overlay .status:not(:empty) {
+  opacity: 1;
 }
 
-.pm-err {
-  color: var(--bad);
-}
-
-.pm-btn {
-  padding: 9px 18px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  font-family: inherit;
-  font-size: 13px;
-  color: var(--text);
-  background: #fff;
-  cursor: pointer;
-  transition:
-    background 0.15s,
-    border-color 0.15s,
-    color 0.15s;
-}
-
-.pm-btn:hover:not(:disabled) {
-  border-color: #c3cfdd;
-}
-
-.pm-btn.primary {
-  width: auto;
-  padding: 9px 18px;
-  border: 1px solid var(--brand);
-  border-radius: 9px;
-  font-size: 13px;
-  font-weight: 600;
-  background: var(--brand);
-  box-shadow: none;
-}
-
-.pm-btn.primary:hover:not(:disabled) {
-  background: #2a62d4;
-  transform: none;
-  box-shadow: none;
-  filter: none;
-}
-
-.pm-btn.primary:disabled {
-  color: #fff;
-  background: #c3cede;
-  border-color: #c3cede;
-}
-
-/* 恢复默认值：设置页里的低权重文字按钮 */
-.pm-btn.link {
-  padding: 3px 8px;
-  border-color: transparent;
-  font-size: 11px;
-  color: var(--muted);
-  background: transparent;
-}
-
-.pm-btn.link:hover:not(:disabled) {
-  color: var(--brand);
-  background: #f1f6ff;
-}
-
-.pm-btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
+/* 报错要看得见，换成红色底 */
+.pm-standalone .status.err,
+.pm-overlay .status.err {
+  color: var(--aisv-bad);
+  background: var(--aisv-bad-soft);
 }

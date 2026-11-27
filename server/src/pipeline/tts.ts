@@ -174,6 +174,9 @@ export async function runTtsStage(ctx: TaskContext, transcript: Transcript): Pro
     fingerprint: transcriptFingerprint(transcript),
   };
   fs.writeFileSync(manifestFile, JSON.stringify(manifest, null, 2), "utf-8");
-  ctx.markStage("tts", "done", `${paragraphs.length} 段 / ${totalDuration.toFixed(1)}s`);
+  ctx.markStage("tts", "done", `${paragraphs.length} 段 / ${totalDuration.toFixed(1)}s`, {
+    sections: paragraphs.length,
+    seconds: Number(totalDuration.toFixed(1)),
+  });
   return manifest;
 }

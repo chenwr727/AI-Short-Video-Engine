@@ -1,19 +1,21 @@
+import type { MessageKey } from "./i18n";
 import type { TaskState } from "./types";
 
 export type Phase = "input" | "script" | "render" | "material" | "cards" | "result";
 
 export interface StepDef {
   id: Phase;
-  label: string;
-  desc: string;
+  /** 键名而不是译文：渲染时才取词，语言一换就跟着变 */
+  label: MessageKey;
+  desc: MessageKey;
 }
 
 const ALL_STEPS: StepDef[] = [
-  { id: "input", label: "文案脚本", desc: "输入链接或正文" },
-  { id: "script", label: "剧本生成", desc: "选脚本风格 · AI 写稿" },
-  { id: "render", label: "配音生成", desc: "逐句配音 · 音色选择" },
-  { id: "material", label: "素材确认", desc: "匹配素材 · 片头章节" },
-  { id: "result", label: "成片预览", desc: "渲染设置 · 播放" },
+  { id: "input", label: "steps.content", desc: "steps.contentDesc" },
+  { id: "script", label: "steps.script", desc: "steps.scriptDesc" },
+  { id: "render", label: "steps.tts", desc: "steps.ttsDesc" },
+  { id: "material", label: "steps.material", desc: "steps.materialDesc" },
+  { id: "result", label: "steps.render", desc: "steps.renderDesc" },
 ];
 
 /**

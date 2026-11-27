@@ -1,0 +1,28 @@
+import type { AppKey } from "./app.zh";
+
+/** app 命名空间的英文字典，键由 zh 侧约束。 */
+export const app = {
+  busy: "A task is running. Wait for it to finish or cancel it first.",
+  composeTitle: "Compositing",
+  connecting: "Connecting to backend…",
+  dismiss: "Dismiss",
+  name: "AI Short Video Studio",
+  noContent: "Nothing to work with yet. Go back and paste a link or some text.",
+  noLlmKey: "No LLM API key yet. Add it in Settings → Preferences (Ctrl+,) and it applies immediately.",
+  resume: "Resumed the last task ({time} · {status}), stopped at “{step}”",
+  settingsHint: "Ctrl+, Preferences",
+  settingsHintMac: "⌘, Preferences",
+  "status.awaiting_cards": "Awaiting layout review",
+  "status.awaiting_material": "Awaiting footage review",
+  "status.awaiting_script": "Awaiting script review",
+  "status.cancelled": "Cancelled",
+  "status.cards_ready": "Layout confirmed",
+  "status.completed": "Done",
+  "status.failed": "Failed",
+  "status.idle": "Idle",
+  "status.material_ready": "Footage ready",
+  "status.running": "Generating",
+  "status.script_confirmed": "Script confirmed",
+  "status.tts_ready": "Voice ready",
+  tagline: "Link → script → voice → footage → final cut, all automatic",
+} satisfies Record<AppKey, string>;

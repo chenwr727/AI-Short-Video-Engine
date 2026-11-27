@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import { app, BrowserWindow, Menu, dialog, ipcMain, shell } from "electron";
-import { configFile, DEFAULTS, ensureConfig, loadConfig, saveConfig, type AppConfig } from "./config";
+import { app, BrowserWindow, Menu, dialog, ipcMain, nativeTheme, shell } from "electron";
+import { configFile, DEFAULTS, ensureConfig, loadConfig, loadUi, saveConfig, saveUi, type AppConfig } from "./config";
 import { isPortable, setupPortableMode } from "./paths";
 import { findFreePort, startBackend, type Backend } from "./server";
 
@@ -20,6 +20,7 @@ let backend: Backend | null = null;
 let mainWindow: BrowserWindow | null = null;
 let settingsWindow: BrowserWindow | null = null;
 let promptsWindow: BrowserWindow | null = null;
+let aboutWindow: BrowserWindow | null = null;
 
 interface HealthPayload {
   ok: boolean;
@@ -72,6 +73,20 @@ async function ensureBackend(): Promise<Backend> {
 /** 与 index.css 的 .titlebar 高度一致 */
 const HEADER_HEIGHT = 36;
 
+/**
+ * 窗口底色与系统按钮区配色，与 web/src/styles/tokens.css 的
+ * --aisv-bg-base / --aisv-label-secondary 保持一致。
+ *
+ * 这两处颜色只能由主进程设：窗口背景在页面加载前就要画出来，
+ * 右上角的按钮区是原生绘制的，CSS 管不到。
+ */
+const WINDOW_THEME = {
+  light: { bg: "#ffffff", symbol: "#61666b" },
+  dark: { bg: "#151517", symbol: "#cfd3d6" },
+} as const;
+
+type WindowTheme = keyof typeof WINDOW_THEME;
+
 function createMainWindow(url: string): BrowserWindow {
   const win = new BrowserWindow({
     width: 1320,
@@ -79,20 +94,62 @@ function createMainWindow(url: string): BrowserWindow {
     minWidth: 1024,
     minHeight: 700,
     show: false,
-    backgroundColor: "#f4f7fb",
+    // 深色用户启动时先按深色铺底，避免白屏一闪
+    backgroundColor: nativeTheme.shouldUseDarkColors ? WINDOW_THEME.dark.bg : WINDOW_THEME.light.bg,
     title: "AI 短视频生成器",
     icon: appIcon(),
     // 菜单由渲染层绘制
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
     ...(process.platform === "darwin"
       ? { trafficLightPosition: { x: 16, y: 22 } }
-      : { titleBarOverlay: { color: "#f4f7fb", symbolColor: "#3b4a5f", height: HEADER_HEIGHT } }),
+      : {
+          titleBarOverlay: {
+            color: nativeTheme.shouldUseDarkColors ? WINDOW_THEME.dark.bg : WINDOW_THEME.light.bg,
+            symbolColor: nativeTheme.shouldUseDarkColors ? WINDOW_THEME.dark.symbol : WINDOW_THEME.light.symbol,
+            height: HEADER_HEIGHT,
+          },
+        }),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
     },
+  });
+
+  /*
+   * 渲染层切主题时把结果发回来，重新给窗口按钮区配色。
+   * Windows 上 setTitleBarOverlay 可直接改；macOS 是交通灯按钮，跟随系统，
+   * 不需要也不支持这个调用。
+   */
+  ipcMain.on("app:window-theme", (event, theme: unknown) => {
+    if (event.sender !== win.webContents) return;
+    if (theme !== "light" && theme !== "dark") return;
+    const palette = WINDOW_THEME[theme as WindowTheme];
+    win.setBackgroundColor(palette.bg);
+    if (process.platform !== "darwin") {
+      win.setTitleBarOverlay({ color: palette.bg, symbolColor: palette.symbol, height: HEADER_HEIGHT });
+    }
+  });
+
+  /*
+   * 界面语言在窗口之间的转发。
+   *
+   * 设置页是 file:// 下的独立页面，主窗口在 http://127.0.0.1:port，
+   * 两者的 localStorage 完全隔离，storage 事件也传不过去。
+   * 所以偏好的真源放在 ui.json：写入方落盘，主进程广播给其他窗口。
+   */
+  ipcMain.handle("app:language-get", () => loadUi().language);
+
+  ipcMain.on("app:language-changed", (event, language: unknown) => {
+    if (language !== "zh" && language !== "en" && language !== "system") return;
+    saveUi({ language });
+    for (const target of [mainWindow, settingsWindow, promptsWindow, aboutWindow]) {
+      if (!target || target.isDestroyed()) continue;
+      // 发起的窗口自己已经切过了，不用回声
+      if (target.webContents === event.sender) continue;
+      target.webContents.send("app:language-changed", language);
+    }
   });
 
   // 菜单在渲染层，快捷键在此兜住
@@ -172,20 +229,53 @@ async function dataDir(): Promise<string> {
   return h?.dataDir ?? path.join(app.getPath("userData"), "data");
 }
 
+/**
+ * 设置：无边框模态面板，居中盖在主窗口上。
+ *
+ * 固定尺寸、圆角、不能缩放拖动。
+ * 用无边框而不是系统标题栏 —— 系统标题栏会带最小化/最大化按钮，
+ * 而「放大缩小」对一个固定版式的设置面板没有意义。
+ */
+const SETTINGS_SIZE = { width: 824, height: 760 };
+
 function createSettingsWindow(): void {
   if (settingsWindow) {
     settingsWindow.focus();
     return;
   }
 
+  const parent = mainWindow;
+  // 居中于主窗口，主窗口不在时居中于屏幕
+  let x: number | undefined;
+  let y: number | undefined;
+  if (parent) {
+    const b = parent.getBounds();
+    x = Math.round(b.x + (b.width - SETTINGS_SIZE.width) / 2);
+    y = Math.round(b.y + (b.height - SETTINGS_SIZE.height) / 2);
+  }
+
   const win = new BrowserWindow({
-    width: 800,
-    height: 840,
-    parent: mainWindow ?? undefined,
-    modal: Boolean(mainWindow),
+    ...SETTINGS_SIZE,
+    ...(x !== undefined && y !== undefined ? { x, y } : {}),
+    parent: parent ?? undefined,
+    /*
+     * 不用 modal。Windows 上 modal 子窗会让父窗口被系统禁用，
+     * 关闭时再重新激活，主界面会因此整窗重绘、闪一下。
+     * 设了 parent 已经能保证它始终压在主窗口之上。
+     */
+    modal: false,
     show: false,
-    title: "设置",
-    backgroundColor: "#f4f7fb",
+    // 无边框 + 不可缩放：没有标题栏和最大化按钮
+    frame: false,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    title: "首选项",
+    // 面板自带圆角，窗口透明才能看出圆角
+    transparent: true,
+    hasShadow: true,
+    backgroundColor: "#00000000",
     icon: appIcon(),
     autoHideMenuBar: true,
     webPreferences: {
@@ -206,7 +296,13 @@ function createSettingsWindow(): void {
   settingsWindow = win;
 }
 
-/** 提示词编辑器：独立窗口，带系统标题栏（最小化/最大化/关闭） */
+/**
+ * 提示词编辑器：独立无边框窗口。
+ *
+ * 和设置面板同一套做法：窗口透明、页面自己画圆角和标题栏。
+ * 系统标题栏的灰底和主窗口的新配色对不上，而且它只出现在这一个窗口上，
+ * 看起来像另一个程序。标题栏画在页面里就能跟着深浅主题走。
+ */
 function createPromptsWindow(): void {
   if (promptsWindow) {
     if (promptsWindow.isMinimized()) promptsWindow.restore();
@@ -214,15 +310,30 @@ function createPromptsWindow(): void {
     return;
   }
 
+  const SIZE = { width: 1040, height: 760 };
+  let x: number | undefined;
+  let y: number | undefined;
+  if (mainWindow) {
+    const b = mainWindow.getBounds();
+    x = Math.round(b.x + (b.width - SIZE.width) / 2);
+    y = Math.round(b.y + (b.height - SIZE.height) / 2);
+  }
+
   const win = new BrowserWindow({
-    width: 1040,
-    height: 760,
-    minWidth: 760,
-    minHeight: 520,
+    ...SIZE,
+    ...(x !== undefined && y !== undefined ? { x, y } : {}),
     parent: mainWindow ?? undefined,
     show: false,
     title: "提示词",
-    backgroundColor: "#ffffff",
+    // 和设置面板保持一致：无边框、固定尺寸，只有面板里那一个关闭钮
+    frame: false,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    transparent: true,
+    hasShadow: true,
+    backgroundColor: "#00000000",
     icon: appIcon(),
     autoHideMenuBar: true,
     webPreferences: {
@@ -325,23 +436,57 @@ function buildMenu(): void {
   Menu.setApplicationMenu(null);
 }
 
-async function showAbout(): Promise<void> {
-  const h = await health();
-  const options = {
-    type: "info" as const,
+/** 关于：自绘卡片，和设置面板同一套做法（透明窗口 + 页面画圆角） */
+const ABOUT_SIZE = { width: 420, height: 360 };
+
+function createAboutWindow(): void {
+  if (aboutWindow) {
+    aboutWindow.focus();
+    return;
+  }
+
+  const parent = mainWindow;
+  let x: number | undefined;
+  let y: number | undefined;
+  if (parent) {
+    const b = parent.getBounds();
+    x = Math.round(b.x + (b.width - ABOUT_SIZE.width) / 2);
+    y = Math.round(b.y + (b.height - ABOUT_SIZE.height) / 2);
+  }
+
+  const win = new BrowserWindow({
+    ...ABOUT_SIZE,
+    ...(x !== undefined && y !== undefined ? { x, y } : {}),
+    parent: parent ?? undefined,
+    modal: Boolean(parent),
+    show: false,
+    frame: false,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
     title: "关于",
-    message: "AI 短视频生成器",
-    detail:
-      "链接 → 剧本 → 配音 → 素材 → 成片，全流程自动跑。\n\n" +
-      `桌面版 ${app.getVersion()}\n` +
-      `后端 ${h?.version ?? "未连接"}\n` +
-      `Electron ${process.versions.electron}\n` +
-      `Chromium ${process.versions.chrome}\n` +
-      `Node ${process.versions.node}`,
-    buttons: ["知道了"],
-  };
-  if (mainWindow) await dialog.showMessageBox(mainWindow, options);
-  else await dialog.showMessageBox(options);
+    transparent: true,
+    hasShadow: true,
+    backgroundColor: "#00000000",
+    icon: appIcon(),
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+
+  win
+    .loadFile(path.join(__dirname, "..", "assets", "about.html"))
+    .catch((e) => dialog.showErrorBox("无法打开关于", String(e)));
+  win.once("ready-to-show", () => win.show());
+  win.on("closed", () => {
+    aboutWindow = null;
+  });
+  aboutWindow = win;
 }
 
 /** 渲染层菜单发来的动作 */
@@ -367,7 +512,7 @@ function registerAppIpc(): void {
         app.quit();
         return { ok: true };
       case "about":
-        await showAbout();
+        createAboutWindow();
         return { ok: true };
       case "docs":
         await openExternal(DOCS_URL);
@@ -407,6 +552,40 @@ function registerAppIpc(): void {
   /** 关掉发起请求的窗口（提示词独立窗口的「取消」） */
   ipcMain.handle("app:close-self", (event) => {
     BrowserWindow.fromWebContents(event.sender)?.close();
+  });
+
+  /** 页面里点链接交给系统浏览器，不在应用内开新窗口 */
+  ipcMain.handle("app:open-external", async (_event, url: unknown) => {
+    if (typeof url !== "string" || !/^https?:\/\//i.test(url)) return { ok: false };
+    await shell.openExternal(url);
+    return { ok: true };
+  });
+
+  /** 设置页顶栏的「配置文件」：用系统默认程序打开 */
+  ipcMain.handle("app:open-config-file", async () => {
+    try {
+      await openPath(configFile());
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  /** 关于卡片要的版本号与仓库地址 */
+  ipcMain.handle("app:about-info", async () => {
+    const h = await health();
+    return {
+      repo: REPO_URL,
+      // key 用稳定标识，渲染层拼成 about.version.<key> 再取词；
+      // 直接传中文会让翻译查不到，语言切换后仍然是中文
+      versions: [
+        { key: "desktop", value: app.getVersion() },
+        { key: "backend", value: h?.version ?? "" },
+        { key: "electron", value: process.versions.electron },
+        { key: "chromium", value: process.versions.chrome },
+        { key: "node", value: process.versions.node },
+      ],
+    };
   });
 }
 

@@ -1571,6 +1571,11 @@ export async function runComposeStage(
   fs.writeFileSync(marker, `${fingerprint}\n${outputStamp(output)}`, "utf-8");
 
   const missingNote = missingCards > 0 ? ` / 缺 ${missingCards} 张版式卡` : "";
-  ctx.markStage("compose", "done", `${clips.length} 段 / ${(totalDurationMs / 1000).toFixed(1)}s${missingNote}`);
+  ctx.markStage("compose", "done", `${clips.length} 段 / ${(totalDurationMs / 1000).toFixed(1)}s${missingNote}`, {
+    sections: clips.length,
+    seconds: Number((totalDurationMs / 1000).toFixed(1)),
+    // 缺卡提示也要结构化，否则前端按 counts 现拼时会把这段丢掉
+    ...(missingCards > 0 ? { missingCards } : {}),
+  });
   return output;
 }

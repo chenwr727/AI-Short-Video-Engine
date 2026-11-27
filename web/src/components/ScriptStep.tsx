@@ -1,4 +1,5 @@
 import { SCRIPT_STAGE_IDS } from "../phases";
+import { useT } from "../i18n";
 import type { Meta, RawTranscript, TaskState } from "../types";
 import { ConfigSection, Panel } from "./Panel";
 import { LogPanel, StageList } from "./StageList";
@@ -30,6 +31,7 @@ interface ScriptStepProps {
 }
 
 export function ScriptStep(props: ScriptStepProps) {
+  const t = useT();
   const {
     task,
     edit,
@@ -70,7 +72,8 @@ export function ScriptStep(props: ScriptStepProps) {
   const dialogueTotal = edit ? edit.paragraphs.reduce((sum, paragraph) => sum + paragraph.dialogues.length, 0) : 0;
 
   const optionsDisabled = running || busy;
-  const styleLabel = meta?.promptSources.find((option) => option.id === form.promptSource)?.label ?? "未选风格";
+  const styleLabel =
+    meta?.promptSources.find((option) => option.id === form.promptSource)?.label ?? t("script.styleUnset");
 
   const regenerateButton = task ? (
     <button
@@ -78,46 +81,42 @@ export function ScriptStep(props: ScriptStepProps) {
       type="button"
       onClick={onRegenerate}
       disabled={busy}
-      title="丢弃当前剧本（含未保存的修改）以及后续配音、素材与成片，按上面的内容、风格与角色名重写"
+      title={t("script.regenerateHint")}
     >
-      重新生成
+      {t("common.regenerate")}
     </button>
   ) : null;
 
   return (
     <Panel
-      title="剧本生成"
+      title={t("steps.script")}
       desc={
         idle
-          ? "设定脚本风格与角色名，点「开始生成」后 AI 会抓取内容写稿，完成停在这里等你确认。"
+          ? t("script.hint")
           : cancelled
             ? transcript
-              ? "已停止，但剧本已经写好了：点「继续」接着往下跑，已完成的步骤不会重做。"
-              : "已停止。抓取和写稿都是分步落盘的，点「继续」会从断掉的那一步接着跑。"
+              ? t("tts.stoppedScript")
+              : t("script.stopped")
             : awaiting
-              ? "台词可以直接改，用不上的整条可以删掉；点下一步去选配音，确认后才开始合成。"
+              ? t("script.hint2")
               : transcript
-                ? "剧本已确认并用于配音，这里是当时的版本（只读）。"
-                : "AI 正在抓取内容并写剧本，完成后会自动停在这里等确认。"
+                ? t("script.confirmedReadonly")
+                : t("script.running")
       }
       fill
     >
       <ConfigSection
-        title="脚本风格与角色"
+        title={t("script.title")}
         summary={[styleLabel, form.speakerMain || meta?.speakers.main, form.speakerGuest || meta?.speakers.guest]
           .filter(Boolean)
           .join(" · ")}
         open={layout.configOpen}
       >
         <ScriptOptions meta={meta} form={form} onChange={onFormChange} disabled={optionsDisabled} />
-        {awaiting && (
-          <p className="hint options-hint">
-            改完上面的风格或角色名，点「重新生成」会按新设置重写整篇；当前剧本与后面的配音、素材、成片都会作废。
-          </p>
-        )}
+        {awaiting && <p className="hint options-hint">{t("script.regenerateHint2")}</p>}
       </ConfigSection>
 
-      {failed && <div className="alert">{task?.error ?? "剧本生成失败"}</div>}
+      {failed && <div className="alert">{task?.error ?? t("error.scriptGen")}</div>}
 
       <div className="panel-scroll">
         <StageList stages={stages} />
@@ -136,7 +135,7 @@ export function ScriptStep(props: ScriptStepProps) {
         {layout.showResult && awaiting && edit && (
           <>
             <div className="field">
-              <label htmlFor="script-title">标题</label>
+              <label htmlFor="script-title">{t("script.titleLabel")}</label>
               <input
                 id="script-title"
                 className="text-input"
@@ -148,7 +147,7 @@ export function ScriptStep(props: ScriptStepProps) {
             {edit.paragraphs.map((paragraph, paragraphIndex) => (
               <div className="paragraph" key={paragraphIndex}>
                 <div className="paragraph-head">
-                  第 {paragraphIndex + 1} 段
+                  {t("tts.paragraph", { n: paragraphIndex + 1 })}
                   {paragraph.description && <span className="paragraph-desc">{paragraph.description}</span>}
                 </div>
                 {paragraph.dialogues.map((dialogue, dialogueIndex) => (
@@ -162,8 +161,8 @@ export function ScriptStep(props: ScriptStepProps) {
                     <button
                       className="line-del"
                       type="button"
-                      title={dialogueTotal > 1 ? "删除这条台词" : "剧本至少要留一条台词"}
-                      aria-label="删除这条台词"
+                      title={dialogueTotal > 1 ? t("script.deleteLine") : t("script.needLine")}
+                      aria-label={t("script.deleteLine")}
                       disabled={dialogueTotal <= 1}
                       onClick={() => onDeleteDialogue(paragraphIndex, dialogueIndex)}
                     >
@@ -190,7 +189,7 @@ export function ScriptStep(props: ScriptStepProps) {
             {transcript.paragraphs.map((paragraph, paragraphIndex) => (
               <div className="paragraph" key={paragraphIndex}>
                 <div className="paragraph-head">
-                  第 {paragraphIndex + 1} 段
+                  {t("tts.paragraph", { n: paragraphIndex + 1 })}
                   {paragraph.description && <span className="paragraph-desc">{paragraph.description}</span>}
                 </div>
                 {paragraph.dialogues.map((dialogue, dialogueIndex) => (
@@ -212,55 +211,55 @@ export function ScriptStep(props: ScriptStepProps) {
           <>
             <span className="action-hint">{blockedReason ?? ""}</span>
             <button className="secondary btn-back" type="button" onClick={onBack}>
-              返回上一步
+              {t("common.back")}
             </button>
             <button className="primary" type="button" onClick={onStart} disabled={!canStart}>
-              开始生成剧本
+              {t("script.start")}
             </button>
           </>
         ) : awaiting ? (
           <>
             {regenerateButton}
             <button className="secondary btn-back" type="button" onClick={onBack} disabled={busy}>
-              返回上一步
+              {t("common.back")}
             </button>
             <button className="primary" type="button" onClick={onNext} disabled={busy}>
-              下一步：配音生成
+              {t("script.nextTts")}
             </button>
           </>
         ) : failed ? (
           <>
             <button className="secondary btn-back" type="button" onClick={onBack}>
-              返回上一步
+              {t("common.back")}
             </button>
             <button className="secondary" type="button" onClick={onRestart}>
-              清空并重开
+              {t("script.clearRestart")}
             </button>
             {regenerateButton}
             <button className="primary" type="button" onClick={onRetry} disabled={busy}>
-              重试失败步骤
+              {t("common.retry")}
             </button>
           </>
         ) : running ? (
           <>
             {regenerateButton}
             <button className="secondary btn-back" type="button" onClick={onBack} disabled={busy}>
-              返回上一步
+              {t("common.back")}
             </button>
             <button className="secondary" type="button" onClick={onCancel} disabled={busy}>
-              停止生成
+              {t("script.stopRunning")}
             </button>
           </>
         ) : cancelled ? (
           <>
             <button className="secondary btn-back" type="button" onClick={onBack}>
-              返回上一步
+              {t("common.back")}
             </button>
             <button className="secondary" type="button" onClick={onRestart}>
-              清空并重开
+              {t("script.clearRestart")}
             </button>
             <button className="primary" type="button" onClick={onRetry} disabled={busy}>
-              继续
+              {t("common.continue")}
             </button>
           </>
         ) : (
@@ -268,7 +267,7 @@ export function ScriptStep(props: ScriptStepProps) {
             {regenerateButton}
             {task && (
               <button className="secondary btn-back" type="button" onClick={onBack} disabled={busy}>
-                返回上一步
+                {t("common.back")}
               </button>
             )}
           </>

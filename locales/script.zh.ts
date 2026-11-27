@@ -1,0 +1,35 @@
+/** script 命名空间的中文字典，也是这一组键的真源。 */
+export const script = {
+  blankDefault: "留空用默认角色名",
+  clearRestart: "清空并重开",
+  confirmedReadonly: "剧本已确认并用于配音，这里是当时的版本（只读）。",
+  confirming: "剧本在等你确认",
+  deleteLine: "删除这条台词",
+  done: "正在跑，跑完会自动切到剧本页",
+  fromSettings: "默认取自首选项",
+  guestLabel: "追问角色名",
+  hint: "设定脚本风格与角色名，点「开始生成」后 AI 会抓取内容写稿，完成停在这里等你确认。",
+  hint2: "台词可以直接改，用不上的整条可以删掉；点下一步去选配音，确认后才开始合成。",
+  mainLabel: "主讲角色名",
+  needLine: "剧本至少要留一条台词",
+  nextHint: "下一步选脚本风格与角色名，确认后才开始写稿",
+  nextTts: "下一步：配音生成",
+  regenerateConfirm: "重新生成会丢弃当前剧本（含未保存的修改），以及已生成的配音、素材与成片。继续？",
+  regenerateHint: "丢弃当前剧本（含未保存的修改）以及后续配音、素材与成片，按上面的内容、风格与角色名重写",
+  regenerateHint2:
+    "改完上面的风格或角色名，点「重新生成」会按新设置重写整篇；当前剧本与后面的配音、素材、成片都会作废。",
+  running: "AI 正在抓取内容并写剧本，完成后会自动停在这里等确认。",
+  speakerGuest: "老陈",
+  speakerMain: "小简",
+  start: "开始生成剧本",
+  stopped: "已停止。抓取和写稿都是分步落盘的，点「继续」会从断掉的那一步接着跑。",
+  stopRunning: "停止生成",
+  styleLabel: "脚本风格",
+  styleUnset: "未选风格",
+  summary: "{title} · {n} 段",
+  title: "脚本风格与角色",
+  titleLabel: "标题",
+  unnamed: "未命名",
+} satisfies Record<string, string>;
+
+export type ScriptKey = keyof typeof script;

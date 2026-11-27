@@ -1,0 +1,30 @@
+/** error 命名空间的中文字典，也是这一组键的真源。 */
+export const error = {
+  backend: "无法连接后端",
+  cancel: "取消失败",
+  candidates: "检索候选素材失败",
+  cardSwap: "换版式失败",
+  compose: "合成失败",
+  configList: "获取配置项失败",
+  infoCard: "生成信息卡失败",
+  infoCardAuto: "一键配置信息卡失败",
+  infoCardClear: "撤销信息卡失败",
+  match: "匹配素材失败",
+  materialConfirm: "确认素材失败",
+  promptsRead: "读取提示词失败",
+  promptsReset: "恢复默认失败",
+  promptsSave: "保存提示词失败",
+  render: "生成成片失败",
+  request: "请求失败",
+  retry: "重试失败",
+  root: "缺少 #root 节点",
+  scriptConfirm: "确认剧本失败",
+  scriptGen: "剧本生成失败",
+  scriptRegen: "重新生成剧本失败",
+  settings: "打开首选项失败",
+  taskCreate: "创建任务失败",
+  taskGet: "获取任务失败",
+  ttsRegen: "重新生成配音失败",
+} satisfies Record<string, string>;
+
+export type ErrorKey = keyof typeof error;

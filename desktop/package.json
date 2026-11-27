@@ -10,6 +10,7 @@
     "stage": "node scripts/stage-server.mjs",
     "stage:remotion": "node scripts/stage-remotion.mjs",
     "web": "pnpm -C ../web run build",
+    "locales": "pnpm -C .. run build:locales",
     "build": "node scripts/build.mjs",
     "build:remotion": "node scripts/build.mjs --with-remotion",
     "build:remotion:slim": "node scripts/build.mjs --with-remotion --slim",

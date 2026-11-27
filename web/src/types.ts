@@ -131,6 +131,9 @@ export interface RawTranscript {
   paragraphs: RawParagraph[];
 }
 
+/** 标签与检索词的贴合度：0 跑题，1 只命中通用词，2 命中实义词 */
+export type Relevance = 0 | 1 | 2;
+
 export interface MaterialInfo {
   id: number;
   url: string;
@@ -142,6 +145,8 @@ export interface MaterialInfo {
   isAiGenerated: boolean;
   imageUrl: string;
   videoPath: string;
+  /** 旧版 _videos.json 没有这个字段 */
+  relevance?: Relevance;
 }
 
 export interface MaterialItem extends MaterialInfo {
@@ -155,6 +160,8 @@ export interface MaterialItem extends MaterialInfo {
 
 export interface MaterialManifest {
   source: string;
+  /** 来源 + 画幅 + 时长门槛，变了清单不可复用 */
+  signature?: string;
   items: MaterialItem[];
 }
 
@@ -162,9 +169,21 @@ export type StageStatus = "pending" | "running" | "done" | "failed" | "skipped";
 
 export interface StageState {
   id: string;
+  /** 后端写入的中文名；界面按 id 从词典取词，这里只作兜底 */
   label: string;
   status: StageStatus;
+  /** 落盘的中文摘要；老任务只有这个 */
   message?: string;
+  /** 结构化摘要，有它时按当前语言现拼 */
+  counts?: {
+    sections?: number;
+    seconds?: number;
+    sentences?: number;
+    chars?: number;
+    cards?: number;
+    /** 合成时因缺素材没生成的版式卡数量 */
+    missingCards?: number;
+  };
   startedAt?: number;
   endedAt?: number;
 }
@@ -185,6 +204,34 @@ export type TaskStatus =
 
 export type CardKind = "intro" | "chapter" | "outro" | "quote";
 
+/** 对比卡的一栏 */
+export interface CompareSide {
+  name: string;
+  stance: string;
+  note?: string;
+  /** 台词里能定位到这一栏的原句片段 */
+  quote?: string;
+}
+
+/** 时间线卡的一个节点 */
+export interface TimelineItem {
+  time: string;
+  text: string;
+}
+
+/** 数据卡的一根柱子 */
+export interface StatBar {
+  label: string;
+  value: number;
+  hint?: string;
+}
+
+/** 逐条上屏的要点 */
+export interface CardBeat {
+  text: string;
+  quote: string;
+}
+
 export interface CardSpec {
   id: string;
   kind: CardKind;
@@ -199,6 +246,18 @@ export interface CardSpec {
   fingerprint?: string;
   videoPath?: string;
   stillPath?: string;
+
+  // 信息卡专用的渲染参数，前端不读取，但要与后端定义保持一致
+  avatar?: string;
+  role?: string;
+  line?: string;
+  compare?: { left: CompareSide; right: CompareSide };
+  rightAccent?: string;
+  timeline?: TimelineItem[];
+  stat?: { value: string; caption?: string; note?: string; bars?: StatBar[] };
+  beats?: CardBeat[];
+  /** 信息卡底图（素材帧的 data URI） */
+  bgImage?: string;
 }
 
 export interface CardManifest {
@@ -242,6 +301,8 @@ export interface AudioManifest {
   model: string;
   paragraphs: AudioParagraph[];
   totalDuration: number;
+  /** 台词指纹，改动后旧清单不可复用 */
+  fingerprint?: string;
 }
 
 export interface LogLine {

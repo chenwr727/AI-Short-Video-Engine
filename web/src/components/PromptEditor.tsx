@@ -1,15 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
-import { getPrompt, getPrompts, resetPrompt, savePrompt } from "../api";
+import { getPrompt, getPrompts, savePrompt } from "../api";
+import { useT } from "../i18n";
 import type { PromptDoc, PromptSummary } from "../types";
 
 interface PromptEditorProps {
   onClose: () => void;
-  /** 独立窗口形态：无遮罩、无自绘关闭钮，交给系统标题栏 */
+  /** 独立窗口形态：无遮罩、撑满窗口 */
   standalone?: boolean;
 }
 
-/** 设置 → 提示词：内置默认 + data/prompts 覆盖层，保存后立即生效 */
+/**
+ * 提示词编辑：内置默认 + data/prompts 覆盖层，改完自动保存。
+ *
+ * 骨架与设置页一致：212px 导航 + 内容区的两行网格，
+ * 标题占第一行左格，关闭钮占第一行右格。
+ */
 export function PromptEditor({ onClose, standalone = false }: PromptEditorProps) {
+  const t = useT();
   const [docs, setDocs] = useState<PromptDoc[]>([]);
   const [values, setValues] = useState<PromptSummary[]>([]);
   const [file, setFile] = useState("");
@@ -19,9 +26,10 @@ export function PromptEditor({ onClose, standalone = false }: PromptEditorProps)
   // draft 对应的是哪个键；切换时 draft 还是旧内容，不能拿它算 dirty
   const [loadedId, setLoadedId] = useState("");
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [saved, setSaved] = useState("");
+  /** 自动保存的状态：正在写 / 刚写完。只用于界面反馈，不阻止编辑 */
+  const [saving, setSaving] = useState(false);
+  const [savedAt, setSavedAt] = useState(0);
 
   const doc = useMemo(() => docs.find((item) => item.file === file), [docs, file]);
   const field = useMemo(() => doc?.fields.find((item) => item.key === key), [doc, key]);
@@ -66,7 +74,7 @@ export function PromptEditor({ onClose, standalone = false }: PromptEditorProps)
     let alive = true;
     const target = idOf(file, key);
     setError("");
-    setSaved("");
+    setSavedAt(0);
     (async () => {
       try {
         const data = await getPrompt(file, key);
@@ -83,6 +91,29 @@ export function PromptEditor({ onClose, standalone = false }: PromptEditorProps)
       alive = false;
     };
   }, [file, key]);
+  /*
+   * 停止输入 1 秒后自动保存。
+   *
+   * 依赖 draft：每次按键都会重置定时器，所以只在「停下来」之后写一次。
+   * 卸载时清掉，避免切走之后旧值又被写回去。
+   */
+  useEffect(() => {
+    if (!dirty || !ready) return;
+    const timer = window.setTimeout(() => {
+      void writePrompt(file, key, draft);
+    }, 1000);
+    return () => window.clearTimeout(timer);
+  }, [dirty, ready, draft, file, key]);
+
+  // 关窗口前把没写的落盘
+  useEffect(() => {
+    if (!dirty || !ready) return;
+    const flush = () => {
+      void writePrompt(file, key, draft);
+    };
+    window.addEventListener("beforeunload", flush);
+    return () => window.removeEventListener("beforeunload", flush);
+  }, [dirty, ready, draft, file, key]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -98,70 +129,66 @@ export function PromptEditor({ onClose, standalone = false }: PromptEditorProps)
     );
   }
 
-  async function onSave() {
-    setBusy(true);
+  /**
+   * 把当前草稿写回。
+   *
+   * 不弹任何提示：成功静默，失败在右下角气泡留一行红字。
+   * 写入后不覆盖 draft —— 用户可能已经在继续打字，回填会把新输入冲掉。
+   */
+  async function writePrompt(targetFile: string, targetKey: string, value: string) {
+    setSaving(true);
     setError("");
-    setSaved("");
     try {
-      const data = await savePrompt(file, key, draft);
-      setDraft(data.value);
+      const data = await savePrompt(targetFile, targetKey, value);
       setOverridden(data.overridden);
       syncValues(data);
-      setSaved("已保存，下一次写稿生效");
+      setSavedAt(Date.now());
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
-      setBusy(false);
-    }
-  }
-
-  async function onReset() {
-    if (!window.confirm(`把「${doc?.title ?? ""} · ${field?.label ?? ""}」恢复成内置默认？当前修改会丢失。`)) return;
-    setBusy(true);
-    setError("");
-    setSaved("");
-    try {
-      const data = await resetPrompt(file, key);
-      setDraft(data.value);
-      setOverridden(data.overridden);
-      syncValues(data);
-      setSaved("已恢复内置默认");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
+      setSaving(false);
     }
   }
 
   function switchTo(nextFile: string, nextKey: string) {
-    if (dirty && !window.confirm("当前修改还没保存，切换后会丢失。继续？")) return;
+    // 切走前把没写的内容落盘，不打断操作、也不弹确认
+    if (dirty) void writePrompt(file, key, draft);
     setFile(nextFile);
     setKey(nextKey);
   }
 
-  const head = (
-    <div className="pm-head">
-      <div>
-        <h2>提示词</h2>
-        <p className="hint">改动写进数据目录的 prompts/ 下，覆盖随包内置的默认值，保存后立刻生效。</p>
-      </div>
-      {!standalone && (
-        <button type="button" className="pm-close" onClick={onClose} aria-label="关闭">
-          ×
-        </button>
-      )}
-    </div>
-  );
+  const statusText = error
+    ? null
+    : !ready
+      ? null
+      : saving
+        ? t("prompts.saving")
+        : dirty
+          ? t("common.unsaved")
+          : savedAt
+            ? t("prompts.autoSaved")
+            : null;
 
   const content = (
-    <>
-      {head}
+    <div className="panel">
+      <h1 className="nav-title">{t("prompts.title")}</h1>
 
-      <div className="pm-body">
-        <nav className="pm-nav">
+      {/* 标题行右侧：和设置页一样，唯一的关闭钮就在面板里 */}
+      <div className="header">
+        <span className="header-spacer" />
+        <button type="button" className="icon-btn" onClick={onClose} aria-label={t("common.close")}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9}>
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
+      </div>
+
+      <nav className="nav">
+        <div className="nav-list">
           {docs.map((item) => (
-            <div className="pm-group" key={item.file}>
-              <div className="pm-group-name">{item.title}</div>
+            <div className="nav-group" key={item.file}>
+              {/* 分组名只用来说清「这些是同一个人设下的几段」，不可点 */}
+              <div className="nav-group-name">{item.title}</div>
               {item.fields.map((f) => {
                 const summary = values.find((v) => v.file === item.file && v.key === f.key);
                 const active = item.file === file && f.key === key;
@@ -169,94 +196,69 @@ export function PromptEditor({ onClose, standalone = false }: PromptEditorProps)
                   <button
                     type="button"
                     key={f.key}
-                    className={`pm-nav-item${active ? " on" : ""}`}
+                    className={`nav-cell${active ? " active" : ""}`}
                     onClick={() => switchTo(item.file, f.key)}
+                    title={f.hint || f.label}
                   >
-                    <span>{f.label}</span>
-                    {summary?.overridden && (
-                      <span className="pm-dot" title="已自定义">
-                        ·
-                      </span>
-                    )}
+                    <span className="nav-label">{f.label}</span>
+                    {summary?.overridden && <span className="nav-dot" aria-label={t("common.customized")} />}
                   </button>
                 );
               })}
             </div>
           ))}
-        </nav>
-
-        <div className="pm-main">
-          {loading || !ready ? (
-            <p className="hint">{error ? "读取失败" : "读取中…"}</p>
-          ) : (
-            <>
-              <div className="pm-title">
-                <span>
-                  {doc?.title} · {field?.label}
-                </span>
-                {overridden ? (
-                  <span className="pm-badge">已自定义</span>
-                ) : (
-                  <span className="pm-badge muted">内置默认</span>
-                )}
-              </div>
-              {doc?.description && <p className="hint pm-desc">{doc.description}</p>}
-              {field?.hint && <p className="hint pm-desc">{field.hint}</p>}
-
-              <div className="pm-editor">
-                <span className="pm-count">{draft.length} 字</span>
-                <textarea
-                  className="pm-textarea"
-                  value={draft}
-                  spellCheck={false}
-                  onChange={(event) => setDraft(event.target.value)}
-                  disabled={busy}
-                />
-              </div>
-            </>
-          )}
         </div>
+      </nav>
+
+      <div className={`options${loading || !ready ? " busy" : ""}`}>
+        {loading && !doc ? (
+          <p className="hint">{error ? t("common.failed") : t("common.loading")}</p>
+        ) : (
+          <>
+            <div className="pm-title">
+              <span>
+                {doc?.title} · {field?.label}
+              </span>
+              {overridden ? (
+                <span className="pm-badge">{t("common.customized")}</span>
+              ) : (
+                <span className="pm-badge muted">{t("prompts.builtin")}</span>
+              )}
+            </div>
+            {doc?.description && <p className="hint pm-desc">{doc.description}</p>}
+            {field?.hint && <p className="hint pm-desc">{field.hint}</p>}
+
+            {/* 字数贴在编辑框右下角，不再单独占一行 */}
+            <div className="pm-editor">
+              <textarea
+                className="pm-textarea"
+                value={draft}
+                spellCheck={false}
+                onChange={(event) => setDraft(event.target.value)}
+              />
+              <span className="pm-count">{t("prompts.chars", { n: draft.length })}</span>
+            </div>
+          </>
+        )}
       </div>
 
-      <div className="pm-actions">
-        <span className="pm-status">
-          {error ? <span className="pm-err">{error}</span> : !ready ? null : saved || (dirty && "有未保存修改")}
-        </span>
-        <button
-          type="button"
-          className="pm-btn link"
-          onClick={() => void onReset()}
-          disabled={busy || !ready || (!overridden && !dirty)}
-        >
-          恢复默认值
-        </button>
-        <button type="button" className="pm-btn" onClick={onClose} disabled={busy}>
-          取消
-        </button>
-        <button
-          type="button"
-          className="pm-btn primary"
-          onClick={() => void onSave()}
-          disabled={busy || !ready || !dirty}
-        >
-          保存
-        </button>
-      </div>
-    </>
+      {statusText && <span className="status">{statusText}</span>}
+      {error && <span className="status err">{error}</span>}
+    </div>
   );
 
   // 独立窗口：撑满窗口，不画遮罩
   if (standalone) {
     return (
-      <div className="pm-window" role="dialog" aria-label="提示词">
+      <div className="pm-standalone" role="dialog" aria-label={t("prompts.title")}>
         {content}
       </div>
     );
   }
 
   return (
-    <div className="pm-overlay" role="dialog" aria-modal="true" aria-label="提示词">
-      <div className="pm-dialog">{content}</div>
+    <div className="pm-overlay" role="dialog" aria-modal="true" aria-label={t("prompts.title")}>
+      {content}
     </div>
   );
 }

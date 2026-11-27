@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useT } from "../i18n";
 import { RENDER_STAGE_IDS } from "../phases";
 import type { AudioManifest, Meta, TaskState, TtsEngineOption } from "../types";
 import { ConfigSection, Panel } from "./Panel";
@@ -35,6 +36,7 @@ interface RenderStepProps {
 
 /** 配音试听：整段连播或单句试听 */
 function AudioBoard({ manifest }: { manifest: AudioManifest }) {
+  const t = useT();
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const queueRef = useRef<string[]>([]);
   const [playingKey, setPlayingKey] = useState<string | null>(null);
@@ -80,11 +82,15 @@ function AudioBoard({ manifest }: { manifest: AudioManifest }) {
       <audio ref={audioRef} preload="none" hidden />
       <div className="audio-board-head">
         <span>
-          配音总时长 {manifest.totalDuration.toFixed(1)}s · {manifest.paragraphs.length} 段 · {manifest.model}
+          {t("tts.total", {
+            sec: manifest.totalDuration.toFixed(1),
+            n: manifest.paragraphs.length,
+            model: manifest.model,
+          })}
         </span>
         {playingKey && (
           <button className="play-btn" type="button" onClick={stop}>
-            全部停止
+            {t("tts.stopAll")}
           </button>
         )}
       </div>
@@ -98,9 +104,9 @@ function AudioBoard({ manifest }: { manifest: AudioManifest }) {
         return (
           <details className="audio-para" key={paragraph.index}>
             <summary>
-              <span className="audio-para-title">第 {paragraph.index} 段</span>
+              <span className="audio-para-title">{t("tts.paragraph", { n: paragraph.index })}</span>
               <span className="audio-para-meta">
-                {paragraph.duration.toFixed(1)}s · {lines.length} 句
+                {t("tts.paragraphMeta", { sec: paragraph.duration.toFixed(1), n: lines.length })}
               </span>
               <button
                 className="play-btn"
@@ -115,7 +121,7 @@ function AudioBoard({ manifest }: { manifest: AudioManifest }) {
                     );
                 }}
               >
-                {playingKey === key ? "停止" : "播放整段"}
+                {playingKey === key ? t("common.stop") : t("tts.playAll")}
               </button>
             </summary>
             <div className="audio-lines">
@@ -129,7 +135,7 @@ function AudioBoard({ manifest }: { manifest: AudioManifest }) {
                     type="button"
                     onClick={() => (playingKey === line.file ? stop() : play([line.file], line.file))}
                   >
-                    {playingKey === line.file ? "停止" : "试听"}
+                    {playingKey === line.file ? t("common.stop") : t("tts.play")}
                   </button>
                 </div>
               ))}
@@ -143,15 +149,16 @@ function AudioBoard({ manifest }: { manifest: AudioManifest }) {
 
 export function RenderStep(props: RenderStepProps) {
   const { task, busy, error, onBack, onRestart, onRetry, onNext, onRegenerate, onCancel } = props;
+  const t = useT();
   const stageIds = props.stageIds ?? RENDER_STAGE_IDS;
-  const title = props.title ?? "配音生成";
+  const title = props.title ?? t("tts.title");
 
   if (!task) {
     return (
-      <Panel title={title} desc="还没有任务，请先回到第一步生成剧本。">
+      <Panel title={title} desc={t("render.noTask")}>
         <div className="panel-actions">
           <button className="secondary" type="button" onClick={onRestart}>
-            返回第一步
+            {t("render.backFirst")}
           </button>
         </div>
       </Panel>
@@ -167,20 +174,16 @@ export function RenderStep(props: RenderStepProps) {
 
   const stepStage: StepStage = needsTts ? "setup" : running ? "running" : failed ? "failed" : "ready";
   const layout = stepLayout(stepStage, Boolean(task.audio));
-  const desc =
-    props.desc ??
-    (needsTts
-      ? "配音还没开始：确认音色与语速后，点「开始生成配音」。已合成的句子会落盘，中断后只补缺失的部分。"
-      : "逐句合成配音，中间产物都会落盘，命中缓存会直接复用。");
+  const desc = props.desc ?? (needsTts ? t("tts.hintSetup") : t("tts.hint"));
 
   return (
     <Panel title={title} desc={desc} fill>
       {props.voices && (
         <ConfigSection
-          title="音色与语速"
-          summary={`${props.engine?.label ?? "默认引擎"} · ${props.voices.ttsSpeed || 1} 倍速 · ${
-            (props.speakers ?? []).length
-          } 个角色`}
+          title={t("tts.voice")}
+          summary={`${props.engine?.label ?? t("tts.defaultEngine")} · ${t("tts.speed", {
+            v: props.voices.ttsSpeed || 1,
+          })} · ${t("tts.characters", { n: (props.speakers ?? []).length })}`}
           open={layout.configOpen}
         >
           <VoiceOptions
@@ -192,11 +195,7 @@ export function RenderStep(props: RenderStepProps) {
             onChange={props.onFormChange ?? (() => {})}
             onVoiceChange={props.onVoiceChange ?? (() => {})}
           />
-          {onRegenerate && (
-            <p className="hint">
-              {props.regenerateHint ?? "改完上面的音色或语速，点「重新生成」会重做配音；素材与成片会一起作废。"}
-            </p>
-          )}
+          {onRegenerate && <p className="hint">{props.regenerateHint ?? t("tts.regenerateHint")}</p>}
         </ConfigSection>
       )}
 
@@ -216,10 +215,7 @@ export function RenderStep(props: RenderStepProps) {
 
         {failed && (
           <div className="alert">
-            {task.error ??
-              (task.status === "cancelled"
-                ? "已停止。已完成的步骤都留在磁盘上，点「继续」从断掉的地方接着跑。"
-                : "合成失败")}
+            {task.error ?? (task.status === "cancelled" ? t("tts.stopped") : t("error.compose"))}
           </div>
         )}
         {error && <div className="alert">{error}</div>}
@@ -227,36 +223,36 @@ export function RenderStep(props: RenderStepProps) {
 
       <div className="panel-actions">
         <button className="secondary btn-back" type="button" onClick={onBack} disabled={busy}>
-          返回上一步
+          {t("common.back")}
         </button>
         {failed && (
           <button className="secondary" type="button" onClick={onRestart} disabled={busy}>
-            清空并重开
+            {t("script.clearRestart")}
           </button>
         )}
         {running && (
           <button className="secondary" type="button" onClick={onCancel} disabled={busy}>
-            停止生成
+            {t("script.stopRunning")}
           </button>
         )}
         {onRegenerate && !needsTts && !running && (
           <button className="secondary" type="button" onClick={onRegenerate} disabled={busy}>
-            重新生成
+            {t("common.regenerate")}
           </button>
         )}
         {failed && (
           <button className="primary" type="button" onClick={onRetry} disabled={busy}>
-            {task.status === "cancelled" ? "继续" : "重试失败步骤"}
+            {task.status === "cancelled" ? t("common.continue") : t("common.retry")}
           </button>
         )}
         {needsTts && onRegenerate && (
           <button className="primary" type="button" onClick={onRegenerate} disabled={busy}>
-            开始生成配音
+            {t("tts.start")}
           </button>
         )}
         {showAudio && task.status === "awaiting_material" && (
           <button className="primary" type="button" onClick={onNext} disabled={busy}>
-            下一步：素材确认
+            {t("tts.nextMaterial")}
           </button>
         )}
       </div>

@@ -2,674 +2,1631 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <!-- 与页面 color-scheme 一致，避免 <select> 弹层先画一帧黑底 -->
-    <meta name="color-scheme" content="light" />
-    <title>设置</title>
+    <!-- 深浅两套都支持，具体值由脚本在首帧前写进 <html data-theme> -->
+    <meta name="color-scheme" content="light dark" />
+    <title>Preferences</title>
     <style>
+      /*
+       * 配色与主界面 web/src/styles/tokens.css 同源：
+       * 静态色板 → 语义别名，深浅两套在 data-theme 上切换。
+       * 设置是独立窗口，拿不到主界面的样式表，所以这里复制同一份值。
+       */
       :root {
-        --bg: #f4f7fb;
-        --card: #ffffff;
-        --border: #e3e9f2;
-        --text: #1c2431;
-        --muted: #6b7787;
-        --brand: #2f6fed;
-        --ok: #12a15c;
-        --err: #d9453d;
-        --warn: #b8791a;
-        font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
-        color: var(--text);
-        background: var(--bg);
+        --neutral-00: #ffffff;
+        --neutral-50: #f9fafb;
+        --neutral-60: #f5f6f7;
+        --neutral-75: #f1f3f5;
+        --neutral-100: #ebeef2;
+        --neutral-150: #e9ecf2;
+        --neutral-200: #e1e5ee;
+        --neutral-300: #cfd3d6;
+        --neutral-400: #adb2b8;
+        --neutral-500: #979da6;
+        --neutral-600: #81858c;
+        --neutral-700: #61666b;
+        --neutral-750: #43454a;
+        --neutral-800: #353638;
+        --neutral-850: #2c2c2e;
+        --neutral-875: #232324;
+        --neutral-900: #1b1b1c;
+        --neutral-950: #151517;
+        --neutral-1000: #0f1115;
+
+        --accent-100: #e4edfd;
+        --accent-400: #7aaaff;
+        --accent-450: #5686fe;
+        --accent-500: #4176e6;
+        --accent-800: #34415b;
+
+        --green-100: #e6faed;
+        --green-400: #4ed17e;
+        --green-500: #22c55e;
+        --green-900: #233c2c;
+        --amber-100: #fef5e7;
+        --amber-500: #f59e0b;
+        --amber-600: #dd8629;
+        --amber-900: #27241f;
+        --red-50: #fef2f2;
+        --red-400: #f25a5a;
+        --red-600: #ec1313;
+        --red-900: #570c0c;
+
+        --radius-xs: 4px;
+        --radius-sm: 8px;
+        --radius-md: 12px;
+        --radius-lg: 16px;
+        --radius-xl: 20px;
+        --radius-panel: 28px;
+        --radius-pill: 999px;
+        --ease: cubic-bezier(0.4, 0, 0.2, 1);
+        --t-fast: 0.1s;
+        --t-base: 0.2s;
+
+        --font-text: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB",
+          "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+        --font-code: "SF Mono", "JetBrains Mono", "Fira Code", Consolas, "Liberation Mono", Menlo, Courier,
+          "PingFang SC", "Microsoft YaHei";
       }
+
+      /* ---------- 浅色 ---------- */
+      :root {
+        color-scheme: light;
+
+        --bg-base: var(--neutral-00);
+        --bg-layer-1: var(--neutral-00);
+        --bg-layer-2: var(--neutral-50);
+        --bg-layer-3: var(--neutral-100);
+        --bg-module: var(--neutral-60);
+
+        --label-primary: var(--neutral-1000);
+        --label-secondary: var(--neutral-700);
+        --label-tertiary: var(--neutral-600);
+        --label-caption: var(--neutral-400);
+        --label-on-fill: var(--neutral-00);
+
+        --border-l1: rgb(0 0 0 / 4%);
+        --border-l2: rgb(0 0 0 / 10%);
+        --border-l3: rgb(0 0 0 / 12%);
+        --border-l4: rgb(0 0 0 / 16%);
+        --border-selected: var(--neutral-400);
+
+        --accent: var(--accent-500);
+        --accent-hover: var(--accent-450);
+        --accent-soft: var(--accent-100);
+
+        /* 主按钮：强调色填实 */
+        --btn-primary-fill: var(--accent-500);
+        --btn-primary-hover: var(--accent-450);
+        --btn-primary-label: var(--neutral-00);
+
+        --hover: rgb(38 49 72 / 6%);
+        --active: rgb(38 49 72 / 10%);
+        --hover-solid: var(--neutral-75);
+        --nav-active: var(--neutral-100);
+        --hover-danger: rgb(236 19 19 / 5%);
+
+        --ok: var(--green-500);
+        --ok-strong: #0b7a46;
+        --ok-soft: var(--green-100);
+        --warn: var(--amber-500);
+        --warn-label: var(--amber-600);
+        --warn-soft: var(--amber-100);
+        --bad: var(--red-600);
+        --bad-soft: var(--red-50);
+
+        --scrollbar-thumb: var(--neutral-200);
+        --scrollbar-thumb-hover: var(--neutral-300);
+
+        --elevation-stroke-color: var(--border-l4);
+        --elevation-stroke: 0 0 0 0.5px var(--elevation-stroke-color);
+        --elevation-prominent: var(--elevation-stroke), 0 3px 8px 0 rgb(0 0 0 / 4%), 0 0 20px 0 rgb(0 0 0 / 5%);
+      }
+
+      /* ---------- 深色 ---------- */
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+
+        --bg-base: var(--neutral-950);
+        --bg-layer-1: var(--neutral-875);
+        --bg-layer-2: var(--neutral-850);
+        --bg-layer-3: var(--neutral-800);
+        --bg-module: var(--neutral-800);
+
+        --label-primary: var(--neutral-50);
+        --label-secondary: var(--neutral-300);
+        --label-tertiary: var(--neutral-400);
+        --label-caption: var(--neutral-600);
+        --label-on-fill: var(--neutral-00);
+
+        --border-l1: rgb(255 255 255 / 6%);
+        --border-l2: rgb(255 255 255 / 12%);
+        --border-l3: rgb(255 255 255 / 16%);
+        --border-l4: rgb(255 255 255 / 20%);
+        --border-selected: var(--neutral-400);
+
+        --accent: var(--accent-400);
+        --accent-hover: var(--accent-500);
+        --accent-soft: var(--accent-800);
+
+        --btn-primary-fill: var(--accent-450);
+        --btn-primary-hover: var(--accent-400);
+        --btn-primary-label: var(--neutral-1000);
+
+        --hover: rgb(255 255 255 / 8%);
+        --active: rgb(255 255 255 / 14%);
+        --hover-solid: var(--neutral-800);
+        --nav-active: var(--neutral-750);
+        --hover-danger: rgb(242 90 90 / 15%);
+
+        --ok: var(--green-500);
+        --ok-strong: var(--green-400);
+        --ok-soft: var(--green-900);
+        --warn: var(--amber-500);
+        --warn-label: var(--amber-600);
+        --warn-soft: var(--amber-900);
+        --bad: var(--red-400);
+        --bad-soft: rgb(60 31 27);
+
+        --scrollbar-thumb: var(--neutral-700);
+        --scrollbar-thumb-hover: var(--neutral-600);
+
+        --elevation-stroke-color: var(--border-l3);
+      }
+
       * {
         box-sizing: border-box;
       }
+
+      html,
+      body {
+        height: 100%;
+      }
+
+      /*
+       * 窗口是 transparent 的：html/body 都不能铺底色，
+       * 否则圆角外面会是方块。底色由 .panel 自己带。
+       */
+      html,
+      body {
+        background: transparent;
+      }
+
       body {
         margin: 0;
-        background: var(--bg);
-        /* 只有中间内容区滚动 */
         display: flex;
         flex-direction: column;
         height: 100vh;
-      }
-      .page {
-        flex: 1 1 auto;
-        overflow-y: auto;
-        /* 始终预留滚动槽，避免内容左右晃动 */
-        scrollbar-gutter: stable;
-        padding: 20px 24px;
-      }
-      .page > * {
-        max-width: 780px;
-        margin-left: auto;
-        margin-right: auto;
-      }
-
-      header {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        margin-bottom: 16px;
-      }
-      h1 {
-        font-size: 18px;
-        margin: 0;
-      }
-      .file {
-        margin-left: auto;
-        font-size: 11px;
-        color: var(--muted);
-        word-break: break-all;
-        text-align: right;
-        max-width: 60%;
-      }
-
-      /* 分组可折叠，避免字段全铺开过长 */
-      details.group {
-        background: var(--card);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        margin-bottom: 12px;
+        font-family: var(--font-text);
+        font-size: 14px;
+        line-height: 22px;
+        color: var(--label-primary);
+        -webkit-font-smoothing: antialiased;
         overflow: hidden;
       }
-      details.group > summary {
+
+      /* 滚动条：轨道透明，滑块 4px 视觉宽度 */
+      ::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        border: 3px solid transparent;
+        border-radius: var(--radius-pill);
+        background: var(--scrollbar-thumb);
+        background-clip: content-box;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: var(--scrollbar-thumb-hover);
+        background-clip: content-box;
+      }
+      ::-webkit-scrollbar-corner {
+        background: transparent;
+      }
+
+      :focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+      input:focus-visible,
+      select:focus-visible,
+      button:focus-visible {
+        outline: none;
+      }
+
+      /*
+       * ---------- 面板骨架 ----------
+       *
+       * 212px 导航 + 内容，两行网格（第一行 54px 标题行，第二行内容）。
+       * 这是独立窗口，不是覆盖层，所以没有遮罩与居中。
+       *
+       * 关闭按钮放进网格，不叠在面板上 ——
+       * 叠放时它压不到 28px 圆角，方角会把面板右上角切掉。
+       */
+      .panel {
+        flex: 1 1 auto;
+        position: relative;
+        display: grid;
+        grid-template-columns: 212px minmax(0, 1fr);
+        grid-template-rows: 54px minmax(0, 1fr);
+        grid-template-areas:
+          "title header"
+          "nav options";
+        min-height: 0;
+        background: var(--bg-layer-2);
+        border-radius: var(--radius-panel);
+        overflow: hidden;
+      }
+
+      /* 导航列：pad 10/12，无自身填充，透出面板底色 */
+      .nav {
+        grid-area: nav;
+        min-width: 0;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        padding: 10px 12px 0;
+      }
+
+      /* 标题行：16/500，左内边距 24 与内容区文字对齐 */
+      .nav-title {
+        grid-area: title;
+        margin: 0;
+        padding: 22px 12px 8px 24px;
+        font-size: 16px;
+        line-height: 24px;
+        font-weight: 500;
+        color: var(--label-primary);
+      }
+
+      .nav-list {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-height: 0;
+        overflow-y: auto;
+      }
+
+      /* 导航格：40 高、r12、pad 9/16/9/12、gap 8、14/400 */
+      .nav-cell {
         display: flex;
         align-items: center;
         gap: 8px;
-        padding: 12px 16px;
-        font-size: 13px;
-        font-weight: 600;
-        cursor: pointer;
-        list-style: none;
-        user-select: none;
-      }
-      details.group > summary::-webkit-details-marker {
-        display: none;
-      }
-      details.group > summary::before {
-        content: "";
-        width: 0;
-        height: 0;
-        border-left: 5px solid var(--muted);
-        border-top: 4px solid transparent;
-        border-bottom: 4px solid transparent;
-        transition: transform 0.15s;
-        flex: none;
-      }
-      details.group[open] > summary::before {
-        transform: rotate(90deg);
-      }
-      details.group[open] > summary {
-        border-bottom: 1px solid var(--border);
-      }
-      .tag {
-        margin-left: auto;
-        font-size: 11px;
+        height: 40px;
+        padding: 9px 16px 9px 12px;
+        border: none;
+        border-radius: var(--radius-md);
+        background: transparent;
+        font-family: inherit;
+        font-size: 14px;
+        line-height: 22px;
         font-weight: 400;
-        color: var(--muted);
-      }
-      .tag.ok {
-        color: var(--ok);
-      }
-      .body {
-        padding: 14px 16px 4px;
+        color: var(--label-primary);
+        text-align: left;
+        cursor: pointer;
+        transition: background var(--t-fast) var(--ease);
       }
 
-      /* 标签固定宽度，输入框左边界对齐 */
-      .field {
-        display: grid;
-        grid-template-columns: 150px 1fr;
+      @media (hover: hover) {
+        .nav-cell:hover {
+          background: var(--hover);
+        }
+      }
+
+      .nav-cell.active {
+        background: var(--nav-active);
+      }
+
+      .nav-icon {
+        display: flex;
+        flex: none;
+        width: 16px;
+        height: 16px;
         align-items: center;
-        gap: 4px 12px;
-        margin-bottom: 10px;
+        justify-content: center;
+        color: var(--label-tertiary);
       }
-      label.lbl {
-        font-size: 12px;
-        color: var(--muted);
-        line-height: 1.4;
+
+      .nav-cell.active .nav-icon {
+        color: var(--label-primary);
       }
-      label.lbl .hint {
+
+      .nav-label {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+
+      /* 已配/未配的小点，比整行变色安静 */
+      .nav-dot {
+        flex: none;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--ok);
+      }
+
+      .nav-dot.warn {
+        background: var(--warn);
+      }
+
+      /* 顶栏：54 高，右侧放「配置文件」和关闭 */
+      .header {
+        grid-area: header;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        height: 54px;
+        padding: 20px 14px 8px 10px;
+      }
+
+      .header-spacer {
+        flex: 1;
+      }
+
+      /* 「配置文件」：低权重文字按钮，和关闭按钮同一行 */
+
+      @media (hover: hover) {
+      }
+
+
+
+      .icon-btn {
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        border: none;
+        border-radius: var(--radius-sm);
+        background: transparent;
+        color: var(--label-primary);
+        cursor: pointer;
+        transition: background var(--t-fast) var(--ease);
+      }
+
+      @media (hover: hover) {
+        .icon-btn:hover {
+          background: var(--hover);
+        }
+      }
+
+
+
+      /* 内容区：pad 0/24/24，自身滚动 */
+      .options {
+        grid-area: options;
+        min-width: 0;
+        min-height: 0;
+        padding: 0 24px 24px;
+        overflow-y: auto;
+      }
+
+      .section {
+        display: none;
+      }
+
+      .section.on {
         display: block;
-        font-size: 11px;
-        color: #98a3b2;
       }
+
+      /*
+       * ---------- 设置项 ----------
+       *
+       * 一行一项：左边标题 + 说明（可折行），右边控件。
+       * 说明在上、控件在右，不设固定标签列 —— 固定列会把长说明压成竖条。
+       */
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 16px 0;
+        border-bottom: 0.5px solid var(--border-l2);
+      }
+
+      /* 最后一项不留线 */
+      .section > .row:last-child,
+      .section > .group:last-child > .row:last-child {
+        border-bottom: none;
+      }
+
+      /* 组标题自带分隔作用，组末行不再画线，免得下一组前面出现两道线 */
+      .group > .row:last-child {
+        border-bottom: none;
+      }
+
+      .row-text {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        /* 给右侧控件留出呼吸，说明不会贴上去 */
+        padding-right: 24px;
+      }
+
+      .row-title {
+        font-size: 14px;
+        font-weight: 400;
+        line-height: 22px;
+        color: var(--label-primary);
+      }
+
+      .row-desc {
+        font-size: 12px;
+        font-weight: 400;
+        line-height: 18px;
+        color: var(--label-tertiary);
+      }
+
+      /*
+       * 控件统一宽度，右侧对齐成一条线。
+       * 开关行用左对齐：它只有 36px 宽，靠右会孤零零贴在边上，
+       * 与上面输入框的左缘对不齐。输入框自己撑满，不受影响。
+       */
+      .row-control {
+        flex: none;
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 8px;
+        width: 260px;
+      }
+
+      /*
+       * 宽控件（长 URL、种子）：说明在上、控件占满整行。
+       * 只有这些行才放宽，其余一律 260，保证列对齐。
+       */
+      .row.stacked {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+      }
+
+      .row.stacked .row-text {
+        padding-right: 0;
+      }
+
+      .row.stacked .row-control {
+        width: 100%;
+      }
+
+      /* 分区里的小标题：不加线，只把主题分开 */
+      .group {
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* 第一组不留顶部空隙，避免和分区说明叠在一起 */
+      .group + .group {
+        margin-top: 8px;
+      }
+
+      .group-title {
+        margin: 0;
+        padding: 20px 0 4px;
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 18px;
+        color: var(--label-tertiary);
+      }
+
+      /* 组标题下面紧跟分组说明时，收掉多余空隙 */
+      .group-title + .row-desc {
+        padding-bottom: 4px;
+      }
+
+      /* 分区说明：贴在首个设置项上方，和行标题同一列 */
+      .section-desc {
+        padding: 18px 0 2px;
+        font-size: 12px;
+        line-height: 18px;
+        color: var(--label-tertiary);
+      }
+
+      /* ---------- 控件 ---------- */
+
       input[type="text"],
       input[type="password"] {
         width: 100%;
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 7px 10px;
-        font-size: 13px;
+        height: 36px;
+        border: 1px solid var(--border-l4);
+        border-radius: var(--radius-md);
+        padding: 0 12px;
         font-family: inherit;
-        background: #fbfcfe;
+        font-size: 14px;
+        line-height: 22px;
+        color: var(--label-primary);
+        background: var(--bg-layer-1);
         outline: none;
-        transition: border-color 0.15s, background 0.15s;
+        transition:
+          border-color var(--t-base) var(--ease),
+          background var(--t-base) var(--ease);
       }
+
+      input::placeholder {
+        color: var(--label-caption);
+      }
+
       input:focus {
-        border-color: var(--brand);
-        background: #fff;
+        border-color: var(--accent);
       }
+
       input.invalid {
-        border-color: var(--err);
-        background: #fff8f7;
+        border-color: var(--bad);
+        background: var(--bad-soft);
       }
-      .field-error {
-        grid-column: 2;
-        font-size: 11px;
-        color: var(--err);
-        margin-top: -2px;
+
+      /*
+       * 下拉框（语言）：和输入框同一套尺寸与边框。
+       * 下拉箭头用背景里画的 SVG —— 系统的 select 箭头在深色下会糊成一块。
+       */
+      select {
+        width: 100%;
+        height: 36px;
+        border: 1px solid var(--border-l4);
+        border-radius: var(--radius-md);
+        padding: 0 32px 0 12px;
+        font-family: inherit;
+        font-size: 14px;
+        line-height: 22px;
+        color: var(--label-primary);
+        background-color: var(--bg-layer-1);
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2381858c' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 10px center;
+        outline: none;
+        cursor: pointer;
+        appearance: none;
+        transition: border-color var(--t-base) var(--ease);
       }
-      .field-error:empty {
-        display: none;
+
+      select:focus {
+        border-color: var(--accent);
       }
+
+      /* 带单位的输入：单位在框外，与输入框右边缘对齐 */
       .with-unit {
         display: flex;
         align-items: center;
-        gap: 6px;
+        gap: 8px;
+        width: 100%;
       }
+
       .with-unit .unit {
-        font-size: 11px;
-        color: var(--muted);
         flex: none;
         min-width: 20px;
-      }
-      .check {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 10px;
-        font-size: 12px;
-        padding-left: 162px;
-      }
-      .check input {
-        width: 15px;
-        height: 15px;
-        flex: none;
-      }
-      .note {
-        margin: 0 0 12px;
-        padding: 8px 10px;
-        border-left: 3px solid #cfe0fb;
-        background: #f6f9ff;
-        border-radius: 0 7px 7px 0;
-        font-size: 11px;
-        line-height: 1.65;
-        color: #5d6f8c;
+        font-size: 14px;
+        line-height: 22px;
+        color: var(--label-secondary);
       }
 
-      .test-row {
-        display: flex;
-        align-items: baseline;
-        gap: 8px;
-        margin: 2px 0 12px 162px;
+      /* 开关：36×20 胶囊 */
+      .switch {
+        position: relative;
+        flex: none;
+        width: 36px;
+        height: 20px;
+        padding: 2px;
+        border: none;
+        border-radius: var(--radius-pill);
+        background: var(--border-l3);
+        cursor: pointer;
+        transition: background var(--t-base) var(--ease);
       }
-      .test-result {
-        font-size: 11px;
-        line-height: 1.5;
-        color: var(--muted);
-        word-break: break-word;
-        min-width: 0;
+
+      .switch[aria-checked="true"] {
+        background: var(--btn-primary-fill);
       }
-      .test-result.ok {
-        color: var(--ok);
+
+      .switch::after {
+        content: "";
+        display: block;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: var(--label-on-fill);
+        transition: transform var(--t-fast) var(--ease);
       }
-      .test-result.err {
-        color: var(--err);
+
+      .switch[aria-checked="false"]::after {
+        background: var(--neutral-00);
+        box-shadow: 0 1px 2px rgb(0 0 0 / 20%);
       }
+
+      .switch[aria-checked="true"]::after {
+        transform: translateX(16px);
+      }
+
+      /* ---------- 按钮 ---------- */
 
       button {
-        border-radius: 9px;
-        padding: 9px 18px;
-        font-size: 13px;
         font-family: inherit;
         cursor: pointer;
-        border: 1px solid var(--border);
-        background: #fff;
-        color: var(--text);
-        transition: background 0.15s, border-color 0.15s, color 0.15s;
       }
-      button:hover:not(:disabled) {
-        border-color: #c3cfdd;
-      }
-      button.primary {
-        background: var(--brand);
-        border-color: var(--brand);
-        color: #fff;
-        font-weight: 600;
-      }
-      button.primary:hover:not(:disabled) {
-        background: #2a62d4;
-      }
-      button.link {
-        padding: 3px 8px;
-        font-size: 11px;
-        color: var(--muted);
-        border-color: transparent;
+
+      .btn {
+        height: 36px;
+        padding: 0 16px;
+        border: none;
+        border-radius: var(--radius-md);
+        box-shadow: inset 0 0 0 1px var(--border-l3);
         background: transparent;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--label-primary);
+        transition:
+          background var(--t-base) var(--ease),
+          opacity var(--t-base) var(--ease);
       }
-      button.link:hover:not(:disabled) {
-        color: var(--brand);
-        background: #f1f6ff;
+
+      @media (hover: hover) {
+        .btn:hover:not(:disabled) {
+          background: var(--hover);
+        }
       }
-      button:disabled {
-        opacity: 0.55;
+
+      .btn.primary {
+        box-shadow: none;
+        background: var(--btn-primary-fill);
+        color: var(--btn-primary-label);
+      }
+
+      @media (hover: hover) {
+        .btn.primary:hover:not(:disabled) {
+          background: var(--btn-primary-hover);
+        }
+      }
+
+      /* 文字按钮：低权重，用于「测试连接」「恢复默认值」 */
+      .btn.text {
+        height: 28px;
+        padding: 0 10px;
+        box-shadow: none;
+        background: transparent;
+        font-size: 13px;
+        font-weight: 400;
+        color: var(--label-tertiary);
+      }
+
+      @media (hover: hover) {
+        .btn.text:hover:not(:disabled) {
+          color: var(--label-primary);
+          background: var(--hover);
+        }
+      }
+
+      .btn:disabled {
+        opacity: 0.4;
         cursor: not-allowed;
       }
 
+      /* ---------- 底部操作条 ---------- */
+
+      /*
+       * 底部操作条：面板网格的最后一行，横跨两列。
+       * 背景用页面底色，才能和上方内容区分开；
+       * 行高由内容撑开（auto），写死高度会被内边距和描边撑破。
+       */
       .bar {
-        flex: none;
-        padding: 11px 24px;
-        background: #fff;
-        border-top: 1px solid var(--border);
+        min-height: 0;
         display: flex;
         align-items: center;
-        gap: 10px;
+        gap: 8px;
+        padding: 10px 24px;
+        border-top: 0.5px solid var(--border-l2);
+        background: var(--bg-layer-2);
+        border-radius: 0 0 var(--radius-panel) var(--radius-panel);
       }
+
+      /*
+       * 状态提示：改动即生效，不需要底部操作条，所以做成悬浮气泡。
+       * 定位在内容区右下角，不占布局，出现时不会把已对齐的内容挤动。
+       */
       .status {
-        margin-right: auto;
+        position: absolute;
+        right: 24px;
+        bottom: 20px;
+        max-width: 60%;
+        padding: 6px 12px;
+        border-radius: var(--radius-md);
+        background: var(--bg-layer-1);
+        box-shadow: 0 4px 16px rgb(0 0 0 / 12%);
+        overflow: hidden;
         font-size: 12px;
-        color: var(--muted);
-        min-width: 0;
-        line-height: 1.4;
-        word-break: break-word;
+        line-height: 18px;
+        color: var(--label-tertiary);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.15s ease;
       }
+
+      .status:not(:empty) {
+        opacity: 1;
+      }
+
       .status.ok {
-        color: var(--ok);
+        color: var(--ok-strong);
       }
+
       .status.err {
-        color: var(--err);
+        color: var(--bad);
       }
+
       .status.warn {
-        color: var(--warn);
+        color: var(--warn-label);
+      }
+
+      /* 单行错误提示挂在字段下方 */
+      .field-error {
+        font-size: 12px;
+        line-height: 18px;
+        color: var(--bad);
+      }
+
+      .field-error:empty {
+        display: none;
+      }
+
+      /* 窄窗口：导航折到顶部一行 */
+      @media (max-width: 720px) {
+        .panel {
+          grid-template-columns: minmax(0, 1fr);
+          grid-template-rows: 54px auto minmax(0, 1fr);
+          grid-template-areas:
+            "title"
+            "nav"
+            "options";
+        }
+
+        .header {
+          display: none;
+        }
+
+        .nav {
+          padding: 0;
+        }
+
+        .nav-list {
+          flex-direction: row;
+          gap: 4px;
+          padding: 0 16px 12px;
+          overflow-x: auto;
+          overflow-y: hidden;
+        }
+
+        .nav-cell {
+          flex: 1 0 auto;
+          justify-content: center;
+          min-width: 108px;
+        }
+
+        .nav-label {
+          flex: none;
+        }
+
+        .options {
+          padding: 0 16px 24px;
+        }
+
+        .row {
+          flex-direction: column;
+          align-items: stretch;
+          gap: 10px;
+        }
+
+        .row-text {
+          padding-right: 0;
+        }
+
+        .row-control {
+          width: 100%;
+          justify-content: flex-start;
+        }
+
+        .bar {
+          padding: 10px 16px;
+        }
       }
     </style>
   </head>
+
   <body>
-    <div class="page">
-      <header>
-        <h1>设置</h1>
-        <label class="check-inline" style="margin: 0 0 0 8px; padding: 0">
-          <input type="checkbox" id="reveal" />
-          <span style="font-size: 12px; color: #6b7787">显示密钥</span>
-        </label>
-        <div class="file" id="config-path">加载中…</div>
-      </header>
+    <div class="panel">
+      <h1 class="nav-title" id="title"></h1>
 
-      <form id="form" novalidate>
-        <details class="group" open>
-          <summary>大模型（写稿）<span class="tag" id="tag-llm">未配置</span></summary>
-          <div class="body">
-            <div class="field">
-              <label class="lbl">API Key</label>
-              <input type="password" data-key="LLM_API_KEY" autocomplete="off" spellcheck="false" />
-            </div>
-            <div class="field">
-              <label class="lbl">接口地址<span class="hint">可只填域名</span></label>
-              <input
-                type="text"
-                data-key="LLM_API_URL"
-                placeholder="https://api.deepseek.com"
-                spellcheck="false"
-                data-text="1"
-              />
-            </div>
-            <div class="field">
-              <label class="lbl">模型</label>
-              <input type="text" data-key="LLM_MODEL" placeholder="deepseek-flash" spellcheck="false" data-text="1" />
-            </div>
-            <div class="test-row">
-              <button type="button" class="link" data-test="llm">测试连接</button>
-              <span class="test-result" id="test-llm"></span>
-            </div>
-          </div>
-        </details>
+      <div class="header">
+        <span class="header-spacer"></span>
+        <button type="button" class="icon-btn" id="close" data-shared-title="btn.close">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
+      </div>
 
-        <details class="group">
-          <summary>配音（通用）</summary>
-          <div class="body">
-            <p class="note">Edge 在线语音免费、无需 Key，是默认配音。下面两个引擎填了 Key 才会出现在「配音设置」里。</p>
-            <div class="field">
-              <label class="lbl">语速<span class="hint">1 = 原速</span></label>
-              <div class="with-unit">
-                <input type="text" data-key="TTS_SPEED" placeholder="1.1" data-num="0.5,2" data-unit="倍" />
-              </div>
-            </div>
-          </div>
-        </details>
+      <nav class="nav" id="nav" data-shared-label="nav.aria">
+        <div class="nav-list" id="nav-list"></div>
+      </nav>
 
-        <details class="group">
-          <summary>配音（DashScope · CosyVoice）<span class="tag" id="tag-dashscope">未配置</span></summary>
-          <div class="body">
-            <div class="field">
-              <label class="lbl">API Key</label>
-              <input type="password" data-key="DASHSCOPE_API_KEY" autocomplete="off" spellcheck="false" />
-            </div>
-            <div class="field">
-              <label class="lbl">HTTP 地址</label>
-              <input
-                type="text"
-                data-key="DASHSCOPE_BASE_URL"
-                placeholder="https://dashscope.aliyuncs.com/api/v1"
-                spellcheck="false"
-                data-text="1"
-              />
-            </div>
-            <div class="field">
-              <label class="lbl">WebSocket 地址<span class="hint">留空自动推导</span></label>
-              <input
-                type="text"
-                data-key="DASHSCOPE_WS_URL"
-                placeholder="wss://…/api-ws/v1/inference"
-                spellcheck="false"
-                data-text="1"
-              />
-            </div>
-            <div class="field">
-              <label class="lbl">业务空间 ID<span class="hint">留空用默认空间</span></label>
-              <input
-                type="text"
-                data-key="DASHSCOPE_WORKSPACE_ID"
-                placeholder="llm-xxxxxxxx"
-                spellcheck="false"
-                data-text="1"
-              />
-            </div>
-            <div class="field">
-              <label class="lbl">CosyVoice 模型</label>
-              <input
-                type="text"
-                data-key="TTS_COSYVOICE_MODEL"
-                placeholder="cosyvoice-v3-flash"
-                spellcheck="false"
-                data-text="1"
-              />
-            </div>
-            <div class="test-row">
-              <button type="button" class="link" data-test="dashscope">测试连接</button>
-              <span class="test-result" id="test-dashscope"></span>
-            </div>
-          </div>
-        </details>
+      <div class="options" id="options">
+        <form id="form" novalidate></form>
+      </div>
 
-        <details class="group">
-          <summary>配音（豆包 · 火山引擎）<span class="tag" id="tag-seed">未配置</span></summary>
-          <div class="body">
-            <p class="note">
-              不填 Key 时不会出现豆包引擎。音色已内置（小何、Vivi、云舟、大壹、猴哥等），在「配音设置」里按角色选。
-            </p>
-            <div class="field">
-              <label class="lbl">API Key</label>
-              <input type="password" data-key="SEED_TTS_API_KEY" autocomplete="off" spellcheck="false" />
-            </div>
-            <div class="field">
-              <label class="lbl">资源 ID</label>
-              <input
-                type="text"
-                data-key="TTS_SEED_RESOURCE_ID"
-                placeholder="seed-tts-2.0"
-                spellcheck="false"
-                data-text="1"
-              />
-            </div>
-            <div class="field">
-              <label class="lbl">模型</label>
-              <input
-                type="text"
-                data-key="TTS_SEED_MODEL"
-                placeholder="seed-tts-2.0-expressive"
-                spellcheck="false"
-                data-text="1"
-              />
-            </div>
-          </div>
-        </details>
-
-        <details class="group">
-          <summary>剧本角色名</summary>
-          <div class="body">
-            <p class="note">
-              这两个名字会写进 AI 的写稿要求里（双人风格用两个，脱口秀只用主讲）。在「文案脚本」页可以按任务临时改。
-            </p>
-            <div class="field">
-              <label class="lbl">主讲角色名<span class="hint">最多 8 字</span></label>
-              <input type="text" data-key="SPEAKER_MAIN" placeholder="小简" data-max="8" />
-            </div>
-            <div class="field">
-              <label class="lbl">追问角色名<span class="hint">最多 8 字</span></label>
-              <input type="text" data-key="SPEAKER_GUEST" placeholder="老陈" data-max="8" />
-            </div>
-          </div>
-        </details>
-
-        <details class="group">
-          <summary>素材<span class="tag" id="tag-material">未配置 Key</span></summary>
-          <div class="body">
-            <div class="field">
-              <label class="lbl">Pixabay Key</label>
-              <input type="password" data-key="PIXABAY_API_KEY" autocomplete="off" spellcheck="false" />
-            </div>
-            <div class="field">
-              <label class="lbl">Pexels Key</label>
-              <input type="password" data-key="PEXELS_API_KEY" autocomplete="off" spellcheck="false" />
-            </div>
-            <div class="field">
-              <label class="lbl">素材最短时长</label>
-              <div class="with-unit">
-                <input type="text" data-key="MATERIAL_MIN_DURATION" placeholder="10" data-num="1,120" data-unit="秒" />
-              </div>
-            </div>
-            <label class="check"><input type="checkbox" data-key="VISION_SELECT" /> 看缩略图选片（需要模型支持图片输入，失败会自动回退到标签选片）</label>
-            <div class="field">
-              <label class="lbl">每段镜头数<span class="hint">1 = 整段只用一条素材</span></label>
-              <div class="with-unit">
-                <input type="text" data-key="SHOTS_PER_PARAGRAPH" placeholder="2" data-num="1,3" data-unit="个" data-int="1" />
-              </div>
-            </div>
-            <label class="check"><input type="checkbox" data-key="QUOTE_FALLBACK" /> 没素材时改用设计卡（不中断出片）</label>
-          </div>
-        </details>
-
-        <details class="group">
-          <summary>画面</summary>
-          <div class="body">
-            <div class="field">
-              <label class="lbl">帧率</label>
-              <div class="with-unit">
-                <input type="text" data-key="FPS" placeholder="24" data-num="1,120" data-unit="fps" data-int="1" />
-              </div>
-            </div>
-            <div class="field">
-              <label class="lbl">画面淡入<span class="hint">0 = 关闭</span></label>
-              <div class="with-unit">
-                <input type="text" data-key="VIDEO_FADE_IN" placeholder="0.5" data-num="0,5" data-unit="秒" />
-              </div>
-            </div>
-            <div class="field">
-              <label class="lbl">画面淡出<span class="hint">0 = 关闭</span></label>
-              <div class="with-unit">
-                <input type="text" data-key="VIDEO_FADE_OUT" placeholder="0.5" data-num="0,5" data-unit="秒" />
-              </div>
-            </div>
-            <div class="field">
-              <label class="lbl">运镜强度<span class="hint">0 = 静止画面</span></label>
-              <div class="with-unit">
-                <input type="text" data-key="CAMERA_MOTION" placeholder="6" data-num="0,10" data-unit="级" data-int="1" />
-              </div>
-            </div>
-            <div class="field">
-              <label class="lbl">调色强度<span class="hint">0 = 不调色</span></label>
-              <div class="with-unit">
-                <input type="text" data-key="COLOR_GRADE" placeholder="5" data-num="0,10" data-unit="级" data-int="1" />
-              </div>
-            </div>
-          </div>
-        </details>
-
-        <details class="group">
-          <summary>字幕与节奏</summary>
-          <div class="body">
-            <div class="field">
-              <label class="lbl">字幕字号<span class="hint">0 = 自动</span></label>
-              <div class="with-unit">
-                <input
-                  type="text"
-                  data-key="SUBTITLE_FONT_SIZE"
-                  placeholder="0"
-                  data-num="0,300"
-                  data-unit="px"
-                  data-int="1"
-                />
-              </div>
-            </div>
-            <div class="field">
-              <label class="lbl">相邻台词间隔<span class="hint">0 = 紧接</span></label>
-              <div class="with-unit">
-                <input type="text" data-key="SUBTITLE_INTERVAL" placeholder="0.2" data-num="0,10" data-unit="秒" />
-              </div>
-            </div>
-            <div class="field">
-              <label class="lbl"
-                >片头 / 标题时长<span class="hint">关掉版式步骤时控制字幕大标题，开了版式卡则兼作片头卡时长；0 = 不显示</span></label
-              >
-              <div class="with-unit">
-                <input type="text" data-key="TITLE_DURATION" placeholder="1.6" data-num="0,30" data-unit="秒" />
-              </div>
-            </div>
-            <div class="field">
-              <label class="lbl">字幕渲染<span class="hint">ass = 合并期直接烧（快）；remotion = 叠透明层（慢很多，需 remotion/ 依赖）</span></label>
-              <div class="with-unit">
-                <input type="text" data-key="SUBTITLE_RENDER" placeholder="ass" data-text="1" />
-              </div>
-            </div>
-            <div class="field">
-              <label class="lbl">段落转场<span class="hint">0 = 关闭</span></label>
-              <div class="with-unit">
-                <input type="text" data-key="TRANSITION_DURATION" placeholder="0.5" data-num="0,10" data-unit="秒" />
-              </div>
-            </div>
-            <div class="field">
-              <label class="lbl">转场风格<span class="hint">fade 或 mixed</span></label>
-              <div class="with-unit">
-                <input type="text" data-key="TRANSITION_STYLE" placeholder="mixed" data-text="1" />
-              </div>
-            </div>
-            <div class="field">
-              <label class="lbl"
-                >外观种子<span class="hint">留空 = 按剧本标题自动派生。决定运镜方向与转场顺序的洗牌：不同选题自动不同观感，同一条重跑结果一致；填固定值可强制复用某一套观感</span></label
-              >
-              <div class="with-unit">
-                <input type="text" data-key="VARIATION_SEED" placeholder="留空自动" data-text="1" />
-              </div>
-            </div>
-          </div>
-        </details>
-
-        <details class="group">
-          <summary>版式卡</summary>
-          <div class="body">
-            <label class="check"
-              ><input type="checkbox" data-key="CARDS_ENABLED" /> 启用版式卡（AI 给片头 / 章节 / 片尾选模板写文案，需要 remotion/ 依赖；关掉则成片不含任何卡片，下方几个开关随之失效。三个开关都不开时按片头时长与过场卡时长出片头 + 章节卡）</label
-            >
-            <div class="field">
-              <label class="lbl"
-                >卡片主色<span class="hint">#rrggbb，版式卡只在这个色板里挑；信息卡直接用它当主色，对比卡右栏自动取相反的冷暖色</span></label
-              >
-              <div class="with-unit">
-                <input type="text" data-key="CARD_ACCENT" placeholder="#ff5a3c" data-text="1" />
-              </div>
-            </div>
-            <label class="check"
-              ><input type="checkbox" data-key="INTRO_ENABLED" /> 用 Remotion 模板渲染片头（时长见上方「字幕与节奏 → 片头 / 标题时长」；需要 remotion/ 依赖，失败自动回退字幕标题）</label
-            >
-            <label class="check"
-              ><input type="checkbox" data-key="CHAPTER_CARD" /> 段落之间插入过场卡（从第 2 段起，最多 6 张；单段视频不出卡）</label
-            >
-            <div class="field">
-              <label class="lbl">过场卡时长<span class="hint">0 = 不出过场卡；太短会被转场吃掉</span></label>
-              <div class="with-unit">
-                <input type="text" data-key="CHAPTER_DURATION" placeholder="2" data-num="0,10" data-unit="秒" />
-              </div>
-            </div>
-            <div class="field">
-              <label class="lbl">片尾时长<span class="hint">0 = 不加片尾</span></label>
-              <div class="with-unit">
-                <input type="text" data-key="OUTRO_DURATION" placeholder="0" data-num="0,15" data-unit="秒" />
-              </div>
-            </div>
-            <div class="field">
-              <label class="lbl">片尾标题</label>
-              <div class="with-unit">
-                <input type="text" data-key="OUTRO_TITLE" placeholder="关注我，下期见" data-text="1" />
-              </div>
-            </div>
-            <div class="field">
-              <label class="lbl">片尾账号<span class="hint">留空不显示</span></label>
-              <div class="with-unit">
-                <input type="text" data-key="OUTRO_HANDLE" placeholder="@你的账号" data-text="1" />
-              </div>
-            </div>
-          </div>
-        </details>
-
-        <details class="group">
-          <summary>背景音乐</summary>
-          <div class="body">
-            <label class="check"><input type="checkbox" data-key="BGM_ENABLED" /> 混入 BGM（关掉后只保留配音）</label>
-            <div class="field">
-              <label class="lbl">BGM 音量<span class="hint">1 = 原音量</span></label>
-              <div class="with-unit">
-                <input type="text" data-key="BGM_VOLUME" placeholder="0.1" data-num="0,4" data-unit="倍" />
-              </div>
-            </div>
-            <div class="field">
-              <label class="lbl">BGM 淡入<span class="hint">0 = 关闭</span></label>
-              <div class="with-unit">
-                <input type="text" data-key="AUDIO_FADE_IN" placeholder="0.8" data-num="0,30" data-unit="秒" />
-              </div>
-            </div>
-            <div class="field">
-              <label class="lbl">BGM 淡出<span class="hint">0 = 关闭</span></label>
-              <div class="with-unit">
-                <input type="text" data-key="AUDIO_FADE_OUT" placeholder="1.2" data-num="0,30" data-unit="秒" />
-              </div>
-            </div>
-            <label class="check"><input type="checkbox" data-key="SFX_ENABLED" /> 转场与片头音效</label>
-            <div class="field">
-              <label class="lbl">音效音量<span class="hint">1 = 原音量</span></label>
-              <div class="with-unit">
-                <input type="text" data-key="SFX_VOLUME" placeholder="0.2" data-num="0,2" data-unit="倍" />
-              </div>
-            </div>
-          </div>
-        </details>
-      </form>
-    </div>
-
-    <div class="bar">
       <span class="status" id="status"></span>
-      <button type="button" class="link" id="reset">恢复默认值</button>
-      <button type="button" id="cancel">取消</button>
-      <button type="button" class="primary" id="save">保存并重启后端</button>
     </div>
 
     <script>
+      /*
+       * ---------- 语言 ----------
+       *
+       * 偏好存在主进程的 ui.json（"zh" | "en" | "system"），不是 localStorage：
+       * 本页在 file:// 下、主窗口在 http:// 下，两套 localStorage 互不相通，
+       * 存本地会出现「设置页英文、主界面中文」，重启后又会话回去。
+       *
+       * 生效值写在 <html lang> 与 <html data-lang>，渲染时统一走 t()。
+       */
+      let langPreference = "system";
+      let lang = "zh";
+
+      /** 把偏好解析成实际语言 */
+      function resolveLang(preference) {
+        if (preference === "zh" || preference === "en") return preference;
+        return String(navigator.language ?? "").toLowerCase().startsWith("zh") ? "zh" : "en";
+      }
+
+      function applyLang() {
+        lang = resolveLang(langPreference);
+        document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
+        document.documentElement.dataset.lang = lang;
+      }
+
+      /**
+       * 从主进程取当前偏好。
+       *
+       * 必须在建 DOM 之前 await 完，否则会先按默认语言画一帧再切。
+       */
+      async function loadLanguage() {
+        if (window.aisv?.getLanguage) {
+          try {
+            const stored = await window.aisv.getLanguage();
+            if (stored === "zh" || stored === "en" || stored === "system") langPreference = stored;
+          } catch {
+            /* 取不到就按跟随系统 */
+          }
+        }
+        applyLang();
+      }
+
+      /*
+       * 词典：来自 locales/，构建时生成 desktop/assets/locales.json。
+       *
+       * 语言包只有一份真源（仓库根的 locales/），主界面 import 它，
+       * 这里 fetch 同一份编译产物 —— 改文案只需改一处。
+       * 键统一带 "settings." 前缀，和主界面的命名空间对齐。
+       */
+      let I18N = null;
+
+      /** 读语言包；失败时留空词典，t() 会显示键名，便于一眼发现漏加载 */
+      async function loadLocales() {
+        try {
+          const response = await fetch("./locales.json");
+          if (!response.ok) throw new Error(String(response.status));
+          I18N = await response.json();
+        } catch (error) {
+          console.error("语言包加载失败", error);
+          I18N = { zh: {}, en: {} };
+        }
+      }
+
+      /** 取词；缺词时回退英文再回退键名，宁可露出键名也不显示空白 */
+      function t(key, vars) {
+        const full = "settings." + key;
+        const template = I18N[lang][full] ?? I18N.en[full] ?? full;
+        if (!vars) return template;
+        return template.replace(/\{(\w+)\}/g, (whole, name) =>
+          vars[name] === undefined ? whole : String(vars[name]),
+        );
+      }
+
+      /** 按 data-shared / data-shared-title / data-shared-label 回填静态文案 */
+      function applySharedText() {
+        for (const node of document.querySelectorAll("[data-shared]")) {
+          node.textContent = t(node.dataset.shared);
+        }
+        for (const node of document.querySelectorAll("[data-shared-title]")) {
+          node.title = t(node.dataset.sharedTitle);
+        }
+        for (const node of document.querySelectorAll("[data-shared-label]")) {
+          node.setAttribute("aria-label", t(node.dataset.sharedLabel));
+        }
+        document.title = t("app.title");
+        /*
+         * 面板左上角的标题也在这里回填。
+         * 它和窗口标题是同一个键，放在一起才不会出现
+         * 「窗口标题有、面板标题空」这种半截状态。
+         */
+        const titleEl = document.getElementById("title");
+        if (titleEl) titleEl.textContent = t("app.title");
+      }
+
+      /*
+       * 主题：与主界面共用 localStorage["aisv.theme"]。
+       * 主界面切换后在这里打开就是新主题；反过来这里切，
+       * 独立窗口之间靠 storage 事件同步。
+       */
+      const THEME_KEY = "aisv.theme";
+
+      function readPreference() {
+        try {
+          const raw = localStorage.getItem(THEME_KEY);
+          if (raw === "light" || raw === "dark" || raw === "system") return raw;
+        } catch {
+          /* 隐私模式下可能读不到 */
+        }
+        return "system";
+      }
+
+      function resolveTheme(preference) {
+        if (preference === "light" || preference === "dark") return preference;
+        return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      }
+
+      function applyTheme() {
+        document.documentElement.dataset.theme = resolveTheme(readPreference());
+      }
+
+      applyTheme();
+      window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+        if (readPreference() === "system") applyTheme();
+      });
+      window.addEventListener("storage", (event) => {
+        if (event.key === THEME_KEY) applyTheme();
+      });
+
       const form = document.getElementById("form");
       const status = document.getElementById("status");
-      const inputs = Array.from(form.querySelectorAll("input[data-key]"));
-      const saveButton = document.getElementById("save");
-      const resetButton = document.getElementById("reset");
+      const navList = document.getElementById("nav-list");
+      const options = document.getElementById("options");
 
-      let defaults = {};
-      /** 加载时的快照，用于判断是否有未保存修改 */
-      let loaded = {};
+      /*
+       * 字段定义。
+       *
+       * 文案一律写键名（labelKey / descKey / titleKey / noteKey / unitKey），
+       * 渲染时再经 t() 取词 —— 结构里不出现任何中文，加语言不用回头找字符串。
+       *
+       *   kind: text / password / number(带单位) / switch / select
+       *   wide: true  -> 控件占满整行（长 URL、颜色值）
+       *   desc: 说明文字，尽量一句话；能省则省
+       *
+       * 配置项顺序与后端 DEFAULTS 一致。注意 language 这一项刻意不带 key：
+       * 它是界面偏好，不是后端配置，scripts/check-config-sync.mjs 校验的
+       * data-key 必须和 DEFAULTS 一一对应，多一个都会被判成"配置里不存在"。
+       */
+      const SECTIONS = [
+        {
+          id: "general",
+          labelKey: "sec.general.label",
+          icon: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18"/>',
+          descKey: "sec.general.desc",
+          rows: [
+            {
+              // 没有 key：只存在于 localStorage，不进配置文件
+              id: "language",
+              titleKey: "general.language.title",
+              descKey: "general.language.desc",
+              kind: "select",
+              options: [
+                { value: "zh", labelKey: "lang.zh" },
+                { value: "en", labelKey: "lang.en" },
+                { value: "system", labelKey: "lang.system" },
+              ],
+            },
+          ],
+        },
+        {
+          id: "llm",
+          labelKey: "sec.llm.label",
+          icon: '<rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 10h8M8 14h5"/>',
+          descKey: "sec.llm.desc",
+          rows: [
+            { key: "LLM_API_KEY", titleKey: "llm.apiKey", kind: "password" },
+            { key: "LLM_API_URL", titleKey: "llm.apiUrl", descKey: "llm.apiUrl.desc", kind: "text" },
+            { key: "LLM_MODEL", titleKey: "llm.model", kind: "text" },
+          ],
+          test: "llm",
+        },
+        {
+          id: "tts",
+          labelKey: "sec.tts.label",
+          icon: '<path d="M12 4v10a3 3 0 0 0 6 0V7"/><circle cx="9" cy="17" r="3"/><path d="M18 4h-4"/>',
+          descKey: "sec.tts.desc",
+          groups: [
+            {
+              titleKey: "tts.group.general",
+              rows: [
+                {
+                  key: "TTS_SPEED",
+                  titleKey: "tts.speed",
+                  descKey: "tts.speed.desc",
+                  kind: "number",
+                  unitKey: "label.unit.times",
+                  min: 0.5,
+                  max: 2,
+                },
+              ],
+            },
+            {
+              titleKey: "tts.group.dashscope",
+              rows: [
+                { key: "DASHSCOPE_API_KEY", titleKey: "tts.apiKey", kind: "password" },
+                { key: "DASHSCOPE_BASE_URL", titleKey: "tts.httpUrl", kind: "text", wide: true },
+                {
+                  key: "DASHSCOPE_WS_URL",
+                  titleKey: "tts.wsUrl",
+                  descKey: "tts.wsUrl.desc",
+                  kind: "text",
+                  wide: true,
+                },
+                {
+                  key: "DASHSCOPE_WORKSPACE_ID",
+                  titleKey: "tts.workspaceId",
+                  descKey: "tts.workspaceId.desc",
+                  kind: "text",
+                },
+                { key: "TTS_COSYVOICE_MODEL", titleKey: "tts.model", kind: "text" },
+              ],
+              test: "dashscope",
+            },
+            {
+              titleKey: "tts.group.seed",
+              noteKey: "tts.group.seed.note",
+              rows: [
+                { key: "SEED_TTS_API_KEY", titleKey: "tts.apiKey", kind: "password" },
+                { key: "TTS_SEED_RESOURCE_ID", titleKey: "tts.seedResourceId", kind: "text" },
+                { key: "TTS_SEED_MODEL", titleKey: "tts.model", kind: "text" },
+              ],
+            },
+          ],
+        },
+        {
+          id: "speaker",
+          labelKey: "sec.speaker.label",
+          icon: '<circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/>',
+          descKey: "sec.speaker.desc",
+          rows: [
+            { key: "SPEAKER_MAIN", titleKey: "speaker.main", descKey: "speaker.name.desc", kind: "text", max: 8 },
+            { key: "SPEAKER_GUEST", titleKey: "speaker.guest", descKey: "speaker.name.desc", kind: "text", max: 8 },
+          ],
+        },
+        {
+          id: "material",
+          labelKey: "sec.material.label",
+          icon: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+          descKey: "sec.material.desc",
+          rows: [
+            { key: "PIXABAY_API_KEY", titleKey: "material.pixabay", kind: "password" },
+            { key: "PEXELS_API_KEY", titleKey: "material.pexels", kind: "password" },
+            {
+              key: "MATERIAL_MIN_DURATION",
+              titleKey: "material.minDuration",
+              kind: "number",
+              unitKey: "label.unit.sec",
+              min: 1,
+              max: 120,
+            },
+            {
+              key: "VISION_SELECT",
+              titleKey: "material.visionSelect",
+              descKey: "material.visionSelect.desc",
+              kind: "switch",
+            },
+            {
+              key: "SHOTS_PER_PARAGRAPH",
+              titleKey: "material.shots",
+              descKey: "material.shots.desc",
+              kind: "number",
+              unitKey: "label.unit.shots",
+              min: 1,
+              max: 3,
+              int: true,
+            },
+            {
+              key: "QUOTE_FALLBACK",
+              titleKey: "material.quoteFallback",
+              descKey: "material.quoteFallback.desc",
+              kind: "switch",
+            },
+          ],
+        },
+        {
+          id: "render",
+          labelKey: "sec.render.label",
+          icon: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l4-4 3 3 3-4 5 5"/>',
+          descKey: "sec.render.desc",
+          rows: [
+            { key: "FPS", titleKey: "render.fps", kind: "number", unit: "fps", min: 1, max: 120, int: true },
+            {
+              key: "VIDEO_FADE_IN",
+              titleKey: "render.fadeIn",
+              descKey: "render.fade.desc",
+              kind: "number",
+              unitKey: "label.unit.sec",
+              min: 0,
+              max: 5,
+            },
+            {
+              key: "VIDEO_FADE_OUT",
+              titleKey: "render.fadeOut",
+              descKey: "render.fade.desc",
+              kind: "number",
+              unitKey: "label.unit.sec",
+              min: 0,
+              max: 5,
+            },
+            {
+              key: "CAMERA_MOTION",
+              titleKey: "render.camera",
+              descKey: "render.camera.desc",
+              kind: "number",
+              unitKey: "label.unit.level",
+              min: 0,
+              max: 10,
+              int: true,
+            },
+            {
+              key: "COLOR_GRADE",
+              titleKey: "render.grade",
+              descKey: "render.grade.desc",
+              kind: "number",
+              unitKey: "label.unit.level",
+              min: 0,
+              max: 10,
+              int: true,
+            },
+          ],
+        },
+        {
+          id: "subtitle",
+          labelKey: "sec.subtitle.label",
+          icon: '<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 14h4M13 14h4M7 11h10"/>',
+          descKey: "sec.subtitle.desc",
+          rows: [
+            {
+              key: "SUBTITLE_FONT_SIZE",
+              titleKey: "subtitle.fontSize",
+              descKey: "subtitle.fontSize.desc",
+              kind: "number",
+              unit: "px",
+              min: 0,
+              max: 300,
+              int: true,
+            },
+            {
+              key: "SUBTITLE_INTERVAL",
+              titleKey: "subtitle.interval",
+              descKey: "subtitle.interval.desc",
+              kind: "number",
+              unitKey: "label.unit.sec",
+              min: 0,
+              max: 10,
+            },
+            {
+              key: "TITLE_DURATION",
+              titleKey: "subtitle.titleDuration",
+              descKey: "subtitle.titleDuration.desc",
+              kind: "number",
+              unitKey: "label.unit.sec",
+              min: 0,
+              max: 30,
+            },
+            {
+              key: "SUBTITLE_RENDER",
+              titleKey: "subtitle.render",
+              descKey: "subtitle.render.desc",
+              kind: "text",
+            },
+            {
+              key: "TRANSITION_DURATION",
+              titleKey: "subtitle.transition",
+              descKey: "subtitle.transition.desc",
+              kind: "number",
+              unitKey: "label.unit.sec",
+              min: 0,
+              max: 10,
+            },
+            {
+              key: "TRANSITION_STYLE",
+              titleKey: "subtitle.transitionStyle",
+              descKey: "subtitle.transitionStyle.desc",
+              kind: "text",
+            },
+            {
+              key: "VARIATION_SEED",
+              titleKey: "subtitle.seed",
+              descKey: "subtitle.seed.desc",
+              kind: "text",
+              wide: true,
+            },
+          ],
+        },
+        {
+          id: "cards",
+          labelKey: "sec.cards.label",
+          icon: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h6M7 13h10M7 17h4"/>',
+          descKey: "sec.cards.desc",
+          groups: [
+            {
+              titleKey: "cards.group.toggle",
+              rows: [
+                {
+                  key: "CARDS_ENABLED",
+                  titleKey: "cards.enabled",
+                  descKey: "cards.enabled.desc",
+                  kind: "switch",
+                },
+              ],
+            },
+            {
+              titleKey: "cards.group.look",
+              rows: [
+                {
+                  key: "CARD_ACCENT",
+                  titleKey: "cards.accent",
+                  descKey: "cards.accent.desc",
+                  kind: "text",
+                },
+              ],
+            },
+            {
+              titleKey: "cards.group.intro",
+              rows: [
+                {
+                  key: "INTRO_ENABLED",
+                  titleKey: "cards.introEnabled",
+                  descKey: "cards.introEnabled.desc",
+                  kind: "switch",
+                },
+                {
+                  key: "CHAPTER_CARD",
+                  titleKey: "cards.chapter",
+                  descKey: "cards.chapter.desc",
+                  kind: "switch",
+                },
+                {
+                  key: "CHAPTER_DURATION",
+                  titleKey: "cards.chapterDuration",
+                  descKey: "cards.chapterDuration.desc",
+                  kind: "number",
+                  unitKey: "label.unit.sec",
+                  min: 0,
+                  max: 10,
+                },
+              ],
+            },
+            {
+              titleKey: "cards.group.outro",
+              rows: [
+                {
+                  key: "OUTRO_DURATION",
+                  titleKey: "cards.outroDuration",
+                  descKey: "cards.outroDuration.desc",
+                  kind: "number",
+                  unitKey: "label.unit.sec",
+                  min: 0,
+                  max: 15,
+                },
+                { key: "OUTRO_TITLE", titleKey: "cards.outroTitle", kind: "text" },
+                {
+                  key: "OUTRO_HANDLE",
+                  titleKey: "cards.outroHandle",
+                  descKey: "cards.outroHandle.desc",
+                  kind: "text",
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: "audio",
+          labelKey: "sec.audio.label",
+          icon: '<path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/>',
+          descKey: "sec.audio.desc",
+          rows: [
+            { key: "BGM_ENABLED", titleKey: "audio.bgm", descKey: "audio.bgm.desc", kind: "switch" },
+            {
+              key: "BGM_VOLUME",
+              titleKey: "audio.volume",
+              descKey: "audio.volume.desc",
+              kind: "number",
+              unitKey: "label.unit.times",
+              min: 0,
+              max: 4,
+            },
+            {
+              key: "AUDIO_FADE_IN",
+              titleKey: "audio.fadeIn",
+              descKey: "audio.fade.desc",
+              kind: "number",
+              unitKey: "label.unit.sec",
+              min: 0,
+              max: 30,
+            },
+            {
+              key: "AUDIO_FADE_OUT",
+              titleKey: "audio.fadeOut",
+              descKey: "audio.fade.desc",
+              kind: "number",
+              unitKey: "label.unit.sec",
+              min: 0,
+              max: 30,
+            },
+            { key: "SFX_ENABLED", titleKey: "audio.sfx", kind: "switch" },
+            {
+              key: "SFX_VOLUME",
+              titleKey: "audio.sfxVolume",
+              descKey: "audio.volume.desc",
+              kind: "number",
+              unitKey: "label.unit.times",
+              min: 0,
+              max: 2,
+            },
+          ],
+        },
+      ];
+
+      /** 所有字段拍平，便于统一取值/校验 */
+      const FIELDS = SECTIONS.flatMap((section) => [
+        ...(section.rows ?? []),
+        ...(section.groups ?? []).flatMap((group) => group.rows),
+      ]);
+
+      let current = SECTIONS[0].id;
 
       function say(text, kind) {
         status.textContent = text;
         status.className = `status ${kind ?? ""}`;
       }
 
-      function isToggle(input) {
-        return input.type === "checkbox";
+      /* ---------- 建 DOM ---------- */
+
+      function svg(paths) {
+        return (
+          `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" ` +
+          `stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`
+        );
       }
+
+      /** 单位：技术名词（fps / px）原样，其余走词典 */
+      function unitLabel(field) {
+        return field.unitKey ? t(field.unitKey) : (field.unit ?? "");
+      }
+
+      /** 一个输入控件 */
+      function control(field, value) {
+        if (field.kind === "switch") {
+          const on = isOn(value, false);
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "switch";
+          btn.dataset.key = field.key;
+          btn.setAttribute("role", "switch");
+          btn.setAttribute("aria-checked", String(on));
+          btn.title = t(field.titleKey);
+          btn.addEventListener("click", () => {
+            const next = btn.getAttribute("aria-checked") !== "true";
+            btn.setAttribute("aria-checked", String(next));
+            paintNavState();
+          });
+          return btn;
+        }
+
+        if (field.kind === "select") {
+          const select = document.createElement("select");
+          // 语言项没有 data-key：它不是后端配置，提交时不该被收进 config
+          select.id = `field-${field.id}`;
+          for (const option of field.options) {
+            const el = document.createElement("option");
+            el.value = option.value;
+            el.textContent = t(option.labelKey);
+            select.appendChild(el);
+          }
+          select.value = langPreference;
+          select.addEventListener("change", () => {
+            setLang(select.value);
+            /*
+             * 交给主进程落盘并广播给主窗口、提示词窗口。
+             * 本页自己不能再存 localStorage —— 那份数据别的窗口看不到。
+             */
+            langPreference = select.value;
+            if (window.aisv?.announceLanguage) window.aisv.announceLanguage(select.value);
+          });
+          return select;
+        }
+
+        const input = document.createElement("input");
+        input.type = field.kind === "password" ? "password" : "text";
+        input.dataset.key = field.key;
+        input.value = value ?? "";
+        if (field.wide) input.placeholder = "";
+        input.spellcheck = false;
+        if (field.kind === "password") input.autocomplete = "off";
+        if (field.max) input.maxLength = field.max;
+        if (field.placeholder) input.placeholder = field.placeholder;
+
+        input.addEventListener("input", () => paintNavState());
+
+        if (field.kind !== "number") return input;
+
+        const wrap = document.createElement("div");
+        wrap.className = "with-unit";
+        wrap.appendChild(input);
+        /*
+         * 英文里「级」「个」这类量词没有对应词，词典给出空串。
+         * 空单位不建节点 —— 否则右侧会多出一段看不见的空隙，
+         * 输入框看起来没占满。
+         */
+        const unitText = unitLabel(field);
+        if (unitText) {
+          const unit = document.createElement("span");
+          unit.className = "unit";
+          unit.textContent = unitText;
+          wrap.appendChild(unit);
+        }
+        return wrap;
+      }
+
+      /** 一行：左标题+说明，右控件 */
+      function row(field, values) {
+        const el = document.createElement("div");
+        // 长说明或宽控件用上下结构，避免标题被挤成细条
+        el.className = `row${field.wide ? " stacked" : ""}`;
+        if (field.key) el.dataset.key = field.key;
+
+        const text = document.createElement("div");
+        text.className = "row-text";
+        const title = document.createElement("div");
+        title.className = "row-title";
+        title.textContent = t(field.titleKey);
+        text.appendChild(title);
+        if (field.descKey) {
+          const desc = document.createElement("div");
+          desc.className = "row-desc";
+          desc.textContent = t(field.descKey);
+          text.appendChild(desc);
+        }
+        const err = document.createElement("div");
+        err.className = "field-error";
+        text.appendChild(err);
+
+        const ctrl = document.createElement("div");
+        ctrl.className = "row-control";
+        ctrl.appendChild(control(field, values[field.key]));
+
+        el.appendChild(text);
+        el.appendChild(ctrl);
+        return el;
+      }
+
+      function buildForm(values) {
+        form.textContent = "";
+        const filled = values ?? {};
+        for (const section of SECTIONS) {
+          const sec = document.createElement("section");
+          sec.className = "section";
+          sec.dataset.section = section.id;
+
+          if (section.descKey) {
+            const p = document.createElement("div");
+            p.className = "section-desc";
+            p.textContent = t(section.descKey);
+            sec.appendChild(p);
+          }
+
+          for (const field of section.rows ?? []) sec.appendChild(row(field, filled));
+
+          for (const group of section.groups ?? []) {
+            const wrap = document.createElement("div");
+            wrap.className = "group";
+            const h = document.createElement("h2");
+            h.className = "group-title";
+            h.textContent = t(group.titleKey);
+            wrap.appendChild(h);
+            if (group.noteKey) {
+              const note = document.createElement("div");
+              note.className = "row-desc";
+              note.style.padding = "0 0 4px";
+              note.textContent = t(group.noteKey);
+              wrap.appendChild(note);
+            }
+            for (const field of group.rows) wrap.appendChild(row(field, filled));
+            if (group.test) wrap.appendChild(testRow(group.test));
+            sec.appendChild(wrap);
+          }
+
+          // 顶层的测试按钮放在最后
+          if (section.test) sec.appendChild(testRow(section.test));
+
+          form.appendChild(sec);
+        }
+      }
+
+      function testRow(target) {
+        const el = document.createElement("div");
+        el.className = "row";
+        el.style.borderBottom = "none";
+
+        const text = document.createElement("div");
+        text.className = "row-text";
+        const title = document.createElement("div");
+        title.className = "row-title";
+        title.textContent = t("test.title");
+        const result = document.createElement("div");
+        result.className = "row-desc";
+        result.id = `test-${target}`;
+        text.appendChild(title);
+        text.appendChild(result);
+
+        const ctrl = document.createElement("div");
+        ctrl.className = "row-control";
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "btn text";
+        btn.textContent = t("btn.test");
+        btn.addEventListener("click", () => void runTest(target, btn, result));
+        ctrl.appendChild(btn);
+
+        el.appendChild(text);
+        el.appendChild(ctrl);
+        return el;
+      }
+
+      function buildNav() {
+        navList.textContent = "";
+        for (const section of SECTIONS) {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "nav-cell";
+          btn.dataset.section = section.id;
+
+          const icon = document.createElement("span");
+          icon.className = "nav-icon";
+          icon.innerHTML = svg(section.icon);
+
+          const label = document.createElement("span");
+          label.className = "nav-label";
+          label.textContent = t(section.labelKey);
+          // 英文长词（Subtitles & pacing）在 212px 导航里会省略，悬停看全
+          label.title = t(section.labelKey);
+
+          btn.appendChild(icon);
+          btn.appendChild(label);
+          btn.addEventListener("click", () => show(section.id));
+          navList.appendChild(btn);
+        }
+      }
+
+      function show(id) {
+        const section = SECTIONS.find((s) => s.id === id);
+        if (!section) return;
+        current = id;
+        for (const node of form.querySelectorAll(".section")) {
+          node.classList.toggle("on", node.dataset.section === id);
+        }
+        for (const btn of navList.querySelectorAll(".nav-cell")) {
+          btn.classList.toggle("active", btn.dataset.section === id);
+        }
+        options.scrollTop = 0;
+      }
+
+      /* ---------- 取值 / 校验 ---------- */
 
       function isOn(value, fallback) {
         const text = String(value ?? "").trim().toLowerCase();
@@ -677,228 +1634,282 @@
         return !["0", "false", "off", "no"].includes(text);
       }
 
-      function errorSlot(input) {
-        const field = input.closest(".field");
-        if (!field) return null;
-        let slot = field.querySelector(".field-error");
-        if (!slot) {
-          slot = document.createElement("div");
-          slot.className = "field-error";
-          field.appendChild(slot);
-        }
-        return slot;
+      function inputs() {
+        return Array.from(form.querySelectorAll("input[data-key]"));
       }
 
-      function setInvalid(input, message) {
-        input.classList.toggle("invalid", Boolean(message));
-        const slot = errorSlot(input);
-        if (slot) slot.textContent = message ?? "";
-      }
-
-      /** data-num="最小,最大"，data-int="1" 要求整数；空值合法，后端会回退默认值 */
-      function checkNumber(input) {
-        if (!input.dataset.num) return "";
-        const raw = input.value.trim();
-        if (!raw) return "";
-
-        const [minText, maxText] = input.dataset.num.split(",");
-        const min = Number(minText);
-        const max = Number(maxText);
-        const unit = input.dataset.unit ?? "";
-
-        // 带单位会被后端当成非法值静默回退默认值
-        if (!/^\d+(\.\d+)?$/.test(raw)) return "只能填数字，不要带单位或字母";
-        let n = Number(raw);
-        if (input.dataset.int === "1" && !Number.isInteger(n)) return "请填整数";
-
-        if (n < min) return `不能小于 ${min}${unit}`;
-        if (n > max) return `不能大于 ${max}${unit}`;
-        return "";
-      }
-
-      function checkText(input) {
-        if (!input.dataset.max) return "";
-        const raw = input.value.trim();
-        if (!raw) return "";
-        if (raw.length > Number(input.dataset.max)) return `最多 ${input.dataset.max} 个字`;
-        return "";
-      }
-
-      function validateInput(input) {
-        if (isToggle(input)) return "";
-        return checkNumber(input) || checkText(input);
-      }
-
-      function validateAll() {
-        let first = null;
-        for (const input of inputs) {
-          const message = validateInput(input);
-          setInvalid(input, message);
-          if (message && !first) first = input;
-        }
-        return first;
+      function switches() {
+        return Array.from(form.querySelectorAll(".switch[data-key]"));
       }
 
       function collect() {
-        const values = {};
-        for (const input of inputs) {
-          values[input.dataset.key] = isToggle(input) ? (input.checked ? "1" : "0") : input.value.trim();
-        }
-        return values;
+        const out = {};
+        for (const input of inputs()) out[input.dataset.key] = input.value;
+        for (const sw of switches()) out[sw.dataset.key] = sw.getAttribute("aria-checked");
+        return out;
       }
 
-      function isDirty() {
-        const now = collect();
-        return Object.keys(now).some((k) => now[k] !== loaded[k]);
-      }
-
-      /** 分组标题右侧的配置状态，省的为确认是否填过而展开 */
-      function refreshTags() {
-        const v = collect();
-        const set = (id, text, on) => {
-          const el = document.getElementById(id);
-          el.textContent = text;
-          el.classList.toggle("ok", Boolean(on));
-        };
-        const llm = Boolean(v.LLM_API_KEY && v.LLM_API_URL && v.LLM_MODEL);
-        set("tag-llm", llm ? "已配置" : "未配置", llm);
-        const ds = Boolean(v.DASHSCOPE_API_KEY);
-        set("tag-dashscope", ds ? "已配置" : "未配置", ds);
-        const seed = Boolean(v.SEED_TTS_API_KEY);
-        set("tag-seed", seed ? "已配置" : "未配置", seed);
-        const keys = [v.PIXABAY_API_KEY, v.PEXELS_API_KEY].filter(Boolean).length;
-        set("tag-material", keys ? `${keys} 个 Key` : "未配置 Key", keys > 0);
-      }
-
-      function reveal(input) {
-        const details = input.closest("details");
-        if (details) details.open = true;
-        input.scrollIntoView({ block: "center", behavior: "smooth" });
-        input.focus({ preventScroll: true });
-      }
-
-      function applyReveal(checked) {
-        for (const input of inputs) {
-          if (input.dataset.secret === "1") input.type = checked ? "text" : "password";
-        }
-      }
-
-      async function load() {
-        const config = await window.aisv.getConfig();
-        defaults = config.__defaults ?? {};
-        for (const input of inputs) {
+      function fill(values) {
+        for (const input of inputs()) {
           const key = input.dataset.key;
-          if (isToggle(input)) {
-            input.checked = isOn(config[key], true);
-            continue;
-          }
-          input.value = config[key] ?? "";
-          if (input.type === "password") input.dataset.secret = "1";
+          input.value = values[key] ?? "";
+          clearError(input);
         }
-        loaded = collect();
-        document.getElementById("config-path").textContent = `${config.__file ?? ""}`;
-        refreshTags();
-        say("");
+        for (const sw of switches()) {
+          sw.setAttribute("aria-checked", String(isOn(values[sw.dataset.key], false)));
+        }
+        paintNavState();
       }
 
-      form.addEventListener("input", (event) => {
-        const input = event.target;
-        if (!(input instanceof HTMLInputElement) || !input.dataset.key) return;
-        setInvalid(input, validateInput(input));
-        refreshTags();
-      });
-
-      form.addEventListener("change", (event) => {
-        if (event.target instanceof HTMLInputElement && event.target.dataset.key) refreshTags();
-      });
-
-      document.getElementById("reveal").addEventListener("change", (event) => {
-        applyReveal(event.target.checked);
-      });
-
-      for (const button of form.querySelectorAll("button[data-test]")) {
-        button.addEventListener("click", async () => {
-          const target = button.dataset.test;
-          const output = document.getElementById(`test-${target}`);
-          const bad = Array.from(inputs).filter((i) => validateInput(i));
-          if (bad.length) {
-            say("有字段格式不对，先修正再测试", "err");
-            reveal(bad[0]);
-            return;
-          }
-          button.disabled = true;
-          output.className = "test-result";
-          output.textContent = "测试中…";
-          try {
-            const result = await window.aisv.testConfig(target, collect());
-            output.className = `test-result ${result.ok ? "ok" : "err"}`;
-            const cost = result.ms >= 1000 ? `${(result.ms / 1000).toFixed(1)}s` : `${result.ms}ms`;
-            output.textContent = result.ok
-              ? `通过（${cost}）· ${result.message}`
-              : `失败（${cost}）· ${result.message}`;
-          } catch (error) {
-            output.className = "test-result err";
-            output.textContent = `失败 · ${error.message ?? error}`;
-          } finally {
-            button.disabled = false;
-          }
-        });
+      function fieldOf(key) {
+        return FIELDS.find((f) => f.key === key);
       }
 
-      resetButton.addEventListener("click", () => {
-        if (!Object.keys(defaults).length) return;
-        // 默认值里 Key 为空，恢复会清掉已填密钥，先确认
-        const secretCount = inputs.filter(
-          (i) => i.dataset.secret === "1" && i.value.trim() && !defaults[i.dataset.key],
-        ).length;
-        if (secretCount && !confirm(`默认值里密钥为空，恢复后将清空 ${secretCount} 个已填的 Key。继续吗？`)) return;
-        for (const input of inputs) {
-          const key = input.dataset.key;
-          if (isToggle(input)) input.checked = isOn(defaults[key], true);
-          else input.value = defaults[key] ?? "";
-          setInvalid(input, "");
-        }
-        refreshTags();
-        say("已填入默认值，点「保存并重启后端」才会生效", "warn");
-      });
+      function errorSlot(key) {
+        const el = form.querySelector(`.row[data-key="${key}"] .field-error`);
+        return el ?? null;
+      }
 
-      saveButton.addEventListener("click", async () => {
-        const bad = validateAll();
-        if (bad) {
-          say("有字段格式不对，已在对应项下方标出", "err");
-          reveal(bad);
+      function clearError(input) {
+        const slot = errorSlot(input.dataset.key);
+        input.classList.remove("invalid");
+        if (slot) slot.textContent = "";
+      }
+
+      function validateInput(input) {
+        const field = fieldOf(input.dataset.key);
+        if (!field) return "";
+        const raw = input.value.trim();
+
+        /*
+         * max 对两种字段含义不同：文本是字符数上限，数字是数值上限。
+         * 长度检查只对文本生效 —— 否则 TTS_SPEED 这类 max: 2 的数字字段
+         * 输入 1.1（三个字符）会被误判成「最多 2 个字符」。
+         */
+        if (field.kind !== "number") {
+          if (field.max && raw.length > field.max) return t("err.maxLength", { max: field.max });
+          return "";
+        }
+        if (!raw) return "";
+
+        // 带单位会被后端当成非法值静默回退默认值
+        if (!/^\d+(\.\d+)?$/.test(raw)) return t("err.numberOnly");
+        const n = Number(raw);
+        if (field.int && !Number.isInteger(n)) return t("err.integer");
+        if (n < field.min) return t("err.min", { min: `${field.min}${unitLabel(field)}` });
+        if (n > field.max) return t("err.max", { max: `${field.max}${unitLabel(field)}` });
+        return "";
+      }
+
+      /** 导航上的绿点/黄点：这个分区里配了 Key 的项有没有填 */
+      const NAV_KEYS = {
+        llm: ["LLM_API_KEY"],
+        tts: ["DASHSCOPE_API_KEY", "SEED_TTS_API_KEY"],
+        material: ["PIXABAY_API_KEY", "PEXELS_API_KEY"],
+      };
+
+      function paintNavState() {
+        const values = collect();
+        for (const section of SECTIONS) {
+          const btn = navList.querySelector(`.nav-cell[data-section="${section.id}"]`);
+          if (!btn) continue;
+          btn.querySelector(".nav-dot")?.remove();
+          const keys = NAV_KEYS[section.id];
+          if (!keys) continue;
+
+          const filled = keys.some((key) => String(values[key] ?? "").trim() !== "");
+          const dot = document.createElement("span");
+          dot.className = filled ? "nav-dot" : "nav-dot warn";
+          dot.title = filled ? t("nav.configured") : t("nav.unconfigured");
+          btn.appendChild(dot);
+        }
+      }
+
+      /* ---------- 与主进程通信 ---------- */
+
+      async function runTest(target, button, slot) {
+        if (!window.aisv) {
+          slot.textContent = t("test.noBridge");
           return;
         }
-        saveButton.disabled = true;
-        resetButton.disabled = true;
+        slot.textContent = t("test.running");
+        button.disabled = true;
         try {
-          await window.aisv.saveConfig(collect());
-          say("已保存，正在重启后端…", "ok");
-          const restarted = await window.aisv.restartBackend();
-          if (!restarted.ok) throw new Error(restarted.error ?? "重启失败");
-          if (restarted.reused) {
-            // 外部启动的后端主进程停不掉，需用户手动重启
-            say("已保存。当前后端是手动启动的（pnpm dev:server），需要手动重启才会加载新配置", "warn");
-            saveButton.disabled = false;
-            resetButton.disabled = false;
-            return;
-          }
-          loaded = collect();
-          say("已生效", "ok");
-          setTimeout(() => window.aisv.close(), 600);
-        } catch (error) {
-          say(String(error?.message ?? error), "err");
-          saveButton.disabled = false;
-          resetButton.disabled = false;
+          const result = await window.aisv.testConfig(target, collect());
+          slot.textContent = result.ok ? t("test.ok", { ms: result.ms }) : result.message;
+          slot.style.color = result.ok ? "var(--ok-strong)" : "var(--bad)";
+        } catch (e) {
+          slot.textContent = e?.message ?? t("test.failed");
+          slot.style.color = "var(--bad)";
+        } finally {
+          button.disabled = false;
         }
+      }
+
+      async function boot() {
+        if (!window.aisv) {
+          say(t("status.noBridge"), "warn");
+          return;
+        }
+        try {
+          const config = await window.aisv.getConfig();
+          fill(config);
+        } catch (e) {
+          say(t("status.readFailed", { error: e?.message ?? e }), "err");
+        }
+      }
+
+      /* ---------- 事件 ---------- */
+
+      function close() {
+        if (window.aisv) window.aisv.close();
+        else window.close();
+      }
+
+      document.getElementById("close").addEventListener("click", close);
+      /**
+       * 把一个字段写进配置文件。
+       *
+       * 只提交这一个键，不动其他项 —— 全量写会把并发改的别的字段覆盖掉。
+       * 服务端每次用到配置都重新读文件，写完立即生效，不需要重启后端。
+       */
+      async function commitField(input) {
+        const key = input.dataset.key;
+        if (!key) return;
+
+        const message = validateInput(input);
+        paintFieldError(input, message);
+        if (message) return;
+
+        if (!window.aisv) {
+          say(t("status.noBridgeSave"), "err");
+          return;
+        }
+
+        const value = input.classList.contains("switch") ? input.getAttribute("aria-checked") : input.value;
+        try {
+          await window.aisv.saveConfig({ [key]: value });
+          say(t("status.saved"), "ok");
+        } catch (e) {
+          say(t("status.saveFailed", { error: e?.message ?? e }), "err");
+        }
+      }
+
+      /** 错误提示与红框，和整体校验用同一套外观 */
+      function paintFieldError(input, message) {
+        const slot = errorSlot(input.dataset.key);
+        input.classList.toggle("invalid", Boolean(message));
+        if (slot) slot.textContent = message;
+      }
+
+      /*
+       * 提交时机：
+       *   开关、语言下拉 —— change 立刻提交，点完就生效
+       *   文本、数字     —— 失焦时提交；输入过程中只做校验提示，不写盘
+       */
+      form.addEventListener("change", (event) => {
+        const input = event.target;
+        if (!input?.dataset?.key) return;
+        const isSwitch = input.classList.contains("switch");
+        const field = fieldOf(input.dataset.key);
+        if (isSwitch || field?.kind === "select") void commitField(input);
       });
 
-      document.getElementById("cancel").addEventListener("click", () => {
-        if (isDirty() && !confirm("有修改还没保存，确定关闭吗？")) return;
-        window.aisv.close();
+      form.addEventListener("focusout", (event) => {
+        const input = event.target;
+        if (!input?.dataset?.key) return;
+        const field = fieldOf(input.dataset.key);
+        if (field?.kind === "select") return;
+        if (input.classList.contains("switch")) return;
+        void commitField(input);
       });
 
-      load().catch((error) => say(`读取配置失败：${error?.message ?? error}`, "err"));
+      // 回车当作提交，省得非要点别处才生效
+      form.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter") return;
+        const input = event.target;
+        if (!input?.dataset?.key) return;
+        event.preventDefault();
+        void commitField(input);
+      });
+
+      // 输入时先给即时校验反馈，但不写盘
+      form.addEventListener("input", (event) => {
+        const input = event.target;
+        if (!input?.dataset?.key) return;
+        if (input.classList.contains("switch")) return;
+        const field = fieldOf(input.dataset.key);
+        if (field?.kind === "select") return;
+        paintFieldError(input, validateInput(input));
+      });
+
+      // Esc 关闭
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") close();
+      });
+
+      /**
+       * 切换语言：重建整个页面文案。
+       *
+       * 表单是从 SECTIONS 渲染出来的，直接重建最省事，也保证每个字段的
+       * 说明、单位、错误提示都是新语言。重建前先把当前值收下来再填回去，
+       * 用户已经改了一半的内容不会丢。
+       */
+      function setLang(next) {
+        run = { values: collect(), status: status.textContent, statusKind: status.className };
+        // 把传入的偏好写进闭包，applyLang 只认 langPreference
+        if (next === "zh" || next === "en" || next === "system") langPreference = next;
+        applyLang();
+        render();
+        paintNavState();
+      }
+
+      function render() {
+        // 标题由 applySharedText() 一起回填，这里不用重复写
+        applySharedText();
+        buildNav();
+        buildForm(run.values);
+        show(current);
+        // 重建后语言下拉要反映真实偏好
+        const select = document.getElementById("field-language");
+        if (select) select.value = langPreference;
+        status.textContent = run.status;
+        status.className = run.statusKind;
+      }
+
+      /*
+       * 页面状态的唯一存放处：当前值与底部状态栏文案。
+       * 已加载的配置也放在这里 —— 重渲染（换语言）时不会把用户已填的内容清掉。
+       * status 存的是成品文案而不是键，所以像"保存失败：xxx"这种带参数的
+       * 提示在切换语言后保持原样，不会被翻成半截。
+       */
+      let run = { values: {}, status: "", statusKind: "status" };
+
+      /*
+       * 首帧：先对齐主进程的语言、等语言包到位，再把静态文案与表单建出来。
+       *
+       * 不等就会先按 HTML 里的中文闪一下再切成英文。locales.json 是本地的，
+       * 读它比一次网络往返快得多。
+       */
+      (async () => {
+        await loadLanguage();
+        await loadLocales();
+        applySharedText();
+        buildNav();
+        buildForm(run.values);
+        show(current);
+        boot();
+      })();
+
+      // 别的窗口改了语言（主窗口的语言下拉、或另一处设置页）
+      if (window.aisv?.onLanguageChanged) {
+        window.aisv.onLanguageChanged((next) => {
+          if (next !== "zh" && next !== "en" && next !== "system") return;
+          // 比较偏好而不是解析结果：选「跟随系统」时 lang 是 zh/en，永远不等于 next
+          if (next === langPreference) return;
+          setLang(next);
+        });
+      }
     </script>
   </body>
 </html>

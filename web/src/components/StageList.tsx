@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { useLanguage, useT, type Language } from "../i18n";
+import type { MessageKey } from "../i18n";
 import type { LogLine, StageState } from "../types";
 
 const ICON: Record<StageState["status"], string> = {
@@ -9,6 +11,24 @@ const ICON: Record<StageState["status"], string> = {
   skipped: "—",
 };
 
+/**
+ * 阶段名按 id 取词，不用后端存进任务里的 label。
+ *
+ * 任务数据会落盘，里面那份中文是生成当时写死的；
+ * 界面语言变了它不会跟着变，旧任务还会永远显示中文。
+ * 由前端按 id 现取，两种语言都正确，旧任务也能切过来。
+ */
+const STAGE_LABEL: Record<string, MessageKey> = {
+  fetch: "stage.fetch",
+  write: "stage.write",
+  rewrite: "stage.rewrite",
+  split: "stage.split",
+  tts: "stage.tts",
+  material: "stage.material",
+  cards: "stage.cards",
+  compose: "stage.compose",
+};
+
 /** 只给已结束的阶段算耗时 */
 function cost(stage: StageState): string {
   if (!stage.startedAt || !stage.endedAt) return "";
@@ -17,17 +37,51 @@ function cost(stage: StageState): string {
   return sec < 60 ? `${sec.toFixed(1)}s` : `${Math.floor(sec / 60)}m${Math.round(sec % 60)}s`;
 }
 
+/**
+ * 阶段完成摘要。
+ *
+ * 后端同时给了结构化数值和一份落盘的中文快照：
+ * 有数值就按当前语言现拼，老任务没有数值则显示原文（只能是中文）。
+ */
+function summary(stage: StageState, t: (key: MessageKey, vars?: Record<string, string | number>) => string) {
+  const c = stage.counts;
+  if (!c) return stage.message;
+
+  // 合成阶段可能还有「缺 N 张版式卡」的附加说明，和主摘要拼在一起
+  const missing = c.missingCards ? t("stage.summary.missingCards", { n: c.missingCards }) : "";
+
+  let main: string;
+  if (c.sections !== undefined && c.seconds !== undefined) {
+    main = t("stage.summary.sectionsSeconds", { n: c.sections, sec: c.seconds });
+  } else if (c.sections !== undefined && c.sentences !== undefined) {
+    main = t("stage.summary.sectionsSentences", { n: c.sections, sent: c.sentences });
+  } else if (c.sections !== undefined) {
+    main = t("stage.summary.sections", { n: c.sections });
+  } else if (c.chars !== undefined) {
+    main = t("stage.summary.chars", { n: c.chars });
+  } else if (c.cards !== undefined) {
+    main = t("stage.summary.cards", { n: c.cards });
+  } else {
+    return stage.message;
+  }
+
+  return missing ? `${main}${missing}` : main;
+}
+
 export function StageList({ stages }: { stages: StageState[] }) {
+  const t = useT();
   if (stages.length === 0) return null;
   return (
     <ol className="stages">
       {stages.map((stage) => {
         const spent = cost(stage);
+        const key = STAGE_LABEL[stage.id];
+        const text = summary(stage, t);
         return (
           <li key={stage.id} className={`stage ${stage.status}`}>
             <span className="stage-icon">{ICON[stage.status]}</span>
-            <span className="stage-label">{stage.label}</span>
-            {stage.message && <span className="stage-msg">{stage.message}</span>}
+            <span className="stage-label">{key ? t(key) : stage.label}</span>
+            {text && <span className="stage-msg">{text}</span>}
             {spent && <span className="stage-cost">{spent}</span>}
           </li>
         );
@@ -36,9 +90,11 @@ export function StageList({ stages }: { stages: StageState[] }) {
   );
 }
 
-function time(iso: string): string {
+function time(iso: string, language: Language): string {
   const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? "" : date.toLocaleTimeString("zh-CN", { hour12: false });
+  return Number.isNaN(date.getTime())
+    ? ""
+    : date.toLocaleTimeString(language === "en" ? "en-US" : "zh-CN", { hour12: false });
 }
 
 /** 日志面板，自动滚到底部，任务级日志始终显示 */
@@ -65,6 +121,8 @@ export function LogPanel({
   since?: number;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
+  const t = useT();
+  const language = useLanguage();
   const fresh = since === undefined ? logs : logs.filter((line) => Date.parse(line.time) >= since);
   const shown = stages ? fresh.filter((line) => !line.stage || stages.includes(line.stage)) : fresh;
   const hasError = shown.some((line) => line.level === "error");
@@ -81,10 +139,10 @@ export function LogPanel({
 
   const body = (
     <div className={`log${tall ? " log-tall" : ""}`} ref={ref}>
-      {shown.length === 0 && <div className="log-empty">暂无日志</div>}
+      {shown.length === 0 && <div className="log-empty">{t("stage.noLog")}</div>}
       {shown.map((line, index) => (
         <div key={index} className={`log-line ${line.level}`}>
-          <span className="log-time">{time(line.time)}</span>
+          <span className="log-time">{time(line.time, language)}</span>
           <span className="log-text">{line.text}</span>
         </div>
       ))}
@@ -96,8 +154,9 @@ export function LogPanel({
   return (
     <details className="log-details" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
       <summary>
-        {label ?? "运行日志"}（{shown.length} 条）
-        {hasError && <span className="pill error">有报错</span>}
+        {label ?? t("render.log")}
+        {t("stage.count", { n: shown.length })}
+        {hasError && <span className="pill error">{t("stage.hasError")}</span>}
       </summary>
       {body}
     </details>

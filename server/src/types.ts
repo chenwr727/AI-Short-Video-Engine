@@ -79,6 +79,21 @@ export interface StageState {
   label: string;
   status: StageStatus;
   message?: string;
+  /**
+   * 结构化的完成摘要，前端按界面语言组装文案。
+   *
+   * message 是落盘的中文快照，语言切换后不会变；有 counts 时前端优先用它，
+   * 老任务没有这个字段则回退到 message。
+   */
+  counts?: {
+    sections?: number;
+    seconds?: number;
+    sentences?: number;
+    chars?: number;
+    cards?: number;
+    /** 合成时因缺素材没生成的版式卡数量 */
+    missingCards?: number;
+  };
   startedAt?: number;
   endedAt?: number;
 }
@@ -338,5 +353,5 @@ export interface TaskContext {
   workspace: string;
   signal: AbortSignal;
   log: (text: string, level?: LogLine["level"]) => void;
-  markStage: (id: string, status: StageStatus, message?: string) => void;
+  markStage: (id: string, status: StageStatus, message?: string, counts?: StageState["counts"]) => void;
 }

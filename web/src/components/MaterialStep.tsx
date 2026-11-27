@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useState } from "react";
 import { applyInfoCard, cardStillUrl, clearInfoCard, materialPreviewUrl, rewriteCard, searchMaterial } from "../api";
+import { useT } from "../i18n";
 import { MATERIAL_STAGE_IDS } from "../phases";
 import type { CardPrefs, CardSpec, MaterialInfo, MaterialItem, MaterialManifest, Meta, TaskState } from "../types";
 import { Dropdown } from "./Dropdown";
@@ -47,6 +48,7 @@ interface MaterialStepProps {
 const STILL_RETRIES = 4;
 
 function CardStill({ id, fingerprint }: { id: string; fingerprint?: string }) {
+  const t = useT();
   const [attempt, setAttempt] = useState(0);
   const [failed, setFailed] = useState(false);
   /** 重试用尽后等用户点一下再试，避免一直显示占位没法救 */
@@ -69,7 +71,7 @@ function CardStill({ id, fingerprint }: { id: string; fingerprint?: string }) {
           setReload((prev) => prev + 1);
         }}
       >
-        预览还没生成好，点这里重试
+        {t("material.previewRetry")}
       </button>
     );
   }
@@ -116,6 +118,7 @@ function InfoCardTile({
   onToInfoCard: (paragraph: number, template?: string) => Promise<void>;
   onDropInfoCard: (paragraph: number) => Promise<void>;
 }) {
+  const t = useT();
   const here = cardBusy?.paragraph === paragraph ? cardBusy.action : null;
 
   return (
@@ -123,11 +126,12 @@ function InfoCardTile({
       <CardStill id={spec.id} fingerprint={spec.fingerprint} />
       <div className="material-info">
         <div className="material-title">
-          信息卡<span className="pill info">{spec.compositionId}</span>
+          {t("material.cardLabel")}
+          <span className="pill info">{spec.compositionId}</span>
         </div>
         <div className="material-tags">{spec.title}</div>
         <div className="material-meta">
-          叠在第 {paragraph} 段素材上 · {Math.round(spec.durationSec)}s
+          {t("material.overlayMeta", { n: paragraph, sec: Math.round(spec.durationSec) })}
         </div>
         <div className="material-actions">
           <button
@@ -135,9 +139,9 @@ function InfoCardTile({
             type="button"
             disabled={busy || here !== null}
             onClick={() => void onToInfoCard(paragraph)}
-            title="重新让 AI 判断这段该用哪种卡"
+            title={t("material.rejudgeCard")}
           >
-            {here === "apply" ? "生成中…" : "换信息卡"}
+            {here === "apply" ? t("common.generating") : t("material.changeCard")}
           </button>
           <button
             className="secondary"
@@ -145,7 +149,7 @@ function InfoCardTile({
             disabled={busy || here !== null}
             onClick={() => void onDropInfoCard(paragraph)}
           >
-            {here === "clear" ? "处理中…" : "取消信息卡"}
+            {here === "clear" ? t("common.processing") : t("material.clearCard")}
           </button>
         </div>
       </div>
@@ -174,7 +178,9 @@ function CardTile({
   swapping: string;
   onSwap: (id: string) => Promise<void>;
 }) {
-  const kindLabel = spec.kind === "intro" ? "片头" : spec.kind === "chapter" ? "章节" : "片尾";
+  const t = useT();
+  const kindLabel =
+    spec.kind === "intro" ? t("material.intro") : spec.kind === "chapter" ? t("material.chapter") : t("material.outro");
   const working = swapping === spec.id;
   return (
     <div className={`timeline-tile is-card kind-${spec.kind}${landscape ? " is-landscape" : ""}`}>
@@ -186,7 +192,7 @@ function CardTile({
         </div>
         <div className="material-tags">{spec.title}</div>
         <div className="material-meta">
-          {spec.kind === "chapter" ? `第 ${spec.paragraph} 段前 · ` : ""}
+          {spec.kind === "chapter" ? `${t("material.beforeSection", { n: spec.paragraph ?? 0 })} · ` : ""}
           {spec.durationSec}s
         </div>
         <div className="material-actions">
@@ -195,9 +201,9 @@ function CardTile({
             type="button"
             disabled={busy || working}
             onClick={() => void onSwap(spec.id)}
-            title="让 AI 换个标题重新写这张卡"
+            title={t("material.changeCardHint")}
           >
-            {working ? "换文案中…" : "换一个"}
+            {working ? t("material.changeCardRunning") : t("material.changeOne")}
           </button>
         </div>
       </div>
@@ -228,6 +234,7 @@ interface MaterialTileProps {
  * 否则这一格会比同行的片头/章节卡高一截，3 列网格的高低差全乱。
  */
 function MaterialTile(props: MaterialTileProps) {
+  const t = useT();
   const { item, candidate, manifest, awaiting, busy, searching, cardBusy, panel } = props;
   const preview = candidate ? candidate.url : materialPreviewUrl(item.paragraph, item.url);
   const info = candidate ?? item;
@@ -250,7 +257,8 @@ function MaterialTile(props: MaterialTileProps) {
         )}
         <div className="material-info">
           <div className="material-title">
-            第 {item.paragraph} 段{!item.infoCard && candidate && <span className="pill info">待替换</span>}
+            {t("material.paragraph", { n: item.paragraph })}
+            {!item.infoCard && candidate && <span className="pill info">{t("material.pendingReplace")}</span>}
           </div>
           <div className="material-tags">{info.tags || `#${info.id}`}</div>
           <div className="material-meta">
@@ -268,9 +276,9 @@ function MaterialTile(props: MaterialTileProps) {
                 type="button"
                 disabled={busy || searching === item.paragraph}
                 onClick={() => void props.onFindMore(item)}
-                title={item.infoCard ? "换掉底下这段实拍素材，信息卡保留" : "换一段素材"}
+                title={item.infoCard ? t("material.changeClipTitle") : t("material.changeClip")}
               >
-                {searching === item.paragraph ? "检索中…" : "换一个"}
+                {searching === item.paragraph ? t("common.searching") : t("material.changeOne")}
               </button>
               {!item.infoCard && (
                 <button
@@ -278,9 +286,11 @@ function MaterialTile(props: MaterialTileProps) {
                   type="button"
                   disabled={busy || cardBusy?.paragraph === item.paragraph}
                   onClick={() => void props.onToInfoCard(item.paragraph)}
-                  title="按这段台词生成人物 / 对比 / 时间线 / 数据卡，叠在这段素材上"
+                  title={t("material.cardHint")}
                 >
-                  {cardBusy?.paragraph === item.paragraph && cardBusy.action === "apply" ? "生成中…" : "加信息卡"}
+                  {cardBusy?.paragraph === item.paragraph && cardBusy.action === "apply"
+                    ? t("common.generating")
+                    : t("material.addCard")}
                 </button>
               )}
               {candidate && (
@@ -290,7 +300,7 @@ function MaterialTile(props: MaterialTileProps) {
                   disabled={busy}
                   onClick={() => void props.onUndo(item.paragraph)}
                 >
-                  撤销
+                  {t("material.undo")}
                 </button>
               )}
             </div>
@@ -360,6 +370,7 @@ export function MaterialStep(props: MaterialStepProps) {
     cards,
     cardDefaults,
   } = props;
+  const t = useT();
   const manifest = task.material;
   const awaiting = task.status === "awaiting_material" || task.status === "material_ready";
   const editable = awaiting || task.status === "completed";
@@ -395,8 +406,7 @@ export function MaterialStep(props: MaterialStepProps) {
   const [panel, setPanel] = useState<{ paragraph: number; list: MaterialInfo[] } | null>(null);
   const [searching, setSearching] = useState(0);
   const [note, setNote] = useState<{ text: string; bad?: boolean } | null>(null);
-  /** 正在生成信息卡的段号，0 表示空闲 */
-  /** 正在生成/撤销信息卡的段号与动作，null 表示空闲 */
+  /** 正在生成或撤销信息卡的段号与动作，null 表示空闲 */
   const [cardBusy, setCardBusy] = useState<{ paragraph: number; action: "apply" | "clear" } | null>(null);
   /** 正在换文案的版式卡 id，空串表示空闲 */
   const [swapping, setSwapping] = useState("");
@@ -408,7 +418,7 @@ export function MaterialStep(props: MaterialStepProps) {
     try {
       const next = await rewriteCard(id, "text");
       onStateChange(next);
-      setNote({ text: "版式卡已换文案，成片会按新卡片重新合成" });
+      setNote({ text: t("material.cardRewritten") });
     } catch (error) {
       setNote({ text: error instanceof Error ? error.message : String(error), bad: true });
     } finally {
@@ -423,7 +433,7 @@ export function MaterialStep(props: MaterialStepProps) {
     try {
       const next = await applyInfoCard(paragraph, template);
       onStateChange(next);
-      setNote({ text: `第 ${paragraph} 段已改用信息卡，确认后进入合成` });
+      setNote({ text: t("material.cardApplied", { n: paragraph }) });
     } catch (error) {
       setNote({ text: error instanceof Error ? error.message : String(error), bad: true });
     } finally {
@@ -437,7 +447,7 @@ export function MaterialStep(props: MaterialStepProps) {
     try {
       const next = await clearInfoCard(paragraph);
       onStateChange(next);
-      setNote({ text: `第 ${paragraph} 段已恢复实拍素材` });
+      setNote({ text: t("material.cardCleared", { n: paragraph }) });
     } catch (error) {
       setNote({ text: error instanceof Error ? error.message : String(error), bad: true });
     } finally {
@@ -456,7 +466,7 @@ export function MaterialStep(props: MaterialStepProps) {
     try {
       const list = await searchMaterial(item.paragraph, item.searchTerms);
       setPanel({ paragraph: item.paragraph, list });
-      if (list.length === 0) setNote({ text: `第 ${item.paragraph} 段没有检索到新的候选素材。` });
+      if (list.length === 0) setNote({ text: t("material.noNewClip", { n: item.paragraph }) });
     } catch (e) {
       setNote({ text: e instanceof Error ? e.message : String(e), bad: true });
     } finally {
@@ -467,7 +477,7 @@ export function MaterialStep(props: MaterialStepProps) {
   function pick(item: MaterialItem, candidate: MaterialInfo) {
     onPickedChange({ ...picked, [item.paragraph]: candidate });
     setPanel(null);
-    setNote({ text: `第 ${item.paragraph} 段已选好新素材，点「下一步：成片预览」后生效。` });
+    setNote({ text: t("material.newClip", { n: item.paragraph }) });
   }
 
   function undo(paragraph: number) {
@@ -510,25 +520,25 @@ export function MaterialStep(props: MaterialStepProps) {
 
   return (
     <Panel
-      title="素材确认"
+      title={t("material.title")}
       desc={
         manifest
           ? awaiting
-            ? "每段都配好视频了：点开看看，不满意就换一个；确认后去「成片预览」设字幕与 BGM 再生成。"
-            : "成片已生成，每段用的就是下面的素材。想换素材，点上面的「重新生成」按新来源重做。"
+            ? t("material.hintDone")
+            : t("result.hint")
           : matching
-            ? "正在按台词检索并下载素材，完成后会在这里逐段列出来。"
+            ? t("material.searching")
             : awaiting
-              ? "配音已完成，点「开始匹配素材」，AI 会按每段台词找可用的视频素材。"
+              ? t("material.ready")
               : failed
-                ? (task.error ?? "素材匹配没成功，可以换个来源重试。")
-                : "配音还没完成，素材匹配会在配音结束后开始。"
+                ? (task.error ?? t("material.failed"))
+                : t("material.needTts")
       }
       fill
     >
       <ConfigSection
-        title="生成配置"
-        summary={`${sourceLabel} · ${resolutionLabel} · 片头 ${cardSec("introDurationSec") || 0}s`}
+        title={t("material.config")}
+        summary={`${sourceLabel} · ${resolutionLabel} · ${t("material.intro")} ${cardSec("introDurationSec") || 0}s`}
         open={layout.configOpen}
         resetKey={stepStage}
       >
@@ -541,7 +551,8 @@ export function MaterialStep(props: MaterialStepProps) {
           <div className="row row-4 config-flow">
             <div className="field">
               <label htmlFor="card-intro-sec">
-                片头 / 章节 / 片尾（秒）<span className="hint">0 = 不出</span>
+                {t("material.durations")}
+                <span className="hint">{t("material.zeroNoShow")}</span>
               </label>
               <div className="card-sec-row">
                 <input
@@ -553,7 +564,7 @@ export function MaterialStep(props: MaterialStepProps) {
                   step={0.5}
                   value={cardSec("introDurationSec")}
                   disabled={busy || pending || !onCardPrefsChange}
-                  title="片头时长，0 = 不出片头"
+                  title={t("material.introHint")}
                   onChange={(event) => onCardPrefsChange?.({ introDurationSec: clampSec(event.target.value) })}
                 />
                 <input
@@ -564,7 +575,7 @@ export function MaterialStep(props: MaterialStepProps) {
                   step={0.5}
                   value={cardSec("chapterDurationSec")}
                   disabled={busy || pending || !onCardPrefsChange}
-                  title="章节卡时长，0 = 不出章节卡"
+                  title={t("material.chapterHint")}
                   onChange={(event) => onCardPrefsChange?.({ chapterDurationSec: clampSec(event.target.value) })}
                 />
                 <input
@@ -575,15 +586,15 @@ export function MaterialStep(props: MaterialStepProps) {
                   step={0.5}
                   value={cardSec("outroDurationSec")}
                   disabled={busy || pending || !onCardPrefsChange}
-                  title="片尾时长，0 = 不出片尾"
+                  title={t("material.outroDuration")}
                   onChange={(event) => onCardPrefsChange?.({ outroDurationSec: clampSec(event.target.value) })}
                 />
               </div>
-              <span className="field-hint">依次为片头 / 章节 / 片尾</span>
+              <span className="field-hint">{t("material.orderHint")}</span>
             </div>
 
             <div className="field">
-              <label htmlFor="material-source">素材来源</label>
+              <label htmlFor="material-source">{t("material.source")}</label>
               <Dropdown
                 id="material-source"
                 value={form.materialSource}
@@ -591,11 +602,11 @@ export function MaterialStep(props: MaterialStepProps) {
                 onChange={(next) => onFormChange({ materialSource: next })}
                 disabled={busy || pending || (!editable && !canMatchAgain)}
               />
-              <span className="field-hint">{sourceHint ?? "决定从哪个站检索"}</span>
+              <span className="field-hint">{sourceHint ?? t("material.sourceHint")}</span>
             </div>
 
             <div className="field">
-              <label htmlFor="resolution">分辨率</label>
+              <label htmlFor="resolution">{t("material.resolution")}</label>
               <Dropdown
                 id="resolution"
                 value={form.resolution}
@@ -603,34 +614,34 @@ export function MaterialStep(props: MaterialStepProps) {
                 onChange={(next) => onFormChange({ resolution: next })}
                 disabled={busy || pending || (!editable && !canMatchAgain)}
               />
-              <span className="field-hint">成片尺寸</span>
+              <span className="field-hint">{t("material.size")}</span>
             </div>
 
             {/* 信息卡开关：与前三项同一行，用下拉而不是勾选框，和旁边的选择框对齐 */}
             <div className="field">
-              <label htmlFor="auto-info-cards">信息卡</label>
+              <label htmlFor="auto-info-cards">{t("material.infoCard")}</label>
               <Dropdown
                 id="auto-info-cards"
                 value={form.autoInfoCards === false ? "off" : "on"}
                 options={[
-                  { value: "on", label: "自动配置" },
-                  { value: "off", label: "只出实拍" },
+                  { value: "on", label: t("material.autoCards") },
+                  { value: "off", label: t("material.onlyReal") },
                 ]}
                 onChange={(next) => onFormChange({ autoInfoCards: next === "on" })}
                 disabled={busy || pending || (!editable && !canMatchAgain)}
-                title="逐段判断哪几段适合做成人物 / 对比 / 时间线 / 数据卡，适合的自动生成并叠在素材上"
+                title={t("material.cardAutoHint")}
               />
-              <span className="field-hint">叠加在素材上，不替换画面</span>
+              <span className="field-hint">{t("material.overlayOnly")}</span>
             </div>
           </div>
           <p className="field-hint">
             {manifest
-              ? "改完上面的设置，点「重新生成」会按新设置重做素材；已匹配的素材与成片会一起作废。"
+              ? t("material.regenerateHint")
               : canMatchAgain
                 ? cancelled
-                  ? "已停止，之前匹配出来的素材不完整。点「继续」接着补齐没匹配的段落。"
-                  : "上次匹配没成功。可以换个素材来源或分辨率，再点「用新来源重新匹配」。"
-                : "点「开始匹配素材」后按这个配置一次跑完：片头 → 逐段素材 → 信息卡。"}
+                  ? t("material.stopped")
+                  : t("material.failedDetail")
+                : t("material.runHint")}
           </p>
         </div>
       </ConfigSection>
@@ -683,10 +694,10 @@ export function MaterialStep(props: MaterialStepProps) {
                     */}
                     <div className="timeline-para">
                       <span className="para-num">{item.paragraph}</span>
-                      <span>第 {item.paragraph} 段</span>
+                      <span>{t("material.paragraph", { n: item.paragraph })}</span>
                       <span className="para-hint">
-                        {chapter ? `章节卡「${chapter.title}」` : "无章节卡"} · 素材{" "}
-                        {Math.round((picked[item.paragraph] ?? item).duration)}s
+                        {chapter ? t("material.chapterCard", { title: chapter.title }) : t("material.noChapter")} ·{" "}
+                        {t("material.clipLabel")} {Math.round((picked[item.paragraph] ?? item).duration)}s
                       </span>
                     </div>
                     {chapter && (
@@ -731,16 +742,13 @@ export function MaterialStep(props: MaterialStepProps) {
             </div>
           </>
         ) : stepStage === "setup" ? (
-          <p className="hint">素材还没匹配出来。</p>
+          <p className="hint">{t("material.notMatched")}</p>
         ) : null}
 
         {note && <p className={`hint${note.bad ? " hint-warn" : ""}`}>{note.text}</p>}
         {failed && (
           <div className="alert">
-            {task.error ??
-              (task.status === "cancelled"
-                ? "已停止。已下好的素材留在本地，点「继续」只补没完成的段落。"
-                : "匹配素材失败")}
+            {task.error ?? (task.status === "cancelled" ? t("material.stopped") : t("error.match"))}
           </div>
         )}
         {error && <div className="alert">{error}</div>}
@@ -748,51 +756,51 @@ export function MaterialStep(props: MaterialStepProps) {
 
       <div className="panel-actions">
         <button className="secondary btn-back" type="button" onClick={onBack} disabled={busy}>
-          返回上一步
+          {t("common.back")}
         </button>
         {matching && (
           <button className="secondary" type="button" onClick={onCancel} disabled={busy}>
-            停止匹配
+            {t("material.stopMatch")}
           </button>
         )}
         {(manifest || matching) && !matching && (
           <button className="secondary" type="button" disabled={busy} onClick={() => onMatch(true)}>
-            重新生成
+            {t("common.regenerate")}
           </button>
         )}
         {awaiting && !manifest && (
           <button className="primary" type="button" disabled={busy} onClick={() => onMatch()}>
-            开始匹配素材
+            {t("material.startMatch")}
           </button>
         )}
         {awaiting && manifest && (
           <button className="primary" type="button" disabled={busy} onClick={() => onConfirm(replacements)}>
             {(() => {
-              const next = nextLabel ?? "下一步：成片预览";
-              return replacements.length > 0 ? `${next}（已换 ${replacements.length} 段）` : next;
+              const next = nextLabel ?? t("material.nextHint");
+              return replacements.length > 0 ? t("material.nextSwapped", { next, n: replacements.length }) : next;
             })()}
           </button>
         )}
         {task.status === "completed" && (
           <button className="primary" type="button" disabled={busy} onClick={onBack}>
-            返回成片预览
+            {t("material.backToRender")}
           </button>
         )}
 
         {/* 停止后按原来源补齐 */}
         {cancelled && (
           <button className="primary" type="button" disabled={busy} onClick={onRetry}>
-            继续
+            {t("common.continue")}
           </button>
         )}
         {canMatchAgain && !cancelled && (
           <button className="primary" type="button" disabled={busy} onClick={() => onMatch()}>
-            用新来源重新匹配
+            {t("material.rematch")}
           </button>
         )}
         {failed && !manifest && task.status === "failed" && (
           <button className={canMatchAgain ? "secondary" : "primary"} type="button" disabled={busy} onClick={onRetry}>
-            重试失败步骤
+            {t("common.retry")}
           </button>
         )}
       </div>

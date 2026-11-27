@@ -28,10 +28,17 @@ function readDefaults(file) {
   return out;
 }
 
-/** 设置页表单里出现的 data-key */
+/**
+ * 设置页里声明的字段键。
+ *
+ * 表单现在是脚本按 SECTIONS 定义渲染出来的，字段写在 `key: "XXX"` 而不是
+ * 标签的 data-key 上。两种写法都认，免得改一次渲染方式就绕过这项检查。
+ */
 function readFormKeys(file) {
   const src = fs.readFileSync(file, "utf8");
-  return [...src.matchAll(/data-key="([A-Z0-9_]+)"/g)].map((m) => m[1]);
+  const attr = [...src.matchAll(/data-key="([A-Z0-9_]+)"/g)].map((m) => m[1]);
+  const decl = [...src.matchAll(/\bkey:\s*"([A-Z0-9_]+)"/g)].map((m) => m[1]);
+  return [...attr, ...decl];
 }
 
 const problems = [];
@@ -73,51 +80,173 @@ for (const key of form) {
   seen.add(key);
 }
 
-// 5. 输入框须声明类型，否则非法值会被静默回退
+// 5. 每个字段声明须带可校验的类型，否则非法值会被静默回退
 const html = fs.readFileSync(path.join(root, "desktop/assets/settings.html"), "utf8");
-const inputs = [...html.matchAll(/<input\b[^>]*>/g)].map((m) => m[0]);
 
-for (const tag of inputs) {
-  const key = (tag.match(/data-key="([A-Z0-9_]+)"/) ?? [])[1];
+/*
+ * 表单由 SECTIONS 渲染，字段写成可能跨多行的对象字面量：
+ *   {
+ *     key: "MATERIAL_MIN_DURATION",
+ *     title: "素材最短时长",
+ *     kind: "number",
+ *     min: 1,
+ *     max: 120,
+ *   },
+ * 按 "{ … }" 切出每个对象块再逐块检查，不假设写在一行。
+ */
+const blocks = [...html.matchAll(/\{[^{}]*\bkey:\s*"[A-Z0-9_]+"[^{}]*\}/g)].map((m) => m[0]);
+
+for (const block of blocks) {
+  const key = (block.match(/\bkey:\s*"([A-Z0-9_]+)"/) ?? [])[1];
   if (!key) continue;
-  const type = (tag.match(/type="([^"]+)"/) ?? [])[1] ?? "text";
 
-  if (type === "checkbox") {
-    if (tag.includes("data-num") || tag.includes("data-text") || tag.includes("data-max")) {
-      problems.push(`settings.html 里 ${key} 是开关，不该声明 data-num / data-text / data-max`);
+  const kind = (block.match(/\bkind:\s*"([a-z]+)"/) ?? [])[1];
+  if (!kind) {
+    problems.push(`settings.html 里 ${key} 没声明 kind（text / password / number / switch）`);
+    continue;
+  }
+  if (!["text", "password", "number", "switch"].includes(kind)) {
+    problems.push(`settings.html 里 ${key} 的 kind "${kind}" 不认识`);
+    continue;
+  }
+  if (kind !== "number") continue;
+
+  // 数字项必须有 min / max，否则前端没法拦非法值
+  const min = (block.match(/\bmin:\s*(-?\d+(?:\.\d+)?)/) ?? [])[1];
+  const max = (block.match(/\bmax:\s*(-?\d+(?:\.\d+)?)/) ?? [])[1];
+  if (min === undefined || max === undefined) {
+    problems.push(`settings.html 里 ${key} 是数字项，必须声明 min 与 max`);
+    continue;
+  }
+  if (Number(min) > Number(max)) {
+    problems.push(`settings.html 里 ${key} 的 min 大于 max`);
+  }
+}
+
+// 6. 语言包：单一真源在 locales/，各语言的键必须与中文对齐
+/*
+ * en.ts 已经用 Record<MessageKey, string> 在编译期约束住，但那只覆盖 web。
+ * 设置页、关于页走的是构建产物 locales.json，没有类型保护，
+ * 所以这里独立验一遍，顺便确认那两份产物是最新的。
+ */
+const localesDir = path.join(root, "locales");
+
+/**
+ * 从一个 .ts 文件里取顶层两空格缩进的键。
+ *
+ * 值的写法有两种：与键同行，或（长文案）折到下一行由 prettier 排。
+ * 这里只认「键 + 冒号」，不要求后面紧跟引号，否则跨行的那些会被漏掉。
+ * 引号同样可能被 prettier 去掉。
+ */
+function readTsKeys(file) {
+  if (!fs.existsSync(file)) return null;
+  const body = fs.readFileSync(file, "utf8");
+  return [...body.matchAll(/^\s{2}"?([^\s":]+)"?:\s*(?:"|$)/gm)].map((m) => m[1]);
+}
+
+/** 汇总文件里 prefix("ns", …) 的命名空间顺序 */
+function readNamespaces(file) {
+  if (!fs.existsSync(file)) return null;
+  const body = fs.readFileSync(file, "utf8");
+  return [...body.matchAll(/\.\.\.prefix\("(\w+)"/g)].map((m) => m[1]);
+}
+
+const languages = ["zh", "en"];
+const flat = {};
+
+for (const lang of languages) {
+  const nsList = readNamespaces(path.join(localesDir, `${lang}.ts`));
+  if (!nsList) {
+    problems.push(`locales/${lang}.ts 不存在（语言包入口缺失）`);
+    continue;
+  }
+  flat[lang] = new Set();
+  for (const ns of nsList) {
+    const keys = readTsKeys(path.join(localesDir, `${ns}.${lang}.ts`));
+    if (!keys) {
+      problems.push(`locales/${ns}.${lang}.ts 不存在`);
+      continue;
     }
-    continue;
+    for (const key of keys) flat[lang].add(`${ns}.${key}`);
   }
+  if (flat[lang].size === 0) problems.push(`locales/${lang}.ts 没汇总出任何键`);
+}
 
-  const hasNum = tag.includes("data-num");
-  const hasText = tag.includes('data-text="1"');
-  const hasMax = tag.includes("data-max");
-  const numOk = /\bdata-num="\d+(?:\.\d+)?,\d+(?:\.\d+)?"/.test(tag);
-  const maxOk = /\bdata-max="[1-9]\d*"/.test(tag);
+if (flat.zh && flat.en) {
+  for (const key of flat.zh) if (!flat.en.has(key)) problems.push(`locales 英文缺少 ${key}`);
+  for (const key of flat.en) if (!flat.zh.has(key)) problems.push(`locales 中文缺少 ${key}`);
+}
 
-  if (hasNum && !numOk) {
-    problems.push(`settings.html 里 ${key} 的 data-num 格式不对，应为 "最小,最大"（如 "1,120"）`);
-    continue;
+// 7. 原生页面不许再自带词典：只允许 fetch locales.json
+for (const page of ["settings.html", "about.html"]) {
+  const file = path.join(root, "desktop/assets", page);
+  const src = fs.readFileSync(file, "utf8");
+  if (/\bconst I18N\s*=\s*\{/.test(src)) {
+    problems.push(`${page} 里还有内联 I18N 词典，应改为读 locales.json`);
   }
-  if (hasMax && !maxOk) {
-    problems.push(`settings.html 里 ${key} 的 data-max 应为正整数（如 "8"）`);
-    continue;
+  if (!src.includes("locales.json")) {
+    problems.push(`${page} 没有引用 locales.json（语言包接不上）`);
   }
-  if ([hasNum, hasText, hasMax].filter(Boolean).length > 1) {
-    problems.push(`settings.html 里 ${key} 同时声明了多种类型（data-num / data-text / data-max），只能选一种`);
-    continue;
-  }
+}
 
-  // password 本身即文本，无需 data-text
-  if (type === "password") {
-    if (hasNum) problems.push(`settings.html 里 ${key} 是密钥输入框，不该声明 data-num`);
-    continue;
+// 8. locales.json 必须存在且与 locales/ 同步
+const jsonFile = path.join(root, "desktop/assets/locales.json");
+if (!fs.existsSync(jsonFile)) {
+  problems.push("desktop/assets/locales.json 不存在，请运行 node scripts/build-locales.mjs");
+} else if (flat.zh && flat.en) {
+  const built = JSON.parse(fs.readFileSync(jsonFile, "utf8"));
+  for (const lang of languages) {
+    const keys = new Set(Object.keys(built[lang] ?? {}));
+    for (const key of flat[lang]) if (!keys.has(key)) problems.push(`locales.json 的 ${lang} 过期，缺少 ${key}`);
+    for (const key of keys) if (!flat[lang].has(key)) problems.push(`locales.json 的 ${lang} 多出 ${key}`);
   }
+}
 
-  if (!hasNum && !hasText && !hasMax) {
-    problems.push(
-      `settings.html 里 ${key} 没声明类型：数字请加 data-num="最小,最大"，文本请加 data-text="1"，有长度限制请加 data-max="上限"`,
-    );
+// 9. 前后端各存一份类型定义，同名接口的字段必须一致
+/*
+ * web 与 server 不共享包，这些接口是手工同步的两份。
+ * 只比字段名集合：类型写法（可空、联合）允许有差异，
+ * 但少一个字段就意味着那边收不到数据，必须拦下。
+ */
+function interfaceFields(file) {
+  if (!fs.existsSync(file)) return null;
+  const src = fs.readFileSync(file, "utf8");
+  const out = new Map();
+  // 匹配 export interface X { ... }，按花括号配平取主体
+  for (const m of src.matchAll(/export interface (\w+)\s*\{/g)) {
+    const start = m.index + m[0].length;
+    let depth = 1;
+    let i = start;
+    while (i < src.length && depth > 0) {
+      if (src[i] === "{") depth++;
+      else if (src[i] === "}") depth--;
+      i++;
+    }
+    const body = src.slice(start, i - 1);
+    // 顶层字段：行首若干空格 + 标识符 + 可选 ?
+    const fields = new Set();
+    let d = 0;
+    for (const line of body.split("\n")) {
+      const trimmed = line.trim();
+      const fm = /^(\w+)\??\s*:/.exec(trimmed);
+      if (d === 0 && fm) fields.add(fm[1]);
+      d += (line.match(/\{/g) || []).length - (line.match(/\}/g) || []).length;
+    }
+    if (fields.size) out.set(m[1], fields);
+  }
+  return out;
+}
+
+const serverTypes = interfaceFields(path.join(root, "server/src/types.ts"));
+const webTypes = interfaceFields(path.join(root, "web/src/types.ts"));
+if (!serverTypes || !webTypes) {
+  problems.push("server/src/types.ts 或 web/src/types.ts 不存在");
+} else {
+  for (const [name, serverFields] of serverTypes) {
+    const webFields = webTypes.get(name);
+    if (!webFields) continue; // 只在一侧出现的接口不在此列
+    for (const f of serverFields) if (!webFields.has(f)) problems.push(`类型 ${name}：web 侧缺少字段 ${f}`);
+    for (const f of webFields) if (!serverFields.has(f)) problems.push(`类型 ${name}：server 侧缺少字段 ${f}`);
   }
 }
 

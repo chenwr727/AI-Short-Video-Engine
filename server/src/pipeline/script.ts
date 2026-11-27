@@ -344,7 +344,10 @@ export async function runScriptStages(ctx: TaskContext): Promise<Transcript> {
     const raw = normalizeRaw(readJson<unknown>(scriptFile));
     const transcript = toTranscript(raw);
     for (const id of SCRIPT_STAGES) ctx.markStage(id, "skipped", "命中缓存");
-    ctx.markStage("split", "done", `${transcript.paragraphs.length} 段 / ${sentenceCount(transcript)} 句`);
+    ctx.markStage("split", "done", `${transcript.paragraphs.length} 段 / ${sentenceCount(transcript)} 句`, {
+      sections: transcript.paragraphs.length,
+      sentences: sentenceCount(transcript),
+    });
     return transcript;
   }
 
@@ -409,7 +412,10 @@ export async function runScriptStages(ctx: TaskContext): Promise<Transcript> {
 
   ctx.markStage("split", "running");
   const transcript = toTranscript(script);
-  ctx.markStage("split", "done", `${transcript.paragraphs.length} 段 / ${sentenceCount(transcript)} 句`);
+  ctx.markStage("split", "done", `${transcript.paragraphs.length} 段 / ${sentenceCount(transcript)} 句`, {
+    sections: transcript.paragraphs.length,
+    sentences: sentenceCount(transcript),
+  });
   ctx.log(`剧本已就绪：${transcript.title}`);
 
   return transcript;

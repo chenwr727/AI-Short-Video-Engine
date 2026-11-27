@@ -1,0 +1,32 @@
+/** common 命名空间的中文字典，也是这一组键的真源。 */
+export const common = {
+  back: "返回上一步",
+  chinese: "中文",
+  choose: "选择…",
+  choosing: "选择中…",
+  close: "关闭",
+  collapse: "收起",
+  continue: "继续",
+  currentDark: "当前深色",
+  currentLight: "当前浅色",
+  customized: "已自定义",
+  desktopOnly: "该功能只在桌面应用里可用。",
+  english: "English",
+  expand: "展开",
+  failed: "读取失败",
+  generating: "生成中…",
+  loading: "读取中…",
+  notConfigured: "未配置",
+  notGenerated: "未生成",
+  operationFailed: "操作失败",
+  processing: "处理中…",
+  ready: "就绪",
+  regenerate: "重新生成",
+  retry: "重试失败步骤",
+  searching: "检索中…",
+  settingsDesktopOnly: "首选项只在桌面应用里可用，浏览器里请直接改配置文件。",
+  stop: "停止",
+  unsaved: "有未保存修改",
+} satisfies Record<string, string>;
+
+export type CommonKey = keyof typeof common;

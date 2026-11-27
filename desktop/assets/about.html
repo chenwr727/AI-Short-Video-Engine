@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="color-scheme" content="light dark" />
+    <title>About</title>
+    <style>
+      :root {
+        color-scheme: light;
+
+        --neutral-00: #ffffff;
+        --neutral-50: #fafafa;
+        --neutral-75: #f4f5f6;
+        --neutral-200: #e3e5e8;
+        --neutral-300: #cfd3d6;
+        --neutral-400: #a8adb3;
+        --neutral-600: #6b7075;
+        --neutral-750: #333438;
+        --neutral-800: #353538;
+        --neutral-850: #2c2c2e;
+        --neutral-875: #232325;
+        --neutral-950: #151517;
+        --neutral-1000: #0b0b0c;
+        --accent-450: #5686fe;
+        --accent-500: #4176e6;
+        --accent-600: #2d5fd0;
+
+        --radius-sm: 8px;
+        --radius-md: 12px;
+        --radius-xl: 20px;
+        --radius-card: 24px;
+
+        --ease: cubic-bezier(0.4, 0, 0.2, 1);
+        --t-fast: 0.1s;
+        --t-base: 0.18s;
+
+        --font-text: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB",
+          "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+        --font-code: "SF Mono", "JetBrains Mono", "Fira Code", Consolas, "Liberation Mono", Menlo, "PingFang SC",
+          "Microsoft YaHei";
+
+        /* 浅色 */
+        --bg-card: var(--neutral-00);
+        --bg-soft: var(--neutral-75);
+        --label-primary: var(--neutral-1000);
+        --label-secondary: var(--neutral-600);
+        --label-tertiary: var(--neutral-400);
+        --border-l2: rgb(0 0 0 / 10%);
+        --border-l3: rgb(0 0 0 / 12%);
+        --hover: rgb(38 49 72 / 6%);
+        --link: var(--accent-500);
+        --link-hover: var(--accent-600);
+        --badge-bg: var(--neutral-75);
+        --badge-label: var(--neutral-600);
+      }
+
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+
+        --bg-card: var(--neutral-875);
+        --bg-soft: var(--neutral-850);
+        --label-primary: var(--neutral-50);
+        --label-secondary: var(--neutral-300);
+        --label-tertiary: var(--neutral-600);
+        --border-l2: rgb(255 255 255 / 12%);
+        --border-l3: rgb(255 255 255 / 16%);
+        --hover: rgb(255 255 255 / 8%);
+        --link: var(--accent-450);
+        --link-hover: #7ba2ff;
+        --badge-bg: var(--neutral-800);
+        --badge-label: var(--neutral-300);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      /* 窗口透明，卡片自己画圆角，窗口边缘才不会露方角 */
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        background: transparent;
+      }
+
+      body {
+        display: grid;
+        place-items: center;
+        font-family: var(--font-text);
+        color: var(--label-primary);
+        -webkit-font-smoothing: antialiased;
+        user-select: none;
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+
+      main {
+        width: 100%;
+        height: 100%;
+        padding: 20px 22px;
+        border-radius: var(--radius-card);
+        background: var(--bg-card);
+        /* 深色下靠一圈 1px 内描边区分桌面与卡片 */
+        box-shadow: inset 0 0 0 1px var(--border-l2);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      :root[data-theme="light"] main {
+        box-shadow: none;
+      }
+
+      header {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+      }
+
+      .mark {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: 36px;
+        height: 36px;
+        border-radius: var(--radius-md);
+        background: var(--accent-500);
+        color: #fff;
+      }
+
+      .mark svg {
+        width: 18px;
+        height: 18px;
+      }
+
+      .titles {
+        min-width: 0;
+        flex: 1;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 500;
+        line-height: 24px;
+        overflow-wrap: anywhere;
+      }
+
+      .subtitle {
+        margin: 2px 0 0;
+        font-size: 12px;
+        line-height: 18px;
+        color: var(--label-tertiary);
+        overflow-wrap: anywhere;
+      }
+
+      /* 关闭按钮：圆形，只画叉 */
+      .close {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: 26px;
+        height: 26px;
+        padding: 0;
+        border: none;
+        border-radius: 50%;
+        background: transparent;
+        color: var(--label-secondary);
+        cursor: pointer;
+        transition:
+          background var(--t-fast) var(--ease),
+          color var(--t-fast) var(--ease);
+      }
+
+      @media (hover: hover) {
+        .close:hover {
+          background: var(--hover);
+          color: var(--label-primary);
+        }
+      }
+
+      .close svg {
+        width: 13px;
+        height: 13px;
+      }
+
+      /* 版本表：键值两列，行间不画线，靠间距分组 */
+      .versions {
+        margin-top: 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .version-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-height: 26px;
+        font-size: 13px;
+        line-height: 20px;
+      }
+
+      /* 版本名一列：英文（Desktop / Backend）比中文宽，给足宽度不截断 */
+      .version-key {
+        flex: none;
+        width: 82px;
+        color: var(--label-tertiary);
+      }
+
+      .version-value {
+        min-width: 0;
+        overflow: hidden;
+        font-family: var(--font-code);
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+        color: var(--label-primary);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      /* 链接行：整行可点 */
+      .repo {
+        margin-top: 14px;
+        padding-top: 14px;
+        border-top: 0.5px solid var(--border-l2);
+      }
+
+      .repo-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        max-width: 100%;
+        padding: 4px 6px;
+        margin: 0 -6px;
+        border: none;
+        border-radius: var(--radius-sm);
+        background: transparent;
+        font-family: var(--font-code);
+        font-size: 12px;
+        line-height: 20px;
+        color: var(--link);
+        text-align: left;
+        cursor: pointer;
+        transition: background var(--t-fast) var(--ease);
+      }
+
+      @media (hover: hover) {
+        .repo-link:hover {
+          background: var(--hover);
+        }
+      }
+
+      .repo-link .text {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .repo-link svg {
+        flex: none;
+        width: 12px;
+        height: 12px;
+        opacity: 0.8;
+      }
+
+      /* 底栏：只有「知道了」，靠右 */
+      footer {
+        margin-top: auto;
+        padding-top: 16px;
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        flex: none;
+      }
+
+      .btn {
+        min-height: 34px;
+        padding: 6px 16px;
+        border: none;
+        border-radius: var(--radius-md);
+        background: var(--accent-500);
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 500;
+        line-height: 20px;
+        color: #fff;
+        cursor: pointer;
+        transition: background var(--t-base) var(--ease);
+      }
+
+      @media (hover: hover) {
+        .btn:hover {
+          background: var(--accent-600);
+        }
+      }
+
+      :root[data-theme="dark"] .btn:hover {
+        background: var(--accent-450);
+        color: var(--neutral-1000);
+      }
+
+      :root[data-theme="dark"] .btn {
+        background: var(--accent-450);
+        color: var(--neutral-1000);
+      }
+
+      .btn:focus-visible,
+      .close:focus-visible,
+      .repo-link:focus-visible {
+        outline: 2px solid var(--link);
+        outline-offset: 2px;
+      }
+
+      /* 首帧淡入，和设置面板一致 */
+      body {
+        opacity: 0;
+        transition: opacity var(--t-base) var(--ease);
+      }
+
+      body.ready {
+        opacity: 1;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        body {
+          transition: none;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <main>
+      <header>
+        <span class="mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 4.5v15l14-7.5z" fill="currentColor" stroke="none" />
+          </svg>
+        </span>
+        <div class="titles">
+          <h1 id="app-name"></h1>
+          <p class="subtitle" id="app-tagline"></p>
+        </div>
+        <button type="button" class="close" id="close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
+      </header>
+
+      <div class="versions" id="versions"></div>
+
+      <div class="repo">
+        <button type="button" class="repo-link" id="repo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+            <path d="M15 3h6v6M10 14L21 3" />
+          </svg>
+          <span class="text" id="repo-text"></span>
+        </button>
+      </div>
+
+      <footer>
+        <button type="button" class="btn" id="ok"></button>
+      </footer>
+    </main>
+
+    <script>
+      /*
+       * ---------- 语言 ----------
+       *
+       * 偏好存在主进程的 ui.json，不是 localStorage —— 各窗口不同源，互不相通。
+       * 生效值写进 <html lang> 与 <html data-lang>。
+       * 脚本在 body 末尾，等文案填好再加 .ready，不会出现中文闪一下再切英文。
+       */
+      const THEME_KEY = "aisv.theme";
+
+      /* 词典构建时生成到 desktop/assets/locales.json，键带 "about." 前缀 */
+      let I18N = null;
+
+      /** 读语言包；失败时留空词典，t() 会显示键名，便于一眼发现漏加载 */
+      async function loadLocales() {
+        try {
+          const response = await fetch("./locales.json");
+          if (!response.ok) throw new Error(String(response.status));
+          I18N = await response.json();
+        } catch (error) {
+          console.error("语言包加载失败", error);
+          I18N = { zh: {}, en: {} };
+        }
+      }
+
+      let lang = "en";
+
+      /** 按偏好解析出实际语言 */
+      function resolveLang(preference) {
+        if (preference === "zh" || preference === "en") return preference;
+        return String(navigator.language ?? "").toLowerCase().startsWith("zh") ? "zh" : "en";
+      }
+
+      function applyLang(preference) {
+        lang = resolveLang(preference);
+        document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
+        document.documentElement.dataset.lang = lang;
+      }
+
+      /** 从主进程取偏好；取不到就按跟随系统 */
+      async function loadLanguage() {
+        let preference = "system";
+        if (window.aisv?.getLanguage) {
+          try {
+            const stored = await window.aisv.getLanguage();
+            if (stored === "zh" || stored === "en" || stored === "system") preference = stored;
+          } catch {
+            /* 取不到就按跟随系统 */
+          }
+        }
+        applyLang(preference);
+      }
+
+      /** 取词；缺词回退英文再回退键名，宁可露键名也不显示空白 */
+      function t(key) {
+        const full = "about." + key;
+        return I18N[lang][full] ?? I18N.en[full] ?? full;
+      }
+
+      /**
+       * 版本行的名字：后端给的是原始 key（Desktop / Backend / Electron …），
+       * 有译文就用译文，没有就原样显示 —— 以后加了新条目也不会变成键名。
+       */
+      function versionLabel(item) {
+        const raw = String(item.key ?? "");
+        const key = `about.version.${raw.trim().toLowerCase()}`;
+        const translated = I18N[lang][key] ?? I18N.en[key];
+        return translated ?? raw;
+      }
+
+      function readPreference() {
+        try {
+          const raw = localStorage.getItem(THEME_KEY);
+          if (raw === "light" || raw === "dark" || raw === "system") return raw;
+        } catch {
+          /* 隐私模式读不到就走系统 */
+        }
+        return "system";
+      }
+
+      function resolveTheme(preference) {
+        if (preference === "light" || preference === "dark") return preference;
+        return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      }
+
+      function applyTheme() {
+        document.documentElement.dataset.theme = resolveTheme(readPreference());
+      }
+
+      applyTheme();
+      window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+        if (readPreference() === "system") applyTheme();
+      });
+
+      // 主题仍是同源的 localStorage（本页自己写），语言则经主进程广播
+      window.addEventListener("storage", (event) => {
+        if (event.key === THEME_KEY) applyTheme();
+      });
+
+      if (window.aisv?.onLanguageChanged) {
+        window.aisv.onLanguageChanged((preference) => {
+          if (preference !== "zh" && preference !== "en" && preference !== "system") return;
+          const before = lang;
+          applyLang(preference);
+          if (lang !== before) paint();
+        });
+      }
+
+      const okButton = document.getElementById("ok");
+      const closeButton = document.getElementById("close");
+      const repoButton = document.getElementById("repo");
+      const repoText = document.getElementById("repo-text");
+      const versionsList = document.getElementById("versions");
+      let repoUrl = "";
+      let versions = [];
+
+      /** 静态文案 + 版本表都按当前语言重画 */
+      function paint() {
+        document.getElementById("app-name").textContent = t("app.name");
+        document.getElementById("app-tagline").textContent = t("app.tagline");
+        document.title = t("app.title");
+        okButton.textContent = t("btn.ok");
+        closeButton.title = t("btn.close");
+        closeButton.setAttribute("aria-label", t("btn.close"));
+
+        versionsList.textContent = "";
+        for (const item of versions) {
+          const row = document.createElement("div");
+          row.className = "version-row";
+          const key = document.createElement("span");
+          key.className = "version-key";
+          key.textContent = versionLabel(item);
+          const value = document.createElement("span");
+          value.className = "version-value";
+          value.textContent = item.value;
+          value.title = item.value;
+          row.appendChild(key);
+          row.appendChild(value);
+          versionsList.appendChild(row);
+        }
+      }
+
+      function render(data) {
+        versions = data.versions ?? [];
+        repoUrl = data.repo ?? "";
+        // 只显示仓库地址，协议前缀不占宽度
+        repoText.textContent = repoUrl.replace(/^https?:\/\//, "");
+        repoButton.title = repoUrl;
+        paint();
+      }
+      function close() {
+        if (window.aisv) window.aisv.closeWindow();
+        else window.close();
+      }
+
+      okButton.addEventListener("click", close);
+      closeButton.addEventListener("click", close);
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") close();
+      });
+
+      repoButton.addEventListener("click", () => {
+        if (repoUrl && window.aisv && window.aisv.openExternal) window.aisv.openExternal(repoUrl);
+        else if (repoUrl) window.open(repoUrl, "_blank");
+      });
+
+      // 版本信息由主进程传进来，读不到就用占位
+      (async function boot() {
+        // 先定语言、再取语言包，最后才画第一帧，否则会闪一下 HTML 里的中文
+        await loadLanguage();
+        await loadLocales();
+        paint();
+        try {
+          if (window.aisv && window.aisv.aboutInfo) {
+            render(await window.aisv.aboutInfo());
+          }
+        } catch (error) {
+          // 名字给键名而不是成品文案，versionLabel 会把它翻成当前语言
+          versions = [{ key: "error", value: String(error && error.message ? error.message : error) }];
+          paint();
+        }
+        requestAnimationFrame(() => document.body.classList.add("ready"));
+      })();
+    </script>
+  </body>
+</html>

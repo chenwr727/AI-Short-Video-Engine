@@ -1,0 +1,30 @@
+import type { ErrorKey } from "./error.zh";
+
+/** error 命名空间的英文字典，键由 zh 侧约束。 */
+export const error = {
+  backend: "Cannot reach the backend",
+  cancel: "Cancel failed",
+  candidates: "Failed to search candidate clips",
+  cardSwap: "Failed to swap layout",
+  compose: "Compositing failed",
+  configList: "Failed to load config",
+  infoCard: "Failed to generate info card",
+  infoCardAuto: "Failed to auto-configure info cards",
+  infoCardClear: "Failed to remove info card",
+  match: "Failed to match footage",
+  materialConfirm: "Failed to confirm footage",
+  promptsRead: "Failed to read prompts",
+  promptsReset: "Failed to restore defaults",
+  promptsSave: "Failed to save prompts",
+  render: "Failed to render the final cut",
+  request: "Request failed",
+  retry: "Retry failed",
+  root: "Missing #root element",
+  scriptConfirm: "Failed to confirm script",
+  scriptGen: "Script generation failed",
+  scriptRegen: "Failed to regenerate script",
+  settings: "Failed to open preferences",
+  taskCreate: "Failed to create task",
+  taskGet: "Failed to load task",
+  ttsRegen: "Failed to regenerate voiceover",
+} satisfies Record<ErrorKey, string>;

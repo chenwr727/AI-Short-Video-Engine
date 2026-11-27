@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { useT } from "../i18n";
 
 /** 步骤页统一外壳 */
 export function Panel({
@@ -46,6 +47,7 @@ export function ConfigSection({
   resetKey?: string;
   children: ReactNode;
 }) {
+  const t = useT();
   // null = 跟随 open，非 null = 用户手动覆盖
   const [manual, setManual] = useState<boolean | null>(null);
 
@@ -63,7 +65,7 @@ export function ConfigSection({
         </span>
         <span className="config-name">{title}</span>
         {!shown && summary && <span className="config-summary">{summary}</span>}
-        <span className="config-action">{shown ? "收起" : "展开"}</span>
+        <span className="config-action">{shown ? t("common.collapse") : t("common.expand")}</span>
       </button>
       {shown && <div className="config-body">{children}</div>}
     </div>

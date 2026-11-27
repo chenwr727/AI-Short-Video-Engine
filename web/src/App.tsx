@@ -16,6 +16,8 @@ import {
   type RenderPatch,
 } from "./api";
 import { bridge } from "./bridge";
+import { useLanguage, useT } from "./i18n";
+import type { MessageKey } from "./i18n";
 import {
   COMPOSE_STAGE_IDS,
   derivePhase,
@@ -28,6 +30,7 @@ import {
   type Phase,
 } from "./phases";
 import { AppMenu } from "./components/AppMenu";
+import { ThemeToggle } from "./components/ThemeToggle";
 import { EnvStatus } from "./components/EnvStatus";
 import { StatusBar } from "./components/StatusBar";
 import { StepBar } from "./components/StepBar";
@@ -38,21 +41,22 @@ import { MaterialStep } from "./components/MaterialStep";
 import { RenderStep } from "./components/RenderStep";
 import { ResultStep } from "./components/ResultStep";
 import type { FormState, RenderFormState } from "./components/stepTypes";
+import { watchSystemTheme } from "./theme";
 import type { CardPrefs, Health, MaterialInfo, Meta, RawTranscript, TaskState, Transcript } from "./types";
 
-const STATUS_TEXT: Record<TaskState["status"], string> = {
-  idle: "空闲",
-  running: "生成中",
-  awaiting_script: "等待确认剧本",
-  script_confirmed: "剧本已确认",
-  tts_ready: "配音完成",
-  material_ready: "素材就绪",
-  awaiting_material: "等待确认素材",
-  awaiting_cards: "等待确认版式",
-  cards_ready: "版式已确认",
-  completed: "已完成",
-  failed: "失败",
-  cancelled: "已取消",
+const STATUS_TEXT: Record<TaskState["status"], MessageKey> = {
+  idle: "app.status.idle",
+  running: "app.status.running",
+  awaiting_script: "app.status.awaiting_script",
+  script_confirmed: "app.status.script_confirmed",
+  tts_ready: "app.status.tts_ready",
+  material_ready: "app.status.material_ready",
+  awaiting_material: "app.status.awaiting_material",
+  awaiting_cards: "app.status.awaiting_cards",
+  cards_ready: "app.status.cards_ready",
+  completed: "app.status.completed",
+  failed: "app.status.failed",
+  cancelled: "app.status.cancelled",
 };
 
 const STATUS_TONE: Record<TaskState["status"], string> = {
@@ -121,6 +125,9 @@ function writeDraft(form: FormState): void {
 }
 
 export default function App() {
+  const t = useT();
+  // 恢复条里的时间按界面语言格式化
+  const language = useLanguage();
   const [health, setHealth] = useState<Health | null>(null);
   const [meta, setMeta] = useState<Meta | null>(null);
   const [task, setTask] = useState<TaskState | null>(null);
@@ -209,6 +216,9 @@ export default function App() {
     document.body.classList.add("electron");
     if (api.platform === "darwin") document.body.classList.add("mac");
   }, []);
+
+  // 偏好是「跟随系统」时，系统深浅一变界面跟着变
+  useEffect(() => watchSystemTheme(() => undefined), []);
 
   useEffect(() => {
     if (!meta) return;
@@ -332,13 +342,13 @@ export default function App() {
 
   /** 灰按钮要有原因提示 */
   const blockedReason = !health
-    ? "正在连接后端…"
+    ? t("app.connecting")
     : running
-      ? "任务正在运行，等它停下来或先取消。"
+      ? t("app.busy")
       : !health.config.llm.configured
-        ? "还没配置 LLM API Key：在「文件 → 设置…」（Ctrl+,）里填好保存，后端会自动重启生效。"
+        ? t("app.noLlmKey")
         : !form.content.trim()
-          ? "还没有内容：先回上一步填入链接或正文。"
+          ? t("app.noContent")
           : "";
 
   function onFormChange(patch: Partial<FormState>) {
@@ -430,10 +440,7 @@ export default function App() {
 
   /** 重跑剧本，参数取表单当前值 */
   async function onRegenerate() {
-    if (
-      task?.transcript &&
-      !confirmDiscard("重新生成会丢弃当前剧本（含未保存的修改），以及已生成的配音、素材与成片。继续？")
-    ) {
+    if (task?.transcript && !confirmDiscard(t("script.regenerateConfirm"))) {
       return;
     }
     setBusy(true);
@@ -456,7 +463,7 @@ export default function App() {
   }
 
   async function onMatchMaterial(force = false) {
-    if (force && task?.material && !confirmDiscard("重新匹配会丢弃已匹配的素材与已生成的成片。继续？")) return;
+    if (force && task?.material && !confirmDiscard(t("material.regenerateConfirm"))) return;
     setBusy(true);
     setError("");
     try {
@@ -479,7 +486,7 @@ export default function App() {
 
   /** 台词不动，按当前音色设置重做配音 */
   async function onRegenerateTts() {
-    if (task?.audio && !confirmDiscard("重新生成配音会丢弃已生成的配音，以及已匹配的素材与成片。继续？")) return;
+    if (task?.audio && !confirmDiscard(t("tts.regenerateConfirm"))) return;
     setBusy(true);
     setError("");
     try {
@@ -525,7 +532,7 @@ export default function App() {
     if (!reveal) return;
     try {
       const res = await reveal(file);
-      if (!res.ok) window.alert(res.error ?? "打开文件位置失败");
+      if (!res.ok) window.alert(res.error ?? t("result.revealFailed"));
     } catch (e) {
       window.alert(e instanceof Error ? e.message : String(e));
     }
@@ -705,14 +712,16 @@ export default function App() {
               </svg>
             </span>
             <div className="brand-text">
-              <h1>AI 短视频生成器</h1>
-              <span className="brand-sub">链接 → 剧本 → 配音 → 素材 → 成片，全流程自动跑</span>
+              <h1>{t("app.name")}</h1>
+              <span className="brand-sub">{t("app.tagline")}</span>
             </div>
           </div>
 
           <div className="header-meta">
+            {/* 桌面端从「外观」菜单切，浏览器里没有菜单栏，用这个 */}
+            {!bridge() && <ThemeToggle />}
             <EnvStatus health={health} />
-            {task && <span className={`pill ${STATUS_TONE[task.status]}`}>{STATUS_TEXT[task.status]}</span>}
+            {task && <span className={`pill ${STATUS_TONE[task.status]}`}>{t(STATUS_TEXT[task.status])}</span>}
           </div>
         </header>
 
@@ -721,14 +730,23 @@ export default function App() {
         {resumed && (
           <div className="resume-bar">
             <span className="resume-text">
-              已恢复上次的任务（{new Date(resumed.createdAt).toLocaleString("zh-CN", { hour12: false })} ·{" "}
-              {STATUS_TEXT[resumed.status]}），停在「
-              {stepsFor()[indexOf(phase)]?.label}」
+              {t("app.resume", {
+                time: new Date(resumed.createdAt).toLocaleString(language === "en" ? "en-US" : "zh-CN", {
+                  hour12: false,
+                }),
+                status: t(STATUS_TEXT[resumed.status]),
+                step: t(stepsFor()[indexOf(phase)]?.label ?? "steps.content"),
+              })}
             </span>
             <button type="button" className="resume-btn" onClick={onRestart}>
-              新建一条
+              {t("menu.newTask")}
             </button>
-            <button type="button" className="resume-close" onClick={() => setResumed(null)} aria-label="关闭提示">
+            <button
+              type="button"
+              className="resume-close"
+              onClick={() => setResumed(null)}
+              aria-label={t("app.dismiss")}
+            >
               ×
             </button>
           </div>
@@ -863,8 +881,8 @@ export default function App() {
               onRetry={onRetry}
               onCancel={() => void onCancel()}
               onNext={() => goNext("material")}
-              title="合成视频"
-              desc="分段渲染 → 拼接 → 混音，完成后自动切到成片。"
+              title={t("app.composeTitle")}
+              desc={t("tts.running")}
             />
           ))}
       </div>

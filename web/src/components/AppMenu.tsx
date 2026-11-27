@@ -1,9 +1,11 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { bridge, type MenuAction } from "../bridge";
+import { useT } from "../i18n";
+import type { MessageKey } from "../i18n";
 
 /** action 交给主进程，local 由页内处理 */
 interface MenuItemDef {
-  label: string;
+  label: MessageKey;
   action?: MenuAction;
   local?: "new-task";
   icon: ReactNode;
@@ -16,7 +18,7 @@ interface MenuItemDef {
 
 interface MenuDef {
   id: string;
-  label: string;
+  label: MessageKey;
   items: MenuItemDef[];
 }
 
@@ -56,8 +58,16 @@ const ICONS = {
   ),
   file: (
     <svg {...S}>
-      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
-      <path d="M14 3v5h5" />
+      <path d="M4 6.5A1.5 1.5 0 0 1 5.5 5H10l1.5 1.5h7A1.5 1.5 0 0 1 20 8v9.5A1.5 1.5 0 0 1 18.5 19h-13A1.5 1.5 0 0 1 4 17.5z" />
+      <path d="M8 12h8M8 15h5" />
+    </svg>
+  ),
+  settings: (
+    <svg {...S}>
+      <path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1" />
+      <circle cx="15" cy="6" r="2" />
+      <circle cx="9" cy="12" r="2" />
+      <circle cx="17" cy="18" r="2" />
     </svg>
   ),
   power: (
@@ -88,24 +98,30 @@ const ICONS = {
 const MENUS: MenuDef[] = [
   {
     id: "file",
-    label: "文件",
+    label: "menu.file",
     items: [
-      { label: "新建一条", local: "new-task", icon: ICONS.plus, key: "N" },
-      { label: "设置…", action: "settings", icon: ICONS.gear, key: ",", separator: true },
-      { label: "提示词…", action: "prompts", icon: ICONS.book, key: "P" },
-      { label: "打开输出目录", action: "output-dir", icon: ICONS.folder, key: "O", separator: true },
-      { label: "打开数据目录", action: "data-dir", icon: ICONS.database },
-      { label: "打开配置文件", action: "config-file", icon: ICONS.file },
-      { label: "退出", action: "quit", icon: ICONS.power, danger: true, separator: true },
+      { label: "menu.newTask", local: "new-task", icon: ICONS.plus, key: "N" },
+      { label: "menu.outputDir", action: "output-dir", icon: ICONS.folder, key: "O", separator: true },
+      { label: "menu.dataDir", action: "data-dir", icon: ICONS.database },
+      { label: "menu.quit", action: "quit", icon: ICONS.power, danger: true, separator: true },
+    ],
+  },
+  {
+    // 设置、提示词、配置文件都收进设置面板，这里只留入口
+    id: "settings",
+    label: "menu.settings",
+    items: [
+      { label: "menu.preferences", action: "settings", icon: ICONS.settings, key: "," },
+      { label: "menu.prompts", action: "prompts", icon: ICONS.book, key: "P" },
     ],
   },
   {
     id: "help",
-    label: "帮助",
+    label: "menu.help",
     items: [
-      { label: "使用说明", action: "docs", icon: ICONS.book },
-      { label: "反馈问题", action: "feedback", icon: ICONS.chat },
-      { label: "关于", action: "about", icon: ICONS.info, separator: true },
+      { label: "menu.docs", action: "docs", icon: ICONS.book },
+      { label: "menu.feedback", action: "feedback", icon: ICONS.chat },
+      { label: "menu.about", action: "about", icon: ICONS.info, separator: true },
     ],
   },
 ];
@@ -122,6 +138,7 @@ interface AppMenuProps {
 
 /** 代替原生菜单栏 */
 export function AppMenu({ onNewTask }: AppMenuProps) {
+  const t = useT();
   const [open, setOpen] = useState<string | null>(null);
   /** 键盘高亮项，-1 = 无 */
   const [active, setActive] = useState(-1);
@@ -130,7 +147,6 @@ export function AppMenu({ onNewTask }: AppMenuProps) {
   const platform = bridge()?.platform;
 
   const menu = MENUS.find((m) => m.id === open) ?? null;
-  const items = menu?.items ?? [];
 
   useEffect(() => {
     if (!open) return;
@@ -200,12 +216,12 @@ export function AppMenu({ onNewTask }: AppMenuProps) {
 
     const api = bridge();
     if (!api) {
-      window.alert("该功能只在桌面应用里可用。");
+      window.alert(t("common.desktopOnly"));
       return;
     }
     try {
       const res = await api.menu(item.action);
-      if (!res.ok) window.alert(res.error ?? "操作失败");
+      if (!res.ok) window.alert(res.error ?? t("common.operationFailed"));
     } catch (error) {
       window.alert(error instanceof Error ? error.message : String(error));
     }
@@ -230,12 +246,12 @@ export function AppMenu({ onNewTask }: AppMenuProps) {
               setActive(-1);
             }}
           >
-            {m.label}
+            {t(m.label)}
           </button>
 
           {open === m.id && (
             <div className="menu-pop" role="menu">
-              {items.map((item, index) => (
+              {m.items.map((item, index) => (
                 <Fragment key={item.label}>
                   {item.separator && <div className="menu-sep" aria-hidden="true" />}
                   <button
@@ -248,7 +264,7 @@ export function AppMenu({ onNewTask }: AppMenuProps) {
                     <span className="menu-icon" aria-hidden="true">
                       {item.icon}
                     </span>
-                    <span className="menu-text">{item.label}</span>
+                    <span className="menu-text">{t(item.label)}</span>
                     {item.key && <span className="menu-hint">{hint(item.key, platform)}</span>}
                   </button>
                 </Fragment>

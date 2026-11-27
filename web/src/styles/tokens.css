@@ -1,0 +1,268 @@
+/*
+ * 设计变量。
+ *
+ * 结构分三层：
+ *   1. 静态色板 --aisv-static-*  —— 只列颜色，不表达用途；深浅两套一致，不重复声明。
+ *   2. 语义别名 --aisv-alias-*   —— 「这个颜色是干什么的」。组件只允许用这一层。
+ *   3. 具体场景 --aisv-specific-* —— 少数只在某个面型上成立的填充（侧栏、菜单、气泡）。
+ *
+ * 组件里不写死十六进制色值。要改配色只改这个文件，深浅模式自动跟着走。
+ *
+ * 深浅切换靠 <html data-theme="dark">，由 theme.ts 写入。
+ * 深色不是把浅色反相：底色用带蓝的极深灰，浮层逐级变亮，
+ * 分隔线用半透明白，这样叠在任何底色上都不会脏。
+ */
+
+/* ---------- 1. 静态色板 ---------- */
+:root {
+  /* 中性（带一点蓝），浅色往白走，深色往黑走 */
+  --aisv-static-neutral-00: rgb(255, 255, 255);
+  --aisv-static-neutral-50: rgb(249, 250, 251);
+  --aisv-static-neutral-60: rgb(245, 246, 247);
+  --aisv-static-neutral-75: rgb(241, 243, 245);
+  --aisv-static-neutral-100: rgb(235, 238, 242);
+  --aisv-static-neutral-150: rgb(233, 236, 242);
+  --aisv-static-neutral-200: rgb(225, 229, 238);
+  --aisv-static-neutral-300: rgb(207, 211, 214);
+  --aisv-static-neutral-400: rgb(173, 178, 184);
+  --aisv-static-neutral-500: rgb(151, 157, 166);
+  --aisv-static-neutral-600: rgb(129, 133, 140);
+  --aisv-static-neutral-700: rgb(97, 102, 107);
+  --aisv-static-neutral-750: rgb(67, 69, 74);
+  --aisv-static-neutral-800: rgb(53, 54, 56);
+  --aisv-static-neutral-850: rgb(44, 44, 46);
+  --aisv-static-neutral-875: rgb(35, 35, 36);
+  --aisv-static-neutral-900: rgb(27, 27, 28);
+  --aisv-static-neutral-950: rgb(21, 21, 23);
+  --aisv-static-neutral-1000: rgb(15, 17, 21);
+
+  /* 品牌蓝：只用在真正需要强调的地方，不做大面积铺色 */
+  --aisv-static-blue-50: rgb(239, 246, 255);
+  --aisv-static-blue-100: rgb(219, 234, 254);
+  --aisv-static-blue-400: rgb(96, 165, 250);
+  --aisv-static-blue-450: rgb(77, 147, 248);
+  --aisv-static-blue-500: rgb(59, 130, 246);
+
+  /* DeepSeek 蓝，比通用蓝更沉，用于主强调 */
+  --aisv-static-accent-100: rgb(228, 237, 253);
+  --aisv-static-accent-400: rgb(122, 170, 255);
+  --aisv-static-accent-450: rgb(86, 134, 254);
+  --aisv-static-accent-500: rgb(65, 118, 230);
+  --aisv-static-accent-800: rgb(52, 65, 91);
+  --aisv-static-accent-900: rgb(40, 49, 66);
+
+  /* 状态色 */
+  --aisv-static-green-100: rgb(230, 250, 237);
+  --aisv-static-green-400: rgb(78, 209, 126);
+  --aisv-static-green-500: rgb(34, 197, 94);
+  --aisv-static-green-900: rgb(35, 60, 44);
+  --aisv-static-amber-100: rgb(254, 245, 231);
+  --aisv-static-amber-400: rgb(247, 173, 49);
+  --aisv-static-amber-500: rgb(245, 158, 11);
+  --aisv-static-amber-600: rgb(221, 134, 41);
+  --aisv-static-amber-900: rgb(39, 36, 31);
+  --aisv-static-red-50: rgb(254, 242, 242);
+  --aisv-static-red-100: rgb(254, 226, 226);
+  --aisv-static-red-400: rgb(242, 90, 90);
+  --aisv-static-red-500: rgb(239, 68, 68);
+  --aisv-static-red-600: rgb(236, 19, 19);
+  --aisv-static-red-900: rgb(87, 12, 12);
+
+  /* 代码/终端底：不跟主题走，永远深色，配合等宽字体 */
+  --aisv-static-code-ink: rgb(11, 18, 32);
+}
+
+/* ---------- 2. 语义别名 + 尺度（浅色） ---------- */
+:root {
+  color-scheme: light;
+
+  /* 尺度：圆角只用 4 / 8 / 12 / 16 / 20 / 28，不用 10、14 这种杂数 */
+  --aisv-radius-xs: 4px;
+  --aisv-radius-sm: 8px;
+  --aisv-radius-md: 12px;
+  --aisv-radius-lg: 16px;
+  --aisv-radius-xl: 20px;
+  --aisv-radius-panel: 28px;
+  --aisv-radius-pill: 999px;
+
+  /* 动效曲线：一个 ease-in-out 走天下，时长分三档 */
+  --aisv-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --aisv-t-fast: 0.1s;
+  --aisv-t-base: 0.2s;
+  --aisv-t-slow: 0.3s;
+
+  /*
+   * 界面字体：优先系统字体，中文落到「苹方 / 微软雅黑」。
+   * 等宽字体不带裸 monospace 尾巴 —— Windows 上中文会掉到宋体。
+   */
+  --aisv-font-text:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    "Helvetica Neue", Arial, sans-serif;
+  --aisv-font-code:
+    "SF Mono", "JetBrains Mono", "Fira Code", Consolas, "Liberation Mono", Menlo, Courier, "PingFang SC",
+    "Microsoft YaHei";
+  --aisv-font-size: 14px;
+  --aisv-font-size-sm: 13px;
+  --aisv-font-size-xs: 12px;
+  --aisv-line: 22px;
+
+  /*
+   * 层级：底色最平，浮层逐级加白/加黑。
+   * 卡片用 bg-layer-1，页面用 bg-base，弹层用 menu-surface-fill（半透明 + 模糊）。
+   */
+  --aisv-bg-base: var(--aisv-static-neutral-00);
+  --aisv-bg-layer-1: var(--aisv-static-neutral-00);
+  --aisv-bg-layer-2: var(--aisv-static-neutral-50);
+  --aisv-bg-layer-3: var(--aisv-static-neutral-100);
+  --aisv-bg-module: var(--aisv-static-neutral-60);
+  --aisv-bg-skeleton: rgb(0 0 0 / 4%);
+
+  /* 半透明菜单面：主菜单、下拉、popover 共用，配 40px 模糊 */
+  --aisv-menu-fill: rgb(252 253 254 / 72%);
+  --aisv-menu-filter: blur(40px) saturate(150%);
+
+  /* 文字：primary 读正文，secondary 读标签，tertiary 读说明，caption 读最弱的计数/耗时 */
+  --aisv-label-primary: var(--aisv-static-neutral-1000);
+  --aisv-label-secondary: var(--aisv-static-neutral-700);
+  --aisv-label-tertiary: var(--aisv-static-neutral-600);
+  --aisv-label-caption: var(--aisv-static-neutral-400);
+  --aisv-label-on-fill: var(--aisv-static-neutral-00);
+  --aisv-label-inverted: var(--aisv-static-neutral-00);
+
+  /* 边框：l1 最淡（面与面之间），l2 常规，l3 输入框，l4 强调描边 */
+  --aisv-border-l1: rgb(0 0 0 / 4%);
+  --aisv-border-l2: rgb(0 0 0 / 10%);
+  --aisv-border-l3: rgb(0 0 0 / 12%);
+  --aisv-border-l4: rgb(0 0 0 / 16%);
+  --aisv-border-selected: var(--aisv-static-neutral-400);
+
+  /* 强调：主按钮、当前步骤、焦点环、链接 */
+  --aisv-accent: var(--aisv-static-accent-500);
+  --aisv-accent-hover: var(--aisv-static-accent-450);
+  --aisv-accent-strong: var(--aisv-static-accent-800);
+  --aisv-accent-soft: var(--aisv-static-accent-100);
+
+  /*
+   * 主按钮：强调色填实。
+   * 用填充白字而不是深色块 —— 这一屏只有它和链接用强调色，
+   * 视觉上会自己聚成一个「主操作」的焦点。
+   */
+  --aisv-button-primary-fill: var(--aisv-static-accent-500);
+  --aisv-button-primary-hover: var(--aisv-static-accent-450);
+  --aisv-button-primary-label: var(--aisv-static-neutral-00);
+
+  /* 交互反馈：悬停/按下都是同一族的半透明黑，越按越深 */
+  --aisv-hover: rgb(38 49 72 / 6%);
+  --aisv-active: rgb(38 49 72 / 10%);
+  --aisv-hover-solid: var(--aisv-static-neutral-75);
+  --aisv-hover-danger: rgb(236 19 19 / 5%);
+  /* 导航选中底色：比悬停实一档，和设置页同一颗 */
+  --aisv-nav-active: var(--aisv-static-neutral-150);
+
+  /* 状态 */
+  --aisv-ok: var(--aisv-static-green-500);
+  --aisv-ok-strong: rgb(11 122 70);
+  --aisv-ok-soft: var(--aisv-static-green-100);
+  --aisv-warn: var(--aisv-static-amber-500);
+  --aisv-warn-label: var(--aisv-static-amber-600);
+  --aisv-warn-soft: var(--aisv-static-amber-100);
+  --aisv-bad: var(--aisv-static-red-600);
+  --aisv-bad-soft: var(--aisv-static-red-50);
+  --aisv-bad-border: rgb(246 213 210);
+  --aisv-bad-label: rgb(145 49 43);
+  /* 窗口关闭按钮的悬停底色，红底白字 */
+  --aisv-bad-solid: var(--aisv-static-red-600);
+
+  /* 滚动条：轨道透明，只有滑块有色；悬停加深一档 */
+  --aisv-scrollbar-thumb: var(--aisv-static-neutral-200);
+  --aisv-scrollbar-thumb-hover: var(--aisv-static-neutral-300);
+  /*
+   * 滚动条实际占位宽度，必须和 index.css 里 ::-webkit-scrollbar 的 width 一致。
+   * 滑块视觉只露 4px，剩下的是给圆角留的透明边，但布局按 10px 算。
+   */
+  --aisv-scrollbar-width: 10px;
+
+  /*
+   * 高度：用「发丝描边 + 两层极淡柔光」表达层次，不用重投影。
+   * 0.5px 描边画在 box-shadow 里，不占布局。
+   */
+  --aisv-elevation-stroke-color: var(--aisv-border-l4);
+  --aisv-elevation-stroke: 0 0 0 0.5px var(--aisv-elevation-stroke-color);
+  --aisv-elevation-panel: var(--aisv-elevation-stroke), 0 3px 8px 0 rgb(0 0 0 / 3%), 0 0 16px 0 rgb(0 0 0 / 2%);
+  --aisv-elevation-prominent: var(--aisv-elevation-stroke), 0 3px 8px 0 rgb(0 0 0 / 4%), 0 0 20px 0 rgb(0 0 0 / 5%);
+  --aisv-elevation-soft: var(--aisv-elevation-stroke), 0 4px 16px 0 rgb(0 0 0 / 3%), 0 0 24px 0 rgb(0 0 0 / 3%);
+
+  /* 焦点环：2px，走强调色 */
+  --aisv-focus-ring: 0 0 0 2px var(--aisv-accent);
+
+  /* 遮罩 */
+  --aisv-mask: rgb(0 0 0 / 24%);
+  --aisv-mask-photo: rgb(0 0 0 / 88%);
+}
+
+/* ---------- 3. 深色覆盖 ---------- */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --aisv-bg-base: var(--aisv-static-neutral-950);
+  --aisv-bg-layer-1: var(--aisv-static-neutral-875);
+  --aisv-bg-layer-2: var(--aisv-static-neutral-850);
+  --aisv-bg-layer-3: var(--aisv-static-neutral-800);
+  --aisv-bg-module: var(--aisv-static-neutral-800);
+  --aisv-bg-skeleton: rgb(255 255 255 / 8%);
+
+  /* 深色菜单面用带蓝的浅灰半透明，比底色亮一档 */
+  --aisv-menu-fill: rgb(48 49 54 / 64%);
+
+  --aisv-label-primary: var(--aisv-static-neutral-50);
+  --aisv-label-secondary: var(--aisv-static-neutral-300);
+  --aisv-label-tertiary: var(--aisv-static-neutral-400);
+  --aisv-label-caption: var(--aisv-static-neutral-600);
+  --aisv-label-on-fill: var(--aisv-static-neutral-00);
+  --aisv-label-inverted: var(--aisv-static-neutral-800);
+
+  /* 深色下边框改半透明白：叠在任何浮层上都干净 */
+  --aisv-border-l1: rgb(255 255 255 / 6%);
+  --aisv-border-l2: rgb(255 255 255 / 12%);
+  --aisv-border-l3: rgb(255 255 255 / 16%);
+  --aisv-border-l4: rgb(255 255 255 / 20%);
+  --aisv-border-selected: var(--aisv-static-neutral-400);
+
+  --aisv-accent: var(--aisv-static-accent-400);
+  --aisv-accent-hover: var(--aisv-static-accent-500);
+  --aisv-accent-strong: var(--aisv-static-accent-400);
+  --aisv-accent-soft: var(--aisv-static-accent-800);
+
+  /* 深色下主按钮同样用强调蓝，比浅色提亮一档保证对比度 */
+  --aisv-button-primary-fill: var(--aisv-static-accent-450);
+  --aisv-button-primary-hover: var(--aisv-static-accent-400);
+  --aisv-button-primary-label: var(--aisv-static-neutral-1000);
+
+  --aisv-hover: rgb(255 255 255 / 8%);
+  --aisv-active: rgb(255 255 255 / 14%);
+  --aisv-hover-solid: var(--aisv-static-neutral-800);
+  --aisv-hover-danger: rgb(242 90 90 / 15%);
+  /* 深色下选中要比起底更亮，用 neutral-750 与设置页对齐 */
+  --aisv-nav-active: var(--aisv-static-neutral-750);
+
+  --aisv-ok: var(--aisv-static-green-500);
+  --aisv-ok-strong: var(--aisv-static-green-400);
+  --aisv-ok-soft: var(--aisv-static-green-900);
+  --aisv-warn: var(--aisv-static-amber-500);
+  --aisv-warn-label: var(--aisv-static-amber-600);
+  --aisv-warn-soft: var(--aisv-static-amber-900);
+  --aisv-bad: var(--aisv-static-red-400);
+  --aisv-bad-soft: rgb(60 31 27);
+  --aisv-bad-border: rgb(87 12 12);
+  --aisv-bad-label: var(--aisv-static-red-400);
+  /* 深色下红底配白字对比不够，关闭按钮悬停用暗一些的红 */
+  --aisv-bad-solid: rgb(198 34 34);
+
+  --aisv-scrollbar-thumb: var(--aisv-static-neutral-700);
+  --aisv-scrollbar-thumb-hover: var(--aisv-static-neutral-600);
+
+  --aisv-elevation-stroke-color: var(--aisv-border-l3);
+
+  --aisv-mask: rgb(0 0 0 / 50%);
+  --aisv-mask-photo: rgb(0 0 0 / 88%);
+}

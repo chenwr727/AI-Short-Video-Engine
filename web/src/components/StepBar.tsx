@@ -1,5 +1,6 @@
 import type { Phase } from "../phases";
 import { indexOf, stepsFor } from "../phases";
+import { useT } from "../i18n";
 
 interface Props {
   current: Phase;
@@ -10,6 +11,7 @@ interface Props {
 
 /** 顶部步骤条：已完成打勾，已到达可点回 */
 export function StepBar({ current, reached, doneThrough, onSelect }: Props) {
+  const t = useT();
   const steps = stepsFor();
   const cur = indexOf(current);
 
@@ -28,11 +30,11 @@ export function StepBar({ current, reached, doneThrough, onSelect }: Props) {
                 className="step-btn"
                 disabled={!clickable}
                 onClick={() => onSelect(step.id)}
-                title={clickable ? `回到「${step.label}」` : step.desc}
+                title={clickable ? t("steps.backTo", { step: t(step.label) }) : t(step.desc)}
               >
                 <span className="step-dot">{done && !active ? "✓" : index + 1}</span>
-                <span className="step-label">{step.label}</span>
-                <span className="step-desc">{step.desc}</span>
+                <span className="step-label">{t(step.label)}</span>
+                <span className="step-desc">{t(step.desc)}</span>
               </button>
             </li>
           );

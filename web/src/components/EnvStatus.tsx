@@ -1,21 +1,24 @@
 import { useEffect, useRef, useState } from "react";
 import { bridge } from "../bridge";
+import { useT } from "../i18n";
 import type { Health } from "../types";
 
 /** 一项是一组能力，组内为「或」关系 */
 interface EnvItem {
+  /** 稳定标识，用作列表 key；不随语言变化 */
+  id: string;
   label: string;
   ok: boolean;
   /** 缺失时提示补救办法，就绪时为可用档位 */
   note: string;
 }
 
-function envItems(health: Health): EnvItem[] {
+function envItems(health: Health, t: ReturnType<typeof useT>): EnvItem[] {
   const { config, deps } = health;
   const engines = [
-    config.tts.edge && "Edge 语音",
+    config.tts.edge && t("tts.engineEdge"),
     config.tts.dashscope && "CosyVoice",
-    config.tts.seed && "豆包 Seed-TTS",
+    config.tts.seed && t("tts.engineDoubao"),
   ].filter((name): name is string => Boolean(name));
   const sources = [config.material.pixabay && "Pixabay", config.material.pexels && "Pexels"].filter(
     (name): name is string => Boolean(name),
@@ -23,30 +26,35 @@ function envItems(health: Health): EnvItem[] {
 
   return [
     {
+      id: "llm",
       label: "LLM",
       ok: config.llm.configured,
-      note: config.llm.configured ? "" : "未配置 API Key，无法生成剧本",
+      note: config.llm.configured ? "" : t("env.needLlm"),
     },
     {
+      id: "ffmpeg",
       label: "ffmpeg",
       ok: Boolean(deps.ffmpeg),
-      note: deps.ffmpeg ? "" : "未检测到，合成视频会失败",
+      note: deps.ffmpeg ? "" : t("env.ffmpegMissing"),
     },
     {
-      label: "配音引擎",
+      id: "tts",
+      label: t("env.voiceEngine"),
       ok: engines.length > 0,
-      note: engines.length > 0 ? `可用：${engines.join(" · ")}` : "Edge 语音 / CosyVoice / 豆包 Seed-TTS 至少配一个",
+      note: engines.length > 0 ? t("tts.available", { list: engines.join(" · ") }) : t("env.needTts"),
     },
     {
-      label: "素材源",
+      id: "material",
+      label: t("env.materialSource"),
       ok: sources.length > 0,
-      note: sources.length > 0 ? `可用：${sources.join(" · ")}` : "Pixabay / Pexels 至少配一个 Key，否则匹配素材会失败",
+      note: sources.length > 0 ? t("material.sourceAvailable", { list: sources.join(" · ") }) : t("env.needMaterial"),
     },
   ];
 }
 
 /** 环境状态，仅有缺项时显示 */
 export function EnvStatus({ health }: { health: Health | null }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
 
@@ -68,25 +76,28 @@ export function EnvStatus({ health }: { health: Health | null }) {
     };
   }, [open]);
 
-  if (!health) return <span className="pill">连接中…</span>;
+  if (!health) return <span className="pill">{t("stage.connecting")}</span>;
 
-  const items = envItems(health);
+  const items = envItems(health, t);
   const missing = items.filter((item) => !item.ok);
 
   if (missing.length === 0) return null;
 
-  const summary = missing.length === 1 ? `${missing[0]?.label}未配置` : `${missing.length} 项未配置`;
+  const summary =
+    missing.length === 1
+      ? t("env.missingOne", { label: missing[0]?.label ?? "" })
+      : t("env.missing", { n: missing.length });
 
   async function openSettings() {
     setOpen(false);
     const api = bridge();
     if (!api) {
-      window.alert("设置只在桌面应用里可用，浏览器里请直接改配置文件。");
+      window.alert(t("common.settingsDesktopOnly"));
       return;
     }
     try {
       const res = await api.menu("settings");
-      if (!res.ok) window.alert(res.error ?? "打开设置失败");
+      if (!res.ok) window.alert(res.error ?? t("error.settings"));
     } catch (error) {
       window.alert(error instanceof Error ? error.message : String(error));
     }
@@ -106,19 +117,19 @@ export function EnvStatus({ health }: { health: Health | null }) {
       </button>
 
       {open && (
-        <div className="env-pop" role="dialog" aria-label="运行环境">
-          <div className="env-pop-head">运行环境</div>
+        <div className="env-pop" role="dialog" aria-label={t("env.title")}>
+          <div className="env-pop-head">{t("env.title")}</div>
           <ul className="env-list">
             {items.map((item) => (
-              <li key={item.label} className={`env-item ${item.ok ? "ok" : "missing"}`}>
+              <li key={item.id} className={`env-item ${item.ok ? "ok" : "missing"}`}>
                 <span className="env-name">{item.label}</span>
-                <span className="env-state">{item.ok ? "就绪" : "未配置"}</span>
+                <span className="env-state">{item.ok ? t("common.ready") : t("common.notConfigured")}</span>
                 {item.note && <span className="env-note">{item.note}</span>}
               </li>
             ))}
           </ul>
           <button type="button" className="env-settings" onClick={() => void openSettings()}>
-            打开设置…
+            {t("stage.openSettings")}
           </button>
         </div>
       )}

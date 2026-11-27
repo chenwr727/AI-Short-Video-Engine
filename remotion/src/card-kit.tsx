@@ -113,10 +113,12 @@ export const OverlayPlate: React.FC<OverlayPlateProps> = ({ accent, progress, wi
       {/*
         自上而下压暗，但只压到板子上方就停。
         之前压到 62% 已经很暗，素材上半部直接黑掉，等于白搭一张底图。
+        现在从板子上沿（约 46%）开始加深，让板子落在一片压暗区上，
+        底下的亮块不会从板子边缘透上来。
       */}
       <AbsoluteFill
         style={{
-          background: "linear-gradient(to bottom, rgba(0,0,0,0) 34%, rgba(4,7,12,0.35) 52%, rgba(4,7,12,0.7) 100%)",
+          background: "linear-gradient(to bottom, rgba(0,0,0,0) 30%, rgba(4,7,12,0.45) 48%, rgba(4,7,12,0.78) 100%)",
         }}
       />
       <div
@@ -131,7 +133,12 @@ export const OverlayPlate: React.FC<OverlayPlateProps> = ({ accent, progress, wi
           margin: `0 ${Math.round(pad * 0.5)}px ${Math.round(height * 0.45)}px`,
           padding: `${Math.round(width * 0.04)}px ${pad}px`,
           borderRadius: Math.round(width * 0.04),
-          background: "linear-gradient(160deg, rgba(12,18,30,0.88) 0%, rgba(8,11,18,0.94) 100%)",
+          /*
+           * 玻璃板要给文字兜住背景：合成后透明度再高一点，
+           * 底下的人像 / 墙面就不会从字缝里透出来把内容糊掉。
+           * 留着一点渐变，边缘才不会看起来像一整块实心色。
+           */
+          background: "linear-gradient(160deg, rgba(10,15,26,0.95) 0%, rgba(7,10,16,0.98) 100%)",
           border: `${Math.max(1, Math.round(width * 0.0022))}px solid ${accent}55`,
           boxShadow: `0 ${Math.round(width * 0.02)}px ${Math.round(width * 0.06)}px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.06)`,
           opacity: progress,

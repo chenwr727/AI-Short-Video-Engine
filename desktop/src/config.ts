@@ -117,6 +117,57 @@ export function loadConfig(): AppConfig {
   return { ...DEFAULTS, ...readFileConfig() };
 }
 
+/*
+ * 界面偏好：主题、语言。
+ *
+ * 单独存一个 ui.json，不放进 config.json —— 后者是后端配置，
+ * 键集合被一致性检查严格约束，加界面项会破坏那层对应关系。
+ * 更要紧的是：设置页在 file:// 下，主窗口在 http:// 下，
+ * 两边的 localStorage 互不相通，只有落到同一个文件才谈得上共享。
+ */
+export interface UiPreferences {
+  language: "zh" | "en" | "system";
+}
+
+export const UI_DEFAULTS: UiPreferences = { language: "system" };
+
+export function uiFile(): string {
+  return path.join(userDataDir(), "ui.json");
+}
+
+export function loadUi(): UiPreferences {
+  try {
+    const raw = fs.readFileSync(uiFile(), "utf-8");
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const language = parsed.language;
+    return {
+      language: language === "zh" || language === "en" || language === "system" ? language : UI_DEFAULTS.language,
+    };
+  } catch {
+    return { ...UI_DEFAULTS };
+  }
+}
+
+export function saveUi(next: Partial<UiPreferences>): UiPreferences {
+  const merged: UiPreferences = { ...loadUi(), ...next };
+  fs.mkdirSync(userDataDir(), { recursive: true });
+  const file = uiFile();
+  const tmp = `${file}.${process.pid}.tmp`;
+  try {
+    // 先写临时文件再 rename，避免写到一半掉电留下半个 JSON
+    fs.writeFileSync(tmp, `${JSON.stringify(merged, null, 2)}\n`, "utf-8");
+    fs.renameSync(tmp, file);
+  } catch (e) {
+    try {
+      fs.rmSync(tmp, { force: true });
+    } catch {
+      // 清理失败不掩盖原始错误
+    }
+    throw e;
+  }
+  return merged;
+}
+
 /** 首次启动写入一份带默认值的配置 */
 export function ensureConfig(): AppConfig {
   // 损坏文件由 loadConfig 处理，这里只确认存在

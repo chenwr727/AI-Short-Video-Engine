@@ -1518,7 +1518,7 @@ class TaskManager {
     this.emit();
   }
 
-  private markStage(id: string, status: StageStatus, message?: string): void {
+  private markStage(id: string, status: StageStatus, message?: string, counts?: StageState["counts"]): void {
     const state = this.state;
     if (!state) return;
     const stage: StageState | undefined = state.stages.find((s) => s.id === id);
@@ -1526,6 +1526,7 @@ class TaskManager {
 
     stage.status = status;
     if (message !== undefined) stage.message = message;
+    if (counts !== undefined) stage.counts = counts;
     if (status === "running") {
       stage.startedAt = Date.now();
       this.currentStageId = id;

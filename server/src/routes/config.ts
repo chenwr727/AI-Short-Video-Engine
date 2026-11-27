@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { loadConfig, type AppConfig } from "../config.js";
+import { langOf, pick } from "../i18n.js";
 import { runConfigTest, type TestTarget } from "../services/config-test.js";
 
 interface TestBody {
@@ -21,12 +22,19 @@ function pickConfig(input: unknown): Partial<AppConfig> {
 export async function registerConfigRoutes(app: FastifyInstance): Promise<void> {
   // 用表单未保存的值走一次真实请求
   app.post("/api/config-test", async (req, reply) => {
+    const lang = langOf(req.headers["accept-language"]);
     const body = (req.body ?? {}) as TestBody;
     const target = body.target === "dashscope" ? "dashscope" : body.target === "llm" ? "llm" : null;
-    if (!target) return reply.code(400).send({ error: "target 只能是 llm 或 dashscope" });
+    if (!target) {
+      const error = pick(lang, {
+        zh: "target 只能是 llm 或 dashscope",
+        en: "target must be either llm or dashscope",
+      });
+      return reply.code(400).send({ error });
+    }
 
     const cfg: AppConfig = { ...loadConfig(), ...pickConfig(body.config) };
-    const result = await runConfigTest(target as TestTarget, cfg);
+    const result = await runConfigTest(target as TestTarget, cfg, lang);
     return reply.send(result);
   });
 }

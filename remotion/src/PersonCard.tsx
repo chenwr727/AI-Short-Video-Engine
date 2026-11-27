@@ -265,7 +265,7 @@ export const PersonCard: React.FC<PersonCardProps> = ({
                   maxWidth: Math.round(width * 0.72),
                   padding: `${Math.round(width * 0.032)}px ${Math.round(width * 0.04)}px`,
                   borderRadius: Math.round(width * 0.03),
-                  background: "linear-gradient(160deg, rgba(12,18,30,0.9) 0%, rgba(8,11,18,0.95) 100%)",
+                  background: "linear-gradient(160deg, rgba(10,15,26,0.95) 0%, rgba(7,10,16,0.98) 100%)",
                   border: `${Math.max(1, Math.round(width * 0.0022))}px solid ${accent}55`,
                   boxShadow: `0 ${Math.round(width * 0.016)}px ${Math.round(width * 0.05)}px rgba(0,0,0,0.55)`,
                   opacity: plateIn,

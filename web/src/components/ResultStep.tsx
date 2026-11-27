@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { RenderPatch } from "../api";
+import { useT } from "../i18n";
 import { COMPOSE_STAGE_IDS } from "../phases";
 import type { Meta, TaskState } from "../types";
 import { ConfigSection, Panel } from "./Panel";
@@ -22,6 +23,7 @@ interface ResultStepProps {
 /** 第五步：定渲染参数 → 生成成片，生成后仍可改参数重做 */
 export function ResultStep(props: ResultStepProps) {
   const { task, busy, error, meta, onRender, onBack, onRestart, onPickMusic, onReveal } = props;
+  const t = useT();
   const options = task?.options;
   const defaults = meta?.render;
   const hasVideo = task?.status === "completed" && Boolean(task.result);
@@ -65,11 +67,11 @@ export function ResultStep(props: ResultStepProps) {
 
   if (!task) {
     return (
-      <Panel title="成片预览" desc="成片生成后会出现在这里。">
-        <p className="hint">还没有任务，请先生成剧本并完成素材确认。</p>
+      <Panel title={t("result.title")} desc={t("render.empty")}>
+        <p className="hint">{t("result.noTask")}</p>
         <div className="panel-actions">
           <button className="secondary" type="button" onClick={onRestart}>
-            返回第一步
+            {t("render.backFirst")}
           </button>
         </div>
       </Panel>
@@ -96,24 +98,20 @@ export function ResultStep(props: ResultStepProps) {
     });
   }
 
-  const bgmText = bgmEnabled ? `BGM ${bgmVolume}` : "无 BGM";
-  const configSummary = `字幕 ${effectiveFontSize}px · ${bgmText}${music.trim() ? ` · ${music.trim()}` : " · 默认音乐"}`;
+  const bgmText = bgmEnabled ? `BGM ${bgmVolume}` : t("render.noBgm");
+  const configSummary = t("render.summary", {
+    size: effectiveFontSize,
+    bgm: bgmText,
+    music: music.trim() ? ` · ${music.trim()}` : ` · ${t("render.defaultMusic")}`,
+  });
 
   return (
-    <Panel
-      title="成片预览"
-      desc={
-        hasVideo
-          ? "成片已经保存在本地。上面这些参数改完可以重新生成，配音与素材都不用重跑。"
-          : "素材已就绪，先设置字幕与背景音乐，再点「生成成片」。"
-      }
-      fill
-    >
+    <Panel title={t("result.title")} desc={hasVideo ? t("result.hint") : t("render.hintNoTts")} fill>
       {/* 有片子时收起配置与日志，把高度留给预览 */}
-      <ConfigSection title="渲染参数" summary={configSummary} open={layout.configOpen} resetKey={stepStage}>
+      <ConfigSection title={t("render.params")} summary={configSummary} open={layout.configOpen} resetKey={stepStage}>
         <div className="row">
           <div className="field">
-            <label htmlFor="subtitle-size">字幕字号（px）</label>
+            <label htmlFor="subtitle-size">{t("render.fontSize")}（px）</label>
             <input
               id="subtitle-size"
               className="text-input"
@@ -129,7 +127,7 @@ export function ResultStep(props: ResultStepProps) {
             />
           </div>
           <div className="field">
-            <label htmlFor="bgm-volume">BGM 音量（0–2，默认 0.1）</label>
+            <label htmlFor="bgm-volume">{t("result.bgmVolume")}</label>
             <input
               id="bgm-volume"
               className="text-input"
@@ -153,25 +151,25 @@ export function ResultStep(props: ResultStepProps) {
               onChange={(event) => setBgmEnabled(event.target.checked)}
               disabled={rendering}
             />
-            插入背景音乐（不勾选则只保留配音）
+            {t("result.bgmToggle")}
           </label>
         </div>
 
         {bgmEnabled && (
           <div className="field">
-            <label htmlFor="bgm-file">自定义音乐</label>
+            <label htmlFor="bgm-file">{t("result.customMusic")}</label>
             <div className="music-picker">
               <input
                 id="bgm-file"
                 className="text-input"
                 value={music}
                 onChange={(event) => setMusic(event.target.value)}
-                placeholder="留空 = 程序合成的默认 BGM；也可填音乐目录里的文件名"
+                placeholder={t("render.bgmPlaceholder")}
                 disabled={rendering || picking}
               />
               {onPickMusic && (
                 <button className="secondary" type="button" onClick={() => void pick()} disabled={rendering || picking}>
-                  {picking ? "选择中…" : "选择…"}
+                  {picking ? t("common.choosing") : t("common.choose")}
                 </button>
               )}
             </div>
@@ -179,8 +177,7 @@ export function ResultStep(props: ResultStepProps) {
         )}
 
         <p className="hint">
-          字号按画面宽度算好（{defaultFontSize}px，当前 {task.options.width}×{task.options.height}），可以直接改。
-          改字号会重新渲染分段片段，只改 BGM 则复用片段、仅重跑合并与混音。
+          {t("result.fontHint", { n: defaultFontSize, w: task.options.width, h: task.options.height })}
         </p>
       </ConfigSection>
 
@@ -206,7 +203,7 @@ export function ResultStep(props: ResultStepProps) {
               playsInline
             />
           ) : (
-            <p className="hint">还没有生成成片。</p>
+            <p className="hint">{t("result.noOutput")}</p>
           )}
         </div>
       </div>
@@ -216,23 +213,23 @@ export function ResultStep(props: ResultStepProps) {
       {/* 主操作固定最右 */}
       <div className="panel-actions">
         <button className="secondary btn-back" type="button" onClick={onBack}>
-          返回上一步
+          {t("common.back")}
         </button>
         <button className="secondary" type="button" onClick={onRestart}>
-          再做一条
+          {t("result.again")}
         </button>
         {hasVideo &&
           (onReveal ? (
             <button className="secondary" type="button" onClick={() => onReveal(task.result as string)}>
-              在文件夹中显示
+              {t("result.showInFolder")}
             </button>
           ) : (
             <a className="secondary link-btn" href="/api/result?download=1">
-              下载成片
+              {t("result.download")}
             </a>
           ))}
         <button className="primary" type="button" onClick={render} disabled={busy || rendering}>
-          {busy || rendering ? "合成中…" : hasVideo ? "重新生成" : "生成成片"}
+          {busy || rendering ? t("render.generating") : hasVideo ? t("common.regenerate") : t("render.generate")}
         </button>
       </div>
     </Panel>

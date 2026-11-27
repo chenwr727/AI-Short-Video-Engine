@@ -11,6 +11,7 @@ import {
   speakerNames,
 } from "../config.js";
 import { MATERIAL_SOURCES, PROMPT_SOURCES, RESOLUTIONS, ttsEngines } from "../meta.js";
+import { langOf, pick, type Lang } from "../i18n.js";
 import { TaskError, taskManager, type MaterialReplacement } from "../task/manager.js";
 import { mimeOf, sendFileWithRange } from "./send.js";
 import type {
@@ -42,6 +43,28 @@ function requireCardId(raw: unknown): string {
   const id = String(raw ?? "").trim();
   if (!CARD_ID_PATTERN.test(id)) throw new TaskError("卡片标识不合法", 400);
   return id;
+}
+
+/**
+ * 面向用户的错误文案：中英对照。
+ *
+ * 只收「会直接显示在界面上」的那些；内部断言类的报错原样透出即可，
+ * 那种信息是给开发者看的，翻译反而妨碍排查。
+ */
+const ERRORS = {
+  badParagraph: { zh: "段号不合法", en: "Invalid section number" },
+  cardNotFit: {
+    zh: "这段内容不适合做信息卡，换一段或换个模板试试",
+    en: "This section doesn't suit an info card. Try another section or template.",
+  },
+  badFile: { zh: "文件名不合法", en: "Invalid file name" },
+  noAudio: { zh: "音频不存在", en: "Audio not found" },
+  noVideo: { zh: "还没有生成成片", en: "No final cut yet" },
+} as const;
+
+/** 当前请求该用哪种语言 */
+function langOfRequest(reply: FastifyReply): Lang {
+  return langOf(reply.request.headers["accept-language"]);
 }
 
 function fail(reply: FastifyReply, error: unknown) {
@@ -302,7 +325,8 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
   app.post<{ Body: { paragraph?: number; terms?: string[] } }>("/api/task/material/search", async (req, reply) => {
     try {
       const paragraph = Number(req.body?.paragraph);
-      if (!Number.isFinite(paragraph) || paragraph <= 0) throw new TaskError("段号不合法", 400);
+      if (!Number.isFinite(paragraph) || paragraph <= 0)
+        throw new TaskError(pick(langOfRequest(reply), ERRORS.badParagraph), 400);
       const candidates = await taskManager.searchMaterial(paragraph, req.body?.terms);
       return { candidates };
     } catch (error) {
@@ -314,10 +338,11 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
   app.post<{ Body: { paragraph?: number; template?: string } }>("/api/task/material/info-card", async (req, reply) => {
     try {
       const paragraph = Number(req.body?.paragraph);
-      if (!Number.isFinite(paragraph) || paragraph <= 0) throw new TaskError("段号不合法", 400);
+      if (!Number.isFinite(paragraph) || paragraph <= 0)
+        throw new TaskError(pick(langOfRequest(reply), ERRORS.badParagraph), 400);
       const template = typeof req.body?.template === "string" ? req.body.template.trim() : "";
       const card = await taskManager.applyInfoCard(paragraph, template || undefined);
-      if (!card) return reply.code(422).send({ error: "这段内容不适合做信息卡，换一段或换个模板试试" });
+      if (!card) return reply.code(422).send({ error: pick(langOfRequest(reply), ERRORS.cardNotFit) });
       return { card, state: taskManager.getState() };
     } catch (error) {
       return fail(reply, error);
@@ -338,7 +363,8 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
   app.post<{ Body: { paragraph?: number } }>("/api/task/material/info-card/clear", async (req, reply) => {
     try {
       const paragraph = Number(req.body?.paragraph);
-      if (!Number.isFinite(paragraph) || paragraph <= 0) throw new TaskError("段号不合法", 400);
+      if (!Number.isFinite(paragraph) || paragraph <= 0)
+        throw new TaskError(pick(langOfRequest(reply), ERRORS.badParagraph), 400);
       taskManager.clearInfoCard(paragraph);
       return { state: taskManager.getState() };
     } catch (error) {
@@ -350,13 +376,13 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
   app.get<{ Params: { file: string } }>("/api/audio/:file", async (req, reply) => {
     const name = path.basename(req.params.file);
     if (!/^\d+_\d+_\d+\.(wav|mp3)$/i.test(name)) {
-      return reply.code(400).send({ error: "文件名不合法" });
+      return reply.code(400).send({ error: pick(langOfRequest(reply), ERRORS.badFile) });
     }
 
     const state = taskManager.getState();
     const file = state ? path.join(state.workspace, name) : "";
     if (!file || !fs.existsSync(file)) {
-      return reply.code(404).send({ error: "音频不存在" });
+      return reply.code(404).send({ error: pick(langOfRequest(reply), ERRORS.noAudio) });
     }
 
     return sendFileWithRange(reply, file, req.headers.range, { contentType: mimeOf(name) });
@@ -437,7 +463,7 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
     const state = taskManager.getState();
     const file = state?.result;
     if (!file || !fs.existsSync(file)) {
-      return reply.code(404).send({ error: "还没有生成成片" });
+      return reply.code(404).send({ error: pick(langOfRequest(reply), ERRORS.noVideo) });
     }
 
     const filename = `${state.transcript?.title ?? "video"}.mp4`.replace(/[\\/:*?"<>|]/g, "_");
