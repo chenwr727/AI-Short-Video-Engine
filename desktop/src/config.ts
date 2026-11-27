@@ -6,6 +6,7 @@ export interface AppConfig {
   LLM_API_KEY?: string;
   LLM_API_URL?: string;
   LLM_MODEL?: string;
+  LLM_THINKING?: string;
   DASHSCOPE_API_KEY?: string;
   DASHSCOPE_WORKSPACE_ID?: string;
   PIXABAY_API_KEY?: string;
@@ -22,6 +23,7 @@ export const DEFAULTS: AppConfig = {
   LLM_API_KEY: "",
   LLM_API_URL: "https://api.deepseek.com",
   LLM_MODEL: "deepseek-flash",
+  LLM_THINKING: "0",
   DASHSCOPE_API_KEY: "",
   DASHSCOPE_BASE_URL: "https://dashscope.aliyuncs.com/api/v1",
   DASHSCOPE_WORKSPACE_ID: "",

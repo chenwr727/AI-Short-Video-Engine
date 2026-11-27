@@ -50,6 +50,8 @@ export const settings = {
   "llm.apiUrl": "接口地址",
   "llm.apiUrl.desc": "可只填域名",
   "llm.model": "模型",
+  "llm.thinking": "思考模式",
+  "llm.thinking.desc": "关掉更快更稳，写稿用不上推理",
   "material.minDuration": "素材最短时长",
   "material.pexels": "Pexels Key",
   "material.pixabay": "Pixabay Key",

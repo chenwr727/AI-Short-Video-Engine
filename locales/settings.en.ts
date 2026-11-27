@@ -52,6 +52,8 @@ export const settings = {
   "llm.apiUrl": "Endpoint",
   "llm.apiUrl.desc": "The domain alone is enough",
   "llm.model": "Model",
+  "llm.thinking": "Thinking mode",
+  "llm.thinking.desc": "Off is faster and steadier; scripting needs no reasoning",
   "material.minDuration": "Minimum clip length",
   "material.pexels": "Pexels Key",
   "material.pixabay": "Pixabay Key",

@@ -368,9 +368,11 @@ export async function runScriptStages(ctx: TaskContext): Promise<Transcript> {
 
   ctx.markStage("write", "running");
   const draftFile = path.join(ctx.workspace, FILES.draft);
+  // 空文件不算命中缓存
+  const cachedDraft = fs.existsSync(draftFile) ? fs.readFileSync(draftFile, "utf-8") : "";
   let draft: string;
-  if (fs.existsSync(draftFile)) {
-    draft = fs.readFileSync(draftFile, "utf-8");
+  if (cachedDraft.trim()) {
+    draft = cachedDraft;
     ctx.log("复用已生成的草稿");
   } else {
     ctx.log(`正在用「${ctx.options.promptSource}」风格撰写草稿…`);

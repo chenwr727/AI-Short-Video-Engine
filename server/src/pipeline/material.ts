@@ -194,7 +194,7 @@ async function generateTerms(ctx: TaskContext, transcript: Transcript, audio?: A
     const answer = await chat(fullPrompt, JSON.stringify([item]), {
       signal: ctx.signal,
       temperature: 0.6,
-      maxTokens: 1024,
+      maxTokens: 4096,
     });
     // 单段提问时 id 可能是 1，也可能是真实段号
     const parsed = parseTermsMap(answer);
