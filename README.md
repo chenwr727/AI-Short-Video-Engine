@@ -110,6 +110,7 @@ flowchart LR
 | `pnpm build:web` | 构建前端产物到 `web/dist` |
 | `pnpm typecheck` / `pnpm lint` / `pnpm format` | 类型检查 / ESLint / Prettier |
 | `pnpm test` | 运行后端纯函数单元测试 |
+| `git push` | 自动先跑 lint / typecheck / format:check（`pnpm install` 时挂的 hook） |
 | `pnpm dist:win` / `:mac` / `:linux` | 打包免安装 zip / dmg / AppImage |
 | `pnpm dist:win:remotion` | 同上，把 Remotion 卡片运行时一起打进包 |
 

@@ -5,6 +5,7 @@
   "description": "AI Short Video Engine 桌面版（Electron + Fastify + React）",
   "packageManager": "pnpm@12.8.1",
   "scripts": {
+    "prepare": "node scripts/setup-hooks.mjs",
     "dev:server": "pnpm -C server dev",
     "dev:web": "pnpm -C web dev",
     "build:web": "pnpm -C web build",

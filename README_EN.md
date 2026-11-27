@@ -110,6 +110,7 @@ The config file lives at `<next to exe>/UserData/config.json` for the portable b
 | `pnpm build:web` | Build frontend output into `web/dist` |
 | `pnpm typecheck` / `pnpm lint` / `pnpm format` | Typecheck / ESLint / Prettier |
 | `pnpm test` | Run backend unit tests for pure functions |
+| `git push` | Runs lint / typecheck / format:check first (hook installed by `pnpm install`) |
 | `pnpm dist:win` / `:mac` / `:linux` | Build the portable zip / dmg / AppImage |
 | `pnpm dist:win:remotion` | Same, bundling the Remotion card runtime |
 

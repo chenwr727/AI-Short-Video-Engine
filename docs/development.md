@@ -76,3 +76,9 @@ pnpm test        # 后端纯函数单测
 ```
 
 CI 会依次跑这四项。
+
+`pnpm install` 会把 `core.hooksPath` 指向仓库内的 `.githooks`（`scripts/setup-hooks.mjs`），之后 `git push` 会自动先跑 `lint`、`typecheck`、`format:check`，和 CI 的前三项一致，省一次「推上去等 CI 报红」的往返。
+
+- **`test` 不在 hook 里**：`tsx --test` 启动子进程在部分机器上会偶发 `EPERM`，会无故挡住推送，留给 CI。
+- **跳过**：`git push --no-verify`。
+- **没生效**：确认 `git config core.hooksPath` 输出 `.githooks`；CI 与打包暂存目录不会设置它。

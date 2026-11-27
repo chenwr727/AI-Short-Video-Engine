@@ -1,0 +1,4 @@
+#!/bin/sh
+# 真正的逻辑在 scripts/pre-push.mjs：POSIX sh 在 Windows 上不稳（fork 报 errno 13），
+# 这里只把控制权交给 Node。
+exec node "$(dirname "$0")/../scripts/pre-push.mjs" "$@"

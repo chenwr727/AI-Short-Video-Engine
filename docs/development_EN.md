@@ -76,3 +76,9 @@ pnpm test        # backend unit tests for pure functions
 ```
 
 CI runs these four in order.
+
+`pnpm install` points `core.hooksPath` at the in-repo `.githooks` (via `scripts/setup-hooks.mjs`). After that `git push` runs `lint`, `typecheck` and `format:check` first — the same first three steps as CI, saving a round trip.
+
+- **`test` is not in the hook**: `tsx --test` spawns child processes and occasionally fails with `EPERM` on some machines, which would block pushes for no reason. CI still runs it.
+- **Skip**: `git push --no-verify`.
+- **Not active**: check that `git config core.hooksPath` prints `.githooks`. CI and the packaging staging directory never set it.
