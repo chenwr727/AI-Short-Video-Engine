@@ -37,7 +37,7 @@ When reusing an externally started backend, `backend.proc === null`. "Save and r
 
 ### Portable Mode
 
-Enabled when `portable.txt` sits next to the exe; `userData` is redirected to `<exe dir>/UserData`. A write probe runs first — if the directory is not writable (e.g. installed under Program Files) it logs a warning and falls back to `%APPDATA%/aisv-desktop`.
+Enabled when `portable.txt` sits next to the exe; `userData` is redirected to `<exe dir>/UserData`. A write probe runs first — if the directory is not writable (e.g. installed under Program Files) it logs a warning and falls back to `%APPDATA%/shortdeck-desktop`.
 
 Delete `portable.txt` to switch to installed mode; data returns to `%APPDATA%`.
 
@@ -79,7 +79,7 @@ pnpm dev:server   # http://127.0.0.1:4000
 pnpm dev:web      # http://127.0.0.1:3000, /api proxied to 4000
 ```
 
-In development Electron reuses a backend already listening on `:4000`. Use `AISV_OPEN_DEVTOOLS=1` for devtools.
+In development Electron reuses a backend already listening on `:4000`. Use `SHORTDECK_OPEN_DEVTOOLS=1` for devtools.
 
 ## Configuration
 
@@ -98,9 +98,9 @@ The config file location depends on how the app runs:
 | Mode | Path |
 | --- | --- |
 | Portable | `<exe dir>/UserData/config.json` |
-| Installed / development | `%APPDATA%/aisv-desktop/config.json` |
+| Installed / development | `%APPDATA%/shortdeck-desktop/config.json` |
 
-When the backend starts, every non-empty config value is injected as an environment variable (`buildEnv`), plus fixed `AISV_DATA_DIR`, `AISV_OUT_DIR`, `AISV_ASSETS_DIR`, `AISV_CONFIG_FILE`, `AISV_VERSION`, `PORT`, `HOST`. If `build/bin` exists it is prepended to `PATH` and `AISV_BIN_DIR` is set.
+When the backend starts, every non-empty config value is injected as an environment variable (`buildEnv`), plus fixed `SHORTDECK_DATA_DIR`, `SHORTDECK_OUT_DIR`, `SHORTDECK_ASSETS_DIR`, `SHORTDECK_CONFIG_FILE`, `SHORTDECK_VERSION`, `PORT`, `HOST`. If `build/bin` exists it is prepended to `PATH` and `SHORTDECK_BIN_DIR` is set.
 
 Saves use "write temp file + rename" for atomicity, with mode narrowed to `0600` on POSIX (the file holds API keys). A parse failure is backed up to `config.json.corrupt-<timestamp>` before falling back to defaults, so the next save cannot overwrite keys the user already entered.
 
@@ -112,7 +112,7 @@ Field descriptions live in the [main README's configuration table](../README_EN.
 pnpm dist:win     # build → electron-builder → artifact self-check
 ```
 
-Artifact: `desktop/release/AI Short Video-<version>-win-portable.zip` — currently about 214 MB / 2719 entries at `0.1.0`. `compression: maximum` makes the zip stage very slow; switch to `normal` temporarily during day-to-day iteration.
+Artifact: `desktop/release/ShortDeck-<version>-win-portable.zip` — currently about 214 MB / 2719 entries at `0.2.0`. `compression: maximum` makes the zip stage very slow; switch to `normal` temporarily during day-to-day iteration.
 
 Unzip and run; data lands in the sibling `UserData/`:
 

@@ -18,10 +18,10 @@ const SCRIPT_STAGES = ["fetch", "write", "rewrite", "split"] as const;
 /** 动作、情绪注释常用这些括号开头 */
 const BRACKETS = ["（", "(", "【", "["];
 
-/** 审稿低于阈值时按意见返修一次；AISV_SCRIPT_REVIEW=0 关闭 */
-const REVIEW_ENABLED = process.env.AISV_SCRIPT_REVIEW !== "0";
+/** 审稿低于阈值时按意见返修一次；SHORTDECK_SCRIPT_REVIEW=0 关闭 */
+const REVIEW_ENABLED = process.env.SHORTDECK_SCRIPT_REVIEW !== "0";
 const REVIEW_THRESHOLD = (() => {
-  const value = Number(process.env.AISV_SCRIPT_REVIEW_THRESHOLD);
+  const value = Number(process.env.SHORTDECK_SCRIPT_REVIEW_THRESHOLD);
   return Number.isFinite(value) && value > 0 && value <= 1 ? value : 0.82;
 })();
 

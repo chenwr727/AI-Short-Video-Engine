@@ -7,7 +7,7 @@ Fill in the fields via **File → Settings…** (`Ctrl+,`); saving restarts the 
 | Mode | Path |
 | --- | --- |
 | Portable | `<next to exe>/UserData/config.json` |
-| Installed / dev | `%APPDATA%/aisv-desktop/config.json` |
+| Installed / dev | `%APPDATA%/shortdeck-desktop/config.json` |
 
 Field reference (environment variables take precedence over the file, which is handy for temporary overrides):
 
@@ -32,8 +32,8 @@ Field reference (environment variables take precedence over the file, which is h
 | BGM | `BGM_ENABLED` | Mix in background music, default 1; set 0 to keep narration only |
 | BGM | `BGM_VOLUME` | BGM volume, default 0.1 (1 = original level) |
 | BGM | `AUDIO_FADE_IN` / `AUDIO_FADE_OUT` | BGM fade in/out in seconds, defaults 0.8 / 1.2; set 0 to disable |
-| BGM | `AISV_MUSIC_DIR` | Custom music directory, default `<data dir>/music`; bare filenames on the preview page resolve here |
-| SFX | `SFX_ENABLED` / `SFX_VOLUME` | Transition and intro sound effects, default on / 0.2; the files are synthesized by ffmpeg, drop `whoosh.wav` / `impact.wav` into `AISV_SFX_DIR` to replace them |
+| BGM | `SHORTDECK_MUSIC_DIR` | Custom music directory, default `<data dir>/music`; bare filenames on the preview page resolve here |
+| SFX | `SFX_ENABLED` / `SFX_VOLUME` | Transition and intro sound effects, default on / 0.2; the files are synthesized by ffmpeg, drop `whoosh.wav` / `impact.wav` into `SHORTDECK_SFX_DIR` to replace them |
 | Intro | `TITLE_DURATION` | Intro length in seconds (0 = no intro, default 1.6); rendered with the Remotion template (needs `remotion/` dependencies), falls back to the subtitle title on failure. See the Subtitle row |
 | Outro | `OUTRO_DURATION` / `OUTRO_TITLE` / `OUTRO_HANDLE` | Outro card length in seconds (0 = no outro), title copy, account name (hidden when empty) |
 | Chapters | `CHAPTER_DURATION` | Chapter card length in seconds (0 = skip, default 2), inserted from paragraph 2 on, up to 6 cards |
@@ -41,7 +41,7 @@ Field reference (environment variables take precedence over the file, which is h
 
 ## Per-task overrides
 
-These are global defaults. The **Final Preview** page also lets you override subtitle size, BGM on/off, BGM volume, and custom music per task: the size field shows the concrete px value computed for the current resolution (never 0), and mp3/wav/m4a/aac/ogg/flac files are accepted (absolute path, or a filename inside `AISV_MUSIC_DIR`). If the file is missing, the app falls back to generated music and logs a warning. Changing the subtitle size additionally re-renders the segments with burned-in subtitles.
+These are global defaults. The **Final Preview** page also lets you override subtitle size, BGM on/off, BGM volume, and custom music per task: the size field shows the concrete px value computed for the current resolution (never 0), and mp3/wav/m4a/aac/ogg/flac files are accepted (absolute path, or a filename inside `SHORTDECK_MUSIC_DIR`). If the file is missing, the app falls back to generated music and logs a warning. Changing the subtitle size additionally re-renders the segments with burned-in subtitles.
 
 The voice list lives in `server/src/voices.ts` (5 Edge / 10 CosyVoice / 10 Doubao) and is selected per role in the UI — nothing to add to the config file.
 
@@ -51,21 +51,21 @@ Usually unnecessary; useful for troubleshooting or custom deployments:
 
 | Variable | Purpose |
 | --- | --- |
-| `AISV_CONFIG_FILE` | Path to `config.json` |
-| `AISV_DATA_DIR` | Data directory (workspaces / cache / output) |
-| `AISV_OUT_DIR` | Final video output directory |
-| `AISV_ASSETS_DIR` | Static assets such as prompts |
-| `AISV_USER_PROMPTS_DIR` | Prompt override directory, defaults to `<data dir>/prompts` |
-| `AISV_BIN_DIR` | Directory of the bundled ffmpeg / ffprobe |
-| `AISV_MUSIC_DIR` | Custom music directory, default `<data dir>/music` |
-| `AISV_SFX_DIR` | Custom SFX directory (`whoosh.wav` / `impact.wav`), default is the synthesized set |
-| `AISV_REMOTION_DIR` | Point at the `remotion/` project, used by packaged builds |
+| `SHORTDECK_CONFIG_FILE` | Path to `config.json` |
+| `SHORTDECK_DATA_DIR` | Data directory (workspaces / cache / output) |
+| `SHORTDECK_OUT_DIR` | Final video output directory |
+| `SHORTDECK_ASSETS_DIR` | Static assets such as prompts |
+| `SHORTDECK_USER_PROMPTS_DIR` | Prompt override directory, defaults to `<data dir>/prompts` |
+| `SHORTDECK_BIN_DIR` | Directory of the bundled ffmpeg / ffprobe |
+| `SHORTDECK_MUSIC_DIR` | Custom music directory, default `<data dir>/music` |
+| `SHORTDECK_SFX_DIR` | Custom SFX directory (`whoosh.wav` / `impact.wav`), default is the synthesized set |
+| `SHORTDECK_REMOTION_DIR` | Point at the `remotion/` project, used by packaged builds |
 | `PORT` / `HOST` | Backend listen address, defaults `4000` / `127.0.0.1` |
-| `AISV_OPEN_SETTINGS=1` | Open the settings page on startup |
-| `AISV_OPEN_DEVTOOLS=1` | Auto-open DevTools in dev mode |
-| `AISV_LOG_LEVEL` | Backend log level, default `info` |
-| `AISV_CACHE_MAX_MB` | Footage cache limit in MB, default 2048; least recently used files are evicted |
-| `AISV_SCRIPT_REVIEW=0` | Disable script review and revision (on by default, one extra model call per task) |
-| `AISV_SCRIPT_REVIEW_THRESHOLD` | Review pass score, 0~1, default 0.82 |
+| `SHORTDECK_OPEN_SETTINGS=1` | Open the settings page on startup |
+| `SHORTDECK_OPEN_DEVTOOLS=1` | Auto-open DevTools in dev mode |
+| `SHORTDECK_LOG_LEVEL` | Backend log level, default `info` |
+| `SHORTDECK_CACHE_MAX_MB` | Footage cache limit in MB, default 2048; least recently used files are evicted |
+| `SHORTDECK_SCRIPT_REVIEW=0` | Disable script review and revision (on by default, one extra model call per task) |
+| `SHORTDECK_SCRIPT_REVIEW_THRESHOLD` | Review pass score, 0~1, default 0.82 |
 
 How the prompt override layer works is covered in [prompts_EN.md](prompts_EN.md).

@@ -1,33 +1,40 @@
 English | [简体中文](README.md)
 
-<h1 align="center">AI Short Video Engine</h1>
+<h1 align="center">ShortDeck</h1>
 
-<p align="center"><b>Drop in a link, get a vertical short video ready to post.</b></p>
+<p align="center"><b>Link in, reel out. A vertical short video, ready to post.</b></p>
 
 <p align="center">Fetch article → AI script → per-line dubbing → footage matching → title cards → subtitled final cut<br />Fully automatic, pausing only at the moments that matter</p>
 
+<p align="center">1080×1920 out of the box · free TTS by default · human checkpoints on script and footage · subtitle-only re-render</p>
+
+> **For you if**: you turn articles or long-form posts into talk-to-camera shorts, and you are tired of re-running the whole pipeline after a bad "one-click" result.  
+> **Not for you if**: you need real actors or heavy editing, or you do not want to configure one OpenAI-compatible LLM key.
+
 <p align="center">
-  <a href="https://github.com/chenwr727/AI-Short-Video-Engine/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/chenwr727/AI-Short-Video-Engine?color=2f6fed"></a>
-  <a href="https://github.com/chenwr727/AI-Short-Video-Engine/releases"><img alt="Downloads" src="https://img.shields.io/badge/download-Windows%20portable-2f6fed"></a>
+  <a href="https://github.com/chenwr727/ShortDeck/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/chenwr727/ShortDeck?color=2f6fed"></a>
+  <a href="https://github.com/chenwr727/ShortDeck/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/chenwr727/ShortDeck/total?label=downloads&color=2f6fed"></a>
   <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-2f6fed">
   <img alt="Stack" src="https://img.shields.io/badge/Electron%2044%20%C2%B7%20React%2019%20%C2%B7%20Fastify%205-2f6fed">
 </p>
 
-<p align="center">Portable on Windows · ffmpeg bundled · no GPU required · free TTS out of the box</p>
+<p align="center">Portable on Windows · ffmpeg bundled · no GPU required</p>
 
 <p align="center"><a href="#sample-showcase">Samples</a> · <a href="#quick-start">Quick Start</a> · <a href="#workflow">Workflow</a> · <a href="#configuration">Configuration</a> · <a href="docs/faq_EN.md">FAQ</a></p>
 
+<p align="center"><img src="docs/assets/ui.png" alt="Main UI: script step, every line editable" width="900" /></p>
+
 ## Sample Showcase
 
-One 36kr article, one script style swap, a completely different video. Samples are trimmed and compressed to show partial effects only.
+One 36kr article, one script style swap, three completely different videos. Actual engine output, trimmed and compressed only to keep the file size down.
 
 [📄 Original article](https://36kr.com/p/3286128054051718) · Podcast: two speakers, information-dense · Crosstalk: fast banter, dense punchlines · Stand-up: solo narration, host name only
 
 <table>
   <tr>
-    <td align="center"><video src="https://github.com/user-attachments/assets/a8a4175d-2ebf-47cc-9c81-8c9a7aa78ae1"></video><br /><b>Podcast</b></td>
-    <td align="center"><video src="https://github.com/user-attachments/assets/d1819bc3-c909-4ede-927c-57a10f609827"></video><br /><b>Crosstalk</b></td>
-    <td align="center"><video src="https://github.com/user-attachments/assets/896de713-e059-4834-b5ca-91a514d89d24"></video><br /><b>Stand-up</b></td>
+    <td align="center"><video controls src="https://github.com/user-attachments/assets/a8a4175d-2ebf-47cc-9c81-8c9a7aa78ae1"></video><br /><b>Podcast</b></td>
+    <td align="center"><video controls src="https://github.com/user-attachments/assets/d1819bc3-c909-4ede-927c-57a10f609827"></video><br /><b>Crosstalk</b></td>
+    <td align="center"><video controls src="https://github.com/user-attachments/assets/896de713-e059-4834-b5ca-91a514d89d24"></video><br /><b>Stand-up</b></td>
   </tr>
 </table>
 
@@ -38,13 +45,20 @@ The hard part of "one-click AI video" was never generation — it is discovering
 Everything else stays out of your way:
 
 - **Resumable**: every stage writes its artifacts to disk, so a rerun only fills in what is missing (see [Task Artifacts](docs/artifacts_EN.md)).
-- **Zero-cost TTS**: Edge online voices by default — render a video without entering a single key. Switch to CosyVoice or Doubao for richer voices.
+- **Zero-cost TTS**: Edge online voices by default — no extra TTS key required (an LLM key is still needed). Switch to CosyVoice or Doubao for richer voices.
 - **Tunable after render**: change subtitle size, BGM on/off or volume and hit **Regenerate** — only composition reruns, all audio and footage are reused.
 - **Runs out of the box**: the Windows portable build bundles ffmpeg / ffprobe — no Node, Python, or other runtime needed.
 
+| | This project | Generic "one-click" SaaS | Manual editing |
+| --- | --- | --- | --- |
+| Script / footage checkpoints | Two confirmations, rerun only what changed | Usually editable only after render | All manual |
+| TTS cost | Free Edge voices by default | Often billed per minute | Record yourself or buy voices |
+| Runtime | Portable desktop app, ffmpeg bundled | Web app + cloud queue | Install an editor locally |
+| Resume / partial re-render | Supported | Usually re-render the whole video | Manage projects by hand |
+
 ## Quick Start
 
-**1. Get the app**: download `AI Short Video-x.y.z-win-portable.zip` from [Releases](https://github.com/chenwr727/AI-Short-Video-Engine/releases), unzip it, and double-click `AI Short Video.exe`. About 200 MB, everything included. Data lives in `UserData/` next to the exe — delete that folder for a clean uninstall.
+**1. Get the app**: download `ShortDeck-x.y.z-win-portable.zip` from [Releases](https://github.com/chenwr727/ShortDeck/releases), unzip it, and double-click `ShortDeck.exe`. About 200 MB, everything included. Data lives in `UserData/` next to the exe — delete that folder for a clean uninstall.
 
 **2. Add keys**: the settings dialog opens on first launch; afterwards use `Ctrl+,`. Only two things matter:
 
@@ -97,7 +111,7 @@ Fill in the fields via **File → Settings…** (`Ctrl+,`); saving restarts the 
 | Intro / outro / layout cards | off (needs Remotion) | [Remotion Cards](docs/remotion_EN.md) |
 | Script review threshold | 0.82 | [Environment Variables](docs/configuration_EN.md#environment-variables) |
 
-The config file lives at `<next to exe>/UserData/config.json` for the portable build, or `%APPDATA%/aisv-desktop/config.json` for installed / dev runs. Prompts can be edited inside the app — see [Prompt Editor](docs/prompts_EN.md).
+The config file lives at `<next to exe>/UserData/config.json` for the portable build, or `%APPDATA%/shortdeck-desktop/config.json` for installed / dev runs. Prompts can be edited inside the app — see [Prompt Editor](docs/prompts_EN.md).
 
 ## Common Commands
 
@@ -134,4 +148,4 @@ Every page also has a Chinese version (`docs/*.md`).
 
 ## License
 
-This repository does not currently include a `LICENSE` file; please contact the author before commercial use or redistribution.
+Released under the [MIT License](LICENSE) — commercial use and redistribution are allowed. Bundled third-party components (ffmpeg, Edge TTS, Pixabay / Pexels footage) follow their own licenses.

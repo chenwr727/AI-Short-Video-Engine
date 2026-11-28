@@ -3,7 +3,7 @@
 # 打包
 
 ```bash
-pnpm dist:win     # 产物：desktop/release/AI Short Video-<version>-win-portable.zip
+pnpm dist:win     # 产物：desktop/release/ShortDeck-<version>-win-portable.zip
 ```
 
 体积约 200 MB（含 ffmpeg / ffprobe）。`compression: maximum` 会让 zip 阶段跑较久，日常迭代可临时改成 `normal`。

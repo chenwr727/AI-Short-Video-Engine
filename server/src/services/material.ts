@@ -22,7 +22,7 @@ const PIXABAY_LANG = "en";
 const PIXABAY_VIDEO_TYPE = "all";
 const PEXELS_LOCALE = "zh-CN";
 /** 素材缓存上限（MB），超出按最久未用淘汰 */
-const CACHE_MAX_MB = Number(process.env.AISV_CACHE_MAX_MB) || 2048;
+const CACHE_MAX_MB = Number(process.env.SHORTDECK_CACHE_MAX_MB) || 2048;
 
 async function getJson(url: string, headers: Record<string, string> = {}): Promise<unknown> {
   const res = await fetch(url, {

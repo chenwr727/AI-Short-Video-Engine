@@ -31,5 +31,5 @@ Worth knowing:
 - Cards always crossfade into and out of their neighbours (`fade`), while body-to-body transitions still rotate per `TRANSITION_STYLE`, so chapter cards never break the rhythm of the cut.
 - **Any failure falls back** to the plain ASS title card instead of blocking the render; the log states the reason.
 - To restyle a card, edit the matching component under `remotion/src/` (`TitleCard` / `TitleHero` / `ChapterCard` / `ChapterSplit` / `OutroCard` / `OutroMinimal` / `QuoteCard`); see [remotion/README.md](../remotion/README.md) (Chinese).
-- The desktop build **does not bundle** this directory by default (`node_modules` + Chrome Shell is several hundred MB). Use the cards packaging command instead (see [packaging_EN.md](packaging_EN.md)), or drop the whole `remotion/` folder next to the app, or point `AISV_REMOTION_DIR` at it.
+- The desktop build **does not bundle** this directory by default (`node_modules` + Chrome Shell is several hundred MB). Use the cards packaging command instead (see [packaging_EN.md](packaging_EN.md)), or drop the whole `remotion/` folder next to the app, or point `SHORTDECK_REMOTION_DIR` at it.
 - A single render takes about 5–8 seconds (1080×1920, 1.6s intro); retries reuse an already rendered card.

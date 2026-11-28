@@ -31,5 +31,5 @@ npm run studio   # 打开 Studio 实时调标题、配色与节奏
 - 卡片与前后片段之间固定走 `fade`，正片之间的转场仍按 `TRANSITION_STYLE` 轮换，观感不会被章节卡打断。
 - **任一步失败都会回退**到原来的 ASS 大字标题，不会中断出片；日志里会写明原因。
 - 想改样式直接编辑 `remotion/src/` 下对应的组件（`TitleCard` / `TitleHero` / `ChapterCard` / `ChapterSplit` / `OutroCard` / `OutroMinimal` / `QuoteCard`），详见 [remotion/README.md](../remotion/README.md)。
-- 桌面版**默认不打包**这个目录（`node_modules` + Chrome Shell 约几百 MB）。要用的话改用带卡片的打包命令（见 [packaging.md](packaging.md)），或把整个 `remotion/` 放到应用根目录、或设置 `AISV_REMOTION_DIR` 指向它。
+- 桌面版**默认不打包**这个目录（`node_modules` + Chrome Shell 约几百 MB）。要用的话改用带卡片的打包命令（见 [packaging.md](packaging.md)），或把整个 `remotion/` 放到应用根目录、或设置 `SHORTDECK_REMOTION_DIR` 指向它。
 - 单次渲染约 5~8 秒（1080×1920，1.6 秒片头）；同一任务重试会复用已渲染的 `intro.mp4`。

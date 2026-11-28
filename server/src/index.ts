@@ -16,10 +16,10 @@ import { taskManager } from "./task/manager.js";
 
 const PORT = Number(process.env.PORT ?? 4000);
 const HOST = process.env.HOST ?? "127.0.0.1";
-const VERSION = process.env.AISV_VERSION ?? "0.1.0";
+const VERSION = process.env.SHORTDECK_VERSION ?? "0.2.0";
 
 function webDist(): string {
-  return process.env.AISV_WEB_DIR ?? path.resolve(process.cwd(), "..", "web", "dist");
+  return process.env.SHORTDECK_WEB_DIR ?? path.resolve(process.cwd(), "..", "web", "dist");
 }
 
 export function healthPayload() {
@@ -51,7 +51,7 @@ export function healthPayload() {
 }
 
 async function build() {
-  const app = Fastify({ logger: { level: process.env.AISV_LOG_LEVEL ?? "info" } });
+  const app = Fastify({ logger: { level: process.env.SHORTDECK_LOG_LEVEL ?? "info" } });
 
   await app.register(cors, { origin: true });
 

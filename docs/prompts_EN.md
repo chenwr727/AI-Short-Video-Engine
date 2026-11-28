@@ -29,4 +29,4 @@ Worth knowing:
 - Only the files and keys listed above are accepted; the API rejects arbitrary filenames so nothing can be written elsewhere.
 - In dev you can also open `/prompts.html` on the frontend origin directly.
 
-The override directory can be moved with `AISV_USER_PROMPTS_DIR`; see [configuration_EN.md](configuration_EN.md#environment-variables).
+The override directory can be moved with `SHORTDECK_USER_PROMPTS_DIR`; see [configuration_EN.md](configuration_EN.md#environment-variables).

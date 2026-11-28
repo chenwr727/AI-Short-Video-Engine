@@ -7,7 +7,7 @@
 | 运行方式 | 路径 |
 | --- | --- |
 | 免安装版 | `<exe 同级>/UserData/config.json` |
-| 安装版 / 开发态 | `%APPDATA%/aisv-desktop/config.json` |
+| 安装版 / 开发态 | `%APPDATA%/shortdeck-desktop/config.json` |
 
 字段说明（环境变量优先级高于文件，便于临时覆盖）：
 
@@ -32,8 +32,8 @@
 | BGM | `BGM_ENABLED` | 是否混入背景音乐，默认 1；填 0 只保留配音 |
 | BGM | `BGM_VOLUME` | BGM 音量，默认 0.1（1 = 原音量） |
 | BGM | `AUDIO_FADE_IN` / `AUDIO_FADE_OUT` | BGM 淡入/淡出秒数，默认 0.8 / 1.2；设为 0 关闭 |
-| BGM | `AISV_MUSIC_DIR` | 自定义音乐目录，默认 `<数据目录>/music`；成片页只填文件名时按它解析 |
-| 音效 | `SFX_ENABLED` / `SFX_VOLUME` | 转场与片头音效，默认开 / 0.2；音效由 ffmpeg 程序合成，可用 `AISV_SFX_DIR` 放 `whoosh.wav` / `impact.wav` 替换 |
+| BGM | `SHORTDECK_MUSIC_DIR` | 自定义音乐目录，默认 `<数据目录>/music`；成片页只填文件名时按它解析 |
+| 音效 | `SFX_ENABLED` / `SFX_VOLUME` | 转场与片头音效，默认开 / 0.2；音效由 ffmpeg 程序合成，可用 `SHORTDECK_SFX_DIR` 放 `whoosh.wav` / `impact.wav` 替换 |
 | 片头 | `TITLE_DURATION` | 片头秒数（0 = 不出，默认 1.6）；用 Remotion 模板渲染，需先安装 `remotion/` 依赖，失败自动回退到字幕标题。见「字幕」行 |
 | 片尾 | `OUTRO_DURATION` / `OUTRO_TITLE` / `OUTRO_HANDLE` | 片尾卡片秒数（0 = 不加）、标题文案、账号名（留空不显示） |
 | 过场 | `CHAPTER_DURATION` | 过场卡秒数（0 = 不出，默认 2），从第 2 段起最多 6 张 |
@@ -41,7 +41,7 @@
 
 ## 成片页可按任务覆盖
 
-以上是全局默认值。**成片预览** 页还能按任务单独改字幕字号、是否插入 BGM、BGM 音量与自定义音乐：字号框里显示的是按当前分辨率算好的具体 px（不显示 0），支持 mp3/wav/m4a/aac/ogg/flac（绝对路径，或 `AISV_MUSIC_DIR` 目录下的文件名），文件找不到时自动退回程序合成并在日志里提示。改字号会额外重渲染烧了字幕的分段片段。
+以上是全局默认值。**成片预览** 页还能按任务单独改字幕字号、是否插入 BGM、BGM 音量与自定义音乐：字号框里显示的是按当前分辨率算好的具体 px（不显示 0），支持 mp3/wav/m4a/aac/ogg/flac（绝对路径，或 `SHORTDECK_MUSIC_DIR` 目录下的文件名），文件找不到时自动退回程序合成并在日志里提示。改字号会额外重渲染烧了字幕的分段片段。
 
 音色表内置在 `server/src/voices.ts`（Edge 5 个 / CosyVoice 10 个 / 豆包 10 个），界面上按角色选择，不需要写进配置。
 
@@ -51,21 +51,21 @@
 
 | 变量 | 作用 |
 | --- | --- |
-| `AISV_CONFIG_FILE` | 指定 `config.json` 路径 |
-| `AISV_DATA_DIR` | 数据目录（工作区 / 缓存 / 成片） |
-| `AISV_OUT_DIR` | 成片输出目录 |
-| `AISV_ASSETS_DIR` | prompts 等静态资源目录 |
-| `AISV_USER_PROMPTS_DIR` | 提示词覆盖层目录，默认 `<数据目录>/prompts` |
-| `AISV_BIN_DIR` | 随包 ffmpeg / ffprobe 所在目录 |
-| `AISV_MUSIC_DIR` | 自定义音乐目录，默认 `<数据目录>/music` |
-| `AISV_SFX_DIR` | 自定义音效目录（放 `whoosh.wav` / `impact.wav`），默认用程序合成的音效 |
-| `AISV_REMOTION_DIR` | 指定 `remotion/` 子工程位置，打包态用 |
+| `SHORTDECK_CONFIG_FILE` | 指定 `config.json` 路径 |
+| `SHORTDECK_DATA_DIR` | 数据目录（工作区 / 缓存 / 成片） |
+| `SHORTDECK_OUT_DIR` | 成片输出目录 |
+| `SHORTDECK_ASSETS_DIR` | prompts 等静态资源目录 |
+| `SHORTDECK_USER_PROMPTS_DIR` | 提示词覆盖层目录，默认 `<数据目录>/prompts` |
+| `SHORTDECK_BIN_DIR` | 随包 ffmpeg / ffprobe 所在目录 |
+| `SHORTDECK_MUSIC_DIR` | 自定义音乐目录，默认 `<数据目录>/music` |
+| `SHORTDECK_SFX_DIR` | 自定义音效目录（放 `whoosh.wav` / `impact.wav`），默认用程序合成的音效 |
+| `SHORTDECK_REMOTION_DIR` | 指定 `remotion/` 子工程位置，打包态用 |
 | `PORT` / `HOST` | 后端监听地址，默认 `4000` / `127.0.0.1` |
-| `AISV_OPEN_SETTINGS=1` | 启动即打开设置页 |
-| `AISV_OPEN_DEVTOOLS=1` | 开发态自动打开 DevTools |
-| `AISV_LOG_LEVEL` | 后端日志级别，默认 `info` |
-| `AISV_CACHE_MAX_MB` | 素材缓存上限（MB），默认 2048，超出按最久未用淘汰 |
-| `AISV_SCRIPT_REVIEW=0` | 关闭剧本审稿与返修（默认开启，每条多一次模型调用） |
-| `AISV_SCRIPT_REVIEW_THRESHOLD` | 审稿通过分，0~1，默认 0.82 |
+| `SHORTDECK_OPEN_SETTINGS=1` | 启动即打开设置页 |
+| `SHORTDECK_OPEN_DEVTOOLS=1` | 开发态自动打开 DevTools |
+| `SHORTDECK_LOG_LEVEL` | 后端日志级别，默认 `info` |
+| `SHORTDECK_CACHE_MAX_MB` | 素材缓存上限（MB），默认 2048，超出按最久未用淘汰 |
+| `SHORTDECK_SCRIPT_REVIEW=0` | 关闭剧本审稿与返修（默认开启，每条多一次模型调用） |
+| `SHORTDECK_SCRIPT_REVIEW_THRESHOLD` | 审稿通过分，0~1，默认 0.82 |
 
 提示词覆盖层机制见 [prompts.md](prompts.md)。

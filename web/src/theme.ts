@@ -13,7 +13,7 @@ export type ThemePreference = "light" | "dark" | "system";
 
 export type Theme = "light" | "dark";
 
-const STORAGE_KEY = "aisv.theme";
+const STORAGE_KEY = "shortdeck.theme";
 
 const DARK_QUERY = "(prefers-color-scheme: dark)";
 

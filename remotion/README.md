@@ -69,6 +69,6 @@ node render.mjs @props.json
 ## 注意
 
 - 所有 `@remotion/*` 包必须**版本完全一致**，升级时四个包一起改。
-- 桌面版普通包不带本目录。要么用 `pnpm dist:win:remotion` 打带卡片的包（约 400 MB，自带 Chrome Headless Shell），要么用 `pnpm dist:win:remotion-slim`（约 300 MB，借用系统 Edge / Chrome），也可以把整个 `remotion/` 放到应用根目录、或设置 `AISV_REMOTION_DIR` 指向它。
+- 桌面版普通包不带本目录。要么用 `pnpm dist:win:remotion` 打带卡片的包（约 400 MB，自带 Chrome Headless Shell），要么用 `pnpm dist:win:remotion-slim`（约 300 MB，借用系统 Edge / Chrome），也可以把整个 `remotion/` 放到应用根目录、或设置 `SHORTDECK_REMOTION_DIR` 指向它。
 - 想指定浏览器：`REMOTION_BROWSER="C:\路径\chrome.exe"`（没设且目录里没有 Chrome Shell 时，会自动在系统里找 Edge / Chrome）。
 - 动画必须由 `useCurrentFrame()` 驱动，不能用 CSS transition、`Date.now()` 或无种子随机数，否则并发渲染会出现帧错乱。

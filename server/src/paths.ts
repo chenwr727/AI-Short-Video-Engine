@@ -1,13 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
 
-/** 打包态由主进程传 AISV_DATA_DIR，开发态为仓库 data/ */
+/** 打包态由主进程传 SHORTDECK_DATA_DIR，开发态为仓库 data/ */
 export function dataDir(): string {
-  return process.env.AISV_DATA_DIR ?? path.join(process.cwd(), "data");
+  return process.env.SHORTDECK_DATA_DIR ?? path.join(process.cwd(), "data");
 }
 
 export function outDir(): string {
-  return process.env.AISV_OUT_DIR ?? path.join(dataDir(), "out");
+  return process.env.SHORTDECK_OUT_DIR ?? path.join(dataDir(), "out");
 }
 
 export function workspacesDir(): string {
@@ -20,7 +20,7 @@ export function cacheDir(): string {
 }
 
 export function assetsDir(): string {
-  return process.env.AISV_ASSETS_DIR ?? path.join(process.cwd(), "assets");
+  return process.env.SHORTDECK_ASSETS_DIR ?? path.join(process.cwd(), "assets");
 }
 
 /** 随包内置的提示词，打包后在 resources 里，用户改不到 */
@@ -30,17 +30,17 @@ export function promptsDir(): string {
 
 /** 用户覆盖层：同名的写在 data/prompts 下，优先于内置 */
 export function userPromptsDir(): string {
-  return process.env.AISV_USER_PROMPTS_DIR ?? path.join(dataDir(), "prompts");
+  return process.env.SHORTDECK_USER_PROMPTS_DIR ?? path.join(dataDir(), "prompts");
 }
 
 /** 自定义 BGM 目录 */
 export function musicDir(): string {
-  return process.env.AISV_MUSIC_DIR ?? path.join(dataDir(), "music");
+  return process.env.SHORTDECK_MUSIC_DIR ?? path.join(dataDir(), "music");
 }
 
 /** 随包携带的 ffmpeg 目录 */
 export function binDir(): string | null {
-  const dir = process.env.AISV_BIN_DIR;
+  const dir = process.env.SHORTDECK_BIN_DIR;
   return dir && fs.existsSync(dir) ? dir : null;
 }
 

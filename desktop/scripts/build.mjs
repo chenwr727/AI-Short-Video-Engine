@@ -20,8 +20,8 @@ const desktop = path.resolve(here, "..");
 const isWin = process.platform === "win32";
 
 /** 带 Remotion 卡片（片头 / 过场 / 版式）的包体积会多 ~460 MB；--slim 时改用系统浏览器，只多 ~160 MB */
-const withRemotion = process.argv.includes("--with-remotion") || process.env.AISV_WITH_REMOTION === "1";
-const slimRemotion = process.argv.includes("--slim") || process.env.AISV_REMOTION_SLIM === "1";
+const withRemotion = process.argv.includes("--with-remotion") || process.env.SHORTDECK_WITH_REMOTION === "1";
+const slimRemotion = process.argv.includes("--slim") || process.env.SHORTDECK_REMOTION_SLIM === "1";
 
 /** 直接用 node 跑 tsc，避免 Windows 下的 .cmd */
 const tscCli = path.join(desktop, "node_modules", "typescript", "bin", "tsc");

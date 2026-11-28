@@ -1,6 +1,6 @@
 {
-  "name": "aisv-remotion",
-  "version": "0.1.0",
+  "name": "shortdeck-remotion",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {

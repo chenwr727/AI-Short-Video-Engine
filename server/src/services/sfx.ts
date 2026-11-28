@@ -5,9 +5,9 @@ import { runFfmpeg } from "./ffmpeg.js";
 
 export type SfxKind = "whoosh" | "impact";
 
-/** AISV_SFX_DIR 下放同名 wav 即可替换成自己的音效 */
+/** SHORTDECK_SFX_DIR 下放同名 wav 即可替换成自己的音效 */
 function customFile(kind: SfxKind): string | null {
-  const dir = process.env.AISV_SFX_DIR;
+  const dir = process.env.SHORTDECK_SFX_DIR;
   if (!dir) return null;
   const file = path.join(dir, `${kind}.wav`);
   return fs.existsSync(file) && fs.statSync(file).size > 0 ? file : null;

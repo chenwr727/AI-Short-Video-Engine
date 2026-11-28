@@ -6,7 +6,7 @@ export const app = {
   composeTitle: "Compositing",
   connecting: "Connecting to backend…",
   dismiss: "Dismiss",
-  name: "AI Short Video Studio",
+  name: "ShortDeck",
   noContent: "Nothing to work with yet. Go back and paste a link or some text.",
   noLlmKey: "No LLM API key yet. Add it in Settings → Preferences (Ctrl+,) and it applies immediately.",
   restartRunningBody: "Starting a new one aborts the running task and throws away what's been generated so far.",

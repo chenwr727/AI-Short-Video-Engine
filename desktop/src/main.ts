@@ -209,7 +209,7 @@ function createMainWindow(url: string): BrowserWindow {
   });
   win.once("ready-to-show", () => {
     win.show();
-    if (DEV && process.env.AISV_OPEN_DEVTOOLS === "1") win.webContents.openDevTools({ mode: "detach" });
+    if (DEV && process.env.SHORTDECK_OPEN_DEVTOOLS === "1") win.webContents.openDevTools({ mode: "detach" });
   });
   win.on("closed", () => {
     mainWindow = null;
@@ -242,7 +242,7 @@ async function openDir(dir: string): Promise<void> {
   if (err) dialog.showErrorBox("打开失败", err);
 }
 
-const REPO_URL = "https://github.com/chenwr727/AI-Short-Video-Engine";
+const REPO_URL = "https://github.com/chenwr727/ShortDeck";
 const DOCS_URL = `${REPO_URL}#工作流`;
 const FEEDBACK_URL = `${REPO_URL}/issues`;
 
@@ -629,7 +629,7 @@ async function bootstrap(): Promise<void> {
   const h = await health();
   // 未填 LLM Key 视为首次打开，直接弹配置页
   const needSetup = Boolean(h && !h.config.llm.configured);
-  if (needSetup || process.env.AISV_OPEN_SETTINGS === "1") {
+  if (needSetup || process.env.SHORTDECK_OPEN_SETTINGS === "1") {
     await waitForMainShown();
     createSettingsWindow();
   }
@@ -674,7 +674,7 @@ if (!gotLock) {
   });
 
   app.whenReady().then(async () => {
-    if (process.platform === "win32") app.setAppUserModelId("com.aisv.app");
+    if (process.platform === "win32") app.setAppUserModelId("com.shortdeck.app");
     registerSettingsIpc();
     registerAppIpc();
     buildMenu();

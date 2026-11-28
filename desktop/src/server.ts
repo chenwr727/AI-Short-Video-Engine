@@ -44,22 +44,22 @@ function buildEnv(port: number): NodeJS.ProcessEnv {
     ...process.env,
     PORT: String(port),
     HOST: "127.0.0.1",
-    AISV_DATA_DIR: dataDir,
-    AISV_OUT_DIR: path.join(dataDir, "out"),
+    SHORTDECK_DATA_DIR: dataDir,
+    SHORTDECK_OUT_DIR: path.join(dataDir, "out"),
     // 静态资源随服务器目录
-    AISV_ASSETS_DIR: path.join(serverDir(), "assets"),
-    AISV_CONFIG_FILE: configFile(),
-    AISV_VERSION: app.getVersion(),
+    SHORTDECK_ASSETS_DIR: path.join(serverDir(), "assets"),
+    SHORTDECK_CONFIG_FILE: configFile(),
+    SHORTDECK_VERSION: app.getVersion(),
     ELECTRON_RUN_AS_NODE: "1",
   };
 
   // 配置只从 config.json 现读，不冻进环境变量
   const dist = webDistDir();
-  if (fs.existsSync(path.join(dist, "index.html"))) env.AISV_WEB_DIR = dist;
+  if (fs.existsSync(path.join(dist, "index.html"))) env.SHORTDECK_WEB_DIR = dist;
 
   const bin = binDir();
   if (fs.existsSync(bin)) {
-    env.AISV_BIN_DIR = bin;
+    env.SHORTDECK_BIN_DIR = bin;
     env.PATH = `${bin}${path.delimiter}${env.PATH ?? ""}`;
   }
 

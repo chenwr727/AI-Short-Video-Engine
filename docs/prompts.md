@@ -29,4 +29,4 @@
 - 只开放上表这些文件与键，接口不接受任意文件名，避免写到别处。
 - 开发态也可以直接访问前端地址下的 `/prompts.html`。
 
-覆盖层目录可用 `AISV_USER_PROMPTS_DIR` 改到别处，见 [configuration.md](configuration.md#环境变量)。
+覆盖层目录可用 `SHORTDECK_USER_PROMPTS_DIR` 改到别处，见 [configuration.md](configuration.md#环境变量)。

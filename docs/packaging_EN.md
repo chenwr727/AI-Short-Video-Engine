@@ -3,7 +3,7 @@ English | [简体中文](packaging.md)
 # Packaging
 
 ```bash
-pnpm dist:win     # output: desktop/release/AI Short Video-<version>-win-portable.zip
+pnpm dist:win     # output: desktop/release/ShortDeck-<version>-win-portable.zip
 ```
 
 The archive is about 200 MB (ffmpeg/ffprobe included). `compression: maximum` makes the zip step slow, so switch to `normal` for day-to-day iteration.

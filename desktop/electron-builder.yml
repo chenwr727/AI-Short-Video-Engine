@@ -1,6 +1,6 @@
-appId: com.aisv.app
-productName: AI Short Video
-copyright: Copyright © AI Short Video Engine contributors
+appId: com.shortdeck.app
+productName: ShortDeck
+copyright: Copyright © 2026 chenwr
 
 directories:
   output: release

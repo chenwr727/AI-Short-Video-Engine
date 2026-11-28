@@ -338,8 +338,10 @@ export default function App() {
     setForm((prev) => ({
       content: prev.content || task.input,
       promptSource: promptSource || prev.promptSource,
-      speakerMain: validSpeaker(speakers.main) || validSpeaker(prev.speakerMain) || metaRef.current?.speakers.main || "",
-      speakerGuest: validSpeaker(speakers.guest) || validSpeaker(prev.speakerGuest) || metaRef.current?.speakers.guest || "",
+      speakerMain:
+        validSpeaker(speakers.main) || validSpeaker(prev.speakerMain) || metaRef.current?.speakers.main || "",
+      speakerGuest:
+        validSpeaker(speakers.guest) || validSpeaker(prev.speakerGuest) || metaRef.current?.speakers.guest || "",
     }));
   }, [task?.id]);
 
@@ -838,12 +840,7 @@ export default function App() {
             {task && <span className={`pill ${STATUS_TONE[task.status]}`}>{t(STATUS_TEXT[task.status])}</span>}
             {/* 浏览器态常驻新建入口；恢复条已有按钮时不重复 */}
             {!bridge() && task && !(resumed && task.id === resumed.id) && (
-              <button
-                className="secondary"
-                type="button"
-                onClick={() => void onRestart()}
-                disabled={pageLocked}
-              >
+              <button className="secondary" type="button" onClick={() => void onRestart()} disabled={pageLocked}>
                 {t("menu.newTask")}
               </button>
             )}

@@ -1,8 +1,8 @@
 {
-  "name": "ai-short-video-desktop",
-  "version": "0.1.0",
+  "name": "shortdeck-desktop",
+  "version": "0.2.0",
   "private": true,
-  "description": "AI Short Video Engine 桌面版（Electron + Fastify + React）",
+  "description": "ShortDeck 桌面版（Electron + Fastify + React）",
   "packageManager": "pnpm@12.8.1",
   "scripts": {
     "prepare": "node scripts/setup-hooks.mjs",

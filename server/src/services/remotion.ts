@@ -5,10 +5,10 @@ import path from "node:path";
 import { dataDir } from "../paths.js";
 import { runFfmpeg } from "./ffmpeg.js";
 
-/** 找 remotion 子工程：开发态在仓库根，打包态可被 AISV_REMOTION_DIR 覆盖 */
+/** 找 remotion 子工程：开发态在仓库根，打包态可被 SHORTDECK_REMOTION_DIR 覆盖 */
 export function remotionDir(): string | null {
   const candidates = [
-    process.env.AISV_REMOTION_DIR,
+    process.env.SHORTDECK_REMOTION_DIR,
     path.join(process.cwd(), "..", "remotion"),
     path.join(process.cwd(), "remotion"),
     path.join(process.cwd(), "..", "..", "remotion"),
@@ -113,7 +113,7 @@ function resolveBrowserExecutable(): string | undefined {
  * 顺序：显式配置 > 当前 tmpdir（可写就直接用）> 数据目录下的 .tmp-render。
  */
 function resolveTempDir(): string | undefined {
-  const explicit = process.env.AISV_RENDER_TMP?.trim();
+  const explicit = process.env.SHORTDECK_RENDER_TMP?.trim();
   const candidates = [explicit, os.tmpdir(), path.join(dataDir(), ".tmp-render")].filter((dir): dir is string =>
     Boolean(dir),
   );

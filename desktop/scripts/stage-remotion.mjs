@@ -15,7 +15,7 @@ const dest = path.join(destRoot, "remotion");
 const KEEP_FILES = ["render.mjs", "package.json"];
 
 /** 瘦身模式：不带 Chrome Headless Shell（303 MB），改用系统 Edge / Chrome 渲染 */
-const slim = process.argv.includes("--slim") || process.env.AISV_REMOTION_SLIM === "1";
+const slim = process.argv.includes("--slim") || process.env.SHORTDECK_REMOTION_SLIM === "1";
 
 /** 只在运行时打包 / 开发期用得上，打进去纯占体积 */
 const EXCLUDE_MODULES = new Set([

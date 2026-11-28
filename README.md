@@ -1,33 +1,40 @@
 简体中文 | [English](README_EN.md)
 
-<h1 align="center">AI Short Video Engine</h1>
+<h1 align="center">ShortDeck</h1>
 
-<p align="center"><b>丢一个链接进去，拿到一条能直接发的竖屏短视频。</b></p>
+<p align="center"><b>链接进，成片出：一条能直接发的竖屏短视频。</b></p>
 
 <p align="center">抓正文 → AI 写稿 → 分句配音 → 匹配素材 → 版式卡 → 烧字幕成片<br />全流程自动，只在关键节点停下等你点头</p>
 
+<p align="center">1080×1920 直出 · 配音默认 ¥0 · 剧本与素材两处人工确认 · 改字幕只重跑合成</p>
+
+> **适合谁**：要把文章、长文转成口播短视频的创作者和运营；受够了「一键生成」后整条重跑的人。  
+> **不适合谁**：要真人出镜或复杂剪辑的人；不愿配置一个 OpenAI 兼容大模型 Key 的人。
+
 <p align="center">
-  <a href="https://github.com/chenwr727/AI-Short-Video-Engine/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/chenwr727/AI-Short-Video-Engine?color=2f6fed"></a>
-  <a href="https://github.com/chenwr727/AI-Short-Video-Engine/releases"><img alt="Downloads" src="https://img.shields.io/badge/download-Windows%20portable-2f6fed"></a>
+  <a href="https://github.com/chenwr727/ShortDeck/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/chenwr727/ShortDeck?color=2f6fed"></a>
+  <a href="https://github.com/chenwr727/ShortDeck/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/chenwr727/ShortDeck/total?label=downloads&color=2f6fed"></a>
   <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-2f6fed">
   <img alt="Stack" src="https://img.shields.io/badge/Electron%2044%20%C2%B7%20React%2019%20%C2%B7%20Fastify%205-2f6fed">
 </p>
 
-<p align="center">Windows 免安装 · 自带 ffmpeg · 无需独立显卡 · 默认配音零成本</p>
+<p align="center">Windows 免安装 · 自带 ffmpeg · 无需独立显卡</p>
 
 <p align="center"><a href="#效果示例">效果示例</a> · <a href="#快速开始">快速开始</a> · <a href="#工作流">工作流</a> · <a href="#配置">配置</a> · <a href="docs/faq.md">常见问题</a></p>
 
+<p align="center"><img src="docs/assets/ui.png" alt="主界面：剧本生成，每句台词可直接修改" width="900" /></p>
+
 ## 效果示例
 
-同一篇 36kr 文章，换一种脚本风格就是完全不同的一条片子。示例经过剪辑压缩，仅展示部分效果。
+同一篇 36kr 文章，只换脚本风格就出来三条完全不同的片子。以下为引擎实际输出片段（仅做截取压缩以控制体积）。
 
 [📄 示例原文](https://36kr.com/p/3286128054051718) · 播客：两人对谈，信息密度高 · 相声：捧逗互动，包袱密集 · 脱口秀：单人吐槽，只需填主讲角色名
 
 <table>
   <tr>
-    <td align="center"><video src="https://github.com/user-attachments/assets/a8a4175d-2ebf-47cc-9c81-8c9a7aa78ae1"></video><br /><b>播客</b></td>
-    <td align="center"><video src="https://github.com/user-attachments/assets/d1819bc3-c909-4ede-927c-57a10f609827"></video><br /><b>相声</b></td>
-    <td align="center"><video src="https://github.com/user-attachments/assets/896de713-e059-4834-b5ca-91a514d89d24"></video><br /><b>脱口秀</b></td>
+    <td align="center"><video controls src="https://github.com/user-attachments/assets/a8a4175d-2ebf-47cc-9c81-8c9a7aa78ae1"></video><br /><b>播客</b></td>
+    <td align="center"><video controls src="https://github.com/user-attachments/assets/d1819bc3-c909-4ede-927c-57a10f609827"></video><br /><b>相声</b></td>
+    <td align="center"><video controls src="https://github.com/user-attachments/assets/896de713-e059-4834-b5ca-91a514d89d24"></video><br /><b>脱口秀</b></td>
   </tr>
 </table>
 
@@ -38,13 +45,20 @@
 其余环节尽量不让你操心：
 
 - **断点续跑**：每个阶段的产物都落盘，中断后重跑只补缺失部分（见[任务产物](docs/artifacts.md)）。
-- **配音零成本**：默认 Edge 在线语音，不填 Key 就能出片；需要更好音色再切 CosyVoice 或豆包。
+- **配音零成本**：默认 Edge 在线语音，配音不需要额外填 Key（大模型 Key 仍需配置）；需要更好音色再切 CosyVoice 或豆包。
 - **成片可重调**：字幕字号、BGM 开关与音量改完点「重新生成」，只重跑合成，配音与素材全部复用。
 - **开箱即用**：免安装包内置 ffmpeg / ffprobe，不需要 Node、Python 或任何运行时。
 
+| | 本项目 | 通用「一键成片」SaaS | 剪辑软件手动做 |
+| --- | --- | --- | --- |
+| 剧本 / 素材卡点 | 两处确认，改完只补跑 | 通常生成完才能改 | 全程人工 |
+| 配音成本 | 默认 Edge 免费 | 多为按分钟计费 | 自录或另购 |
+| 运行环境 | 桌面免安装，ffmpeg 内置 | 网页 + 云端队列 | 本机装剪辑软件 |
+| 断点续跑 / 局部重合成 | 支持 | 通常整条重来 | 自己管理工程 |
+
 ## 快速开始
 
-**1. 拿到程序**：从 [Releases](https://github.com/chenwr727/AI-Short-Video-Engine/releases) 下载 `AI Short Video-x.y.z-win-portable.zip`，解压后双击 `AI Short Video.exe`。约 200 MB，全部自带。数据都落在 exe 同级的 `UserData/`，删目录即彻底卸载。
+**1. 拿到程序**：从 [Releases](https://github.com/chenwr727/ShortDeck/releases) 下载 `ShortDeck-x.y.z-win-portable.zip`，解压后双击 `ShortDeck.exe`。约 200 MB，全部自带。数据都落在 exe 同级的 `UserData/`，删目录即彻底卸载。
 
 **2. 填 Key**：首次启动会自动弹出设置页，之后用 `Ctrl+,` 打开。真正必填的只有两样：
 
@@ -97,7 +111,7 @@ flowchart LR
 | 片头 / 片尾 / 版式卡 | 关（需 Remotion） | [Remotion 卡片](docs/remotion.md) |
 | 剧本审稿阈值 | 0.82 | [环境变量](docs/configuration.md#环境变量) |
 
-配置文件位于免安装版的 `<exe 同级>/UserData/config.json` 或安装版 / 开发态的 `%APPDATA%/aisv-desktop/config.json`。提示词可以直接在应用里改，见[提示词编辑器](docs/prompts.md)。
+配置文件位于免安装版的 `<exe 同级>/UserData/config.json` 或安装版 / 开发态的 `%APPDATA%/shortdeck-desktop/config.json`。提示词可以直接在应用里改，见[提示词编辑器](docs/prompts.md)。
 
 ## 常用命令
 
@@ -134,4 +148,4 @@ flowchart LR
 
 ## 许可
 
-仓库暂未附带 `LICENSE` 文件；如需商用或二次分发，请先与作者确认。
+本项目采用 [MIT 协议](LICENSE)，可商用与二次分发。内置的 ffmpeg、Edge TTS 及 Pixabay / Pexels 素材等第三方组件按其各自协议执行。

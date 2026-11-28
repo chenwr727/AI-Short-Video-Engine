@@ -141,7 +141,7 @@ export async function synthesizeSeed(cfg: AppConfig, req: TtsRequest): Promise<B
 
   const speed = num(cfg.TTS_SPEED, 1);
   const body = JSON.stringify({
-    user: { uid: "ai-short-video-engine" },
+    user: { uid: "shortdeck" },
     req_params: {
       text: req.text,
       speaker: req.voice,

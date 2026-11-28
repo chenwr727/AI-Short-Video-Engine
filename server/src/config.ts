@@ -127,7 +127,7 @@ export const DEFAULTS: AppConfig = {
 const ENV_KEYS = Object.keys(DEFAULTS) as (keyof AppConfig)[];
 
 export function configFile(): string {
-  return process.env.AISV_CONFIG_FILE ?? path.join(dataDir(), "config.json");
+  return process.env.SHORTDECK_CONFIG_FILE ?? path.join(dataDir(), "config.json");
 }
 
 function readFileConfig(): Partial<AppConfig> {

@@ -1,8 +1,8 @@
 {
-  "name": "aisv-desktop",
-  "version": "0.1.0",
+  "name": "shortdeck-desktop",
+  "version": "0.2.0",
   "private": true,
-  "description": "AI 短视频生成器 桌面版外壳（Electron）",
+  "description": "ShortDeck 桌面版外壳（Electron）",
   "main": "dist/main.js",
   "scripts": {
     "icon": "node scripts/make-icon.mjs",

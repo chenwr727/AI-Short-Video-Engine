@@ -60,9 +60,9 @@ interface ChatResponse {
 
 /** 思考也占额度，给少了正文为空 */
 const DEFAULT_MAX_TOKENS = 8192;
-/** 可用 AISV_LLM_MAX_TOKENS 覆盖 */
+/** 可用 SHORTDECK_LLM_MAX_TOKENS 覆盖 */
 const MAX_TOKENS_CAP = (() => {
-  const value = Number(process.env.AISV_LLM_MAX_TOKENS);
+  const value = Number(process.env.SHORTDECK_LLM_MAX_TOKENS);
   return Number.isFinite(value) && value >= 512 ? Math.floor(value) : 32768;
 })();
 

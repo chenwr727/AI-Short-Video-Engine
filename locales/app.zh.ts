@@ -4,7 +4,7 @@ export const app = {
   composeTitle: "合成视频",
   connecting: "正在连接后端…",
   dismiss: "关闭提示",
-  name: "AI 短视频生成器",
+  name: "ShortDeck",
   noContent: "还没有内容：先回上一步填入链接或正文。",
   noLlmKey: "还没配置 LLM API Key：在「设置 → 首选项…」（Ctrl+,）里填好即可生效。",
   restartRunningBody: "新建一条会中止正在进行的任务，已经生成的部分会一起丢掉。",

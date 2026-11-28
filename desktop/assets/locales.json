@@ -1,6 +1,6 @@
 {
  "zh": {
-  "about.app.name": "AI 短视频生成器",
+  "about.app.name": "ShortDeck",
   "about.app.tagline": "链接 → 剧本 → 配音 → 素材 → 成片",
   "about.app.title": "关于",
   "about.btn.close": "关闭",
@@ -15,7 +15,7 @@
   "app.composeTitle": "合成视频",
   "app.connecting": "正在连接后端…",
   "app.dismiss": "关闭提示",
-  "app.name": "AI 短视频生成器",
+  "app.name": "ShortDeck",
   "app.noContent": "还没有内容：先回上一步填入链接或正文。",
   "app.noLlmKey": "还没配置 LLM API Key：在「设置 → 首选项…」（Ctrl+,）里填好即可生效。",
   "app.restartRunningBody": "新建一条会中止正在进行的任务，已经生成的部分会一起丢掉。",
@@ -452,7 +452,7 @@
   "win.minimize": "最小化"
  },
  "en": {
-  "about.app.name": "AI Short Video Generator",
+  "about.app.name": "ShortDeck",
   "about.app.tagline": "Link → script → voice → footage → final cut",
   "about.app.title": "About",
   "about.btn.close": "Close",
@@ -467,7 +467,7 @@
   "app.composeTitle": "Compositing",
   "app.connecting": "Connecting to backend…",
   "app.dismiss": "Dismiss",
-  "app.name": "AI Short Video Studio",
+  "app.name": "ShortDeck",
   "app.noContent": "Nothing to work with yet. Go back and paste a link or some text.",
   "app.noLlmKey": "No LLM API key yet. Add it in Settings → Preferences (Ctrl+,) and it applies immediately.",
   "app.restartRunningBody": "Starting a new one aborts the running task and throws away what's been generated so far.",

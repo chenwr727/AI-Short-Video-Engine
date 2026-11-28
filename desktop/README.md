@@ -37,7 +37,7 @@ health() 检查 LLM Key    → 未配置则弹设置页
 
 ### 免安装模式
 
-exe 同级存在 `portable.txt` 即启用，`userData` 改指 `<exe 同级>/UserData`。会先做写权限探测，目录不可写（比如放在 Program Files）则打日志并回退到 `%APPDATA%/aisv-desktop`。
+exe 同级存在 `portable.txt` 即启用，`userData` 改指 `<exe 同级>/UserData`。会先做写权限探测，目录不可写（比如放在 Program Files）则打日志并回退到 `%APPDATA%/shortdeck-desktop`。
 
 删掉 `portable.txt` 就切成安装模式，数据回到 `%APPDATA%`。
 
@@ -79,7 +79,7 @@ pnpm dev:server   # http://127.0.0.1:4000
 pnpm dev:web      # http://127.0.0.1:3000，/api 已代理到 4000
 ```
 
-Electron 在开发态会复用已在运行的 `:4000` 后端。调试用 `AISV_OPEN_DEVTOOLS=1`。
+Electron 在开发态会复用已在运行的 `:4000` 后端。调试用 `SHORTDECK_OPEN_DEVTOOLS=1`。
 
 ## 配置
 
@@ -98,9 +98,9 @@ Electron 在开发态会复用已在运行的 `:4000` 后端。调试用 `AISV_O
 | 运行方式 | 路径 |
 | --- | --- |
 | 免安装 | `<exe 同级>/UserData/config.json` |
-| 安装 / 开发 | `%APPDATA%/aisv-desktop/config.json` |
+| 安装 / 开发 | `%APPDATA%/shortdeck-desktop/config.json` |
 
-启动后端时，配置文件的每个非空值都会注入成环境变量（`buildEnv`），另外固定注入 `AISV_DATA_DIR`、`AISV_OUT_DIR`、`AISV_ASSETS_DIR`、`AISV_CONFIG_FILE`、`AISV_VERSION`、`PORT`、`HOST`。`build/bin` 存在时会加进 `PATH` 并设 `AISV_BIN_DIR`。
+启动后端时，配置文件的每个非空值都会注入成环境变量（`buildEnv`），另外固定注入 `SHORTDECK_DATA_DIR`、`SHORTDECK_OUT_DIR`、`SHORTDECK_ASSETS_DIR`、`SHORTDECK_CONFIG_FILE`、`SHORTDECK_VERSION`、`PORT`、`HOST`。`build/bin` 存在时会加进 `PATH` 并设 `SHORTDECK_BIN_DIR`。
 
 保存用「写临时文件 + rename」保证原子性，POSIX 下 mode 收窄到 `0600`（文件里有 API Key）。解析失败会先备份成 `config.json.corrupt-<时间戳>` 再回退默认值，避免下次保存覆盖掉已填的 Key。
 
@@ -112,7 +112,7 @@ Electron 在开发态会复用已在运行的 `:4000` 后端。调试用 `AISV_O
 pnpm dist:win     # 构建 → electron-builder → 产物自检
 ```
 
-产物：`desktop/release/AI Short Video-<version>-win-portable.zip`，当前 `0.1.0` 约 214 MB / 2719 个条目。`compression: maximum` 让 zip 阶段要跑很久，日常迭代可临时改成 `normal`。
+产物：`desktop/release/ShortDeck-<version>-win-portable.zip`，当前 `0.2.0` 约 214 MB / 2719 个条目。`compression: maximum` 让 zip 阶段要跑很久，日常迭代可临时改成 `normal`。
 
 解压即用，数据落在同级 `UserData/`：
 

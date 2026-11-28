@@ -5,8 +5,8 @@
 需要 Node.js 20+（建议 22 LTS）与 pnpm：
 
 ```bash
-git clone -b main https://github.com/chenwr727/AI-Short-Video-Engine.git
-cd AI-Short-Video-Engine
+git clone -b main https://github.com/chenwr727/ShortDeck.git
+cd ShortDeck
 
 pnpm install                  # server + web
 npm --prefix desktop install  # desktop

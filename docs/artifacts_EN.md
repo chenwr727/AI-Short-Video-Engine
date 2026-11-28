@@ -22,4 +22,4 @@ Each task keeps a full set of intermediate files under `<data dir>/workspaces/<t
 
 A rerun after an interruption reuses what is already on disk and only fills in the missing parts; clicking **Regenerate** on the preview page deletes `_output.mp4` and `clips/` and reruns composition, keeping all audio and footage.
 
-For the data directory location and variables such as `AISV_DATA_DIR`, see [configuration_EN.md](configuration_EN.md#environment-variables); **File → Open data directory** takes you straight there.
+For the data directory location and variables such as `SHORTDECK_DATA_DIR`, see [configuration_EN.md](configuration_EN.md#environment-variables); **File → Open data directory** takes you straight there.

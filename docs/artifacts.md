@@ -22,4 +22,4 @@
 
 中断后重跑会复用已有产物，只补缺失部分；在成片页点「重新生成」会清掉 `_output.mp4` 与 `clips/` 重跑合成，配音与素材保持不变。
 
-数据目录位置与 `AISV_DATA_DIR` 等变量见 [configuration.md](configuration.md#环境变量)；**文件 → 打开数据目录** 可直接定位。
+数据目录位置与 `SHORTDECK_DATA_DIR` 等变量见 [configuration.md](configuration.md#环境变量)；**文件 → 打开数据目录** 可直接定位。
