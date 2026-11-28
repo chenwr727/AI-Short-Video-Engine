@@ -866,6 +866,7 @@ export default function App() {
             onRetry={onRetry}
             onCancel={() => void onCancel()}
             onBack={() => goBack("render")}
+            onNext={() => goNext("result")}
             meta={meta}
             form={renderForm}
             onFormChange={onRenderFormChange}

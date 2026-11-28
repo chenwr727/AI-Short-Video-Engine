@@ -22,6 +22,8 @@ interface MaterialStepProps {
   onRetry: () => void;
   onCancel: () => void;
   onBack: () => void;
+  /** 已完成任务回看时，从这里进成片预览 */
+  onNext: () => void;
   meta: Meta | null;
   form: RenderFormState;
   onFormChange: (patch: Partial<RenderFormState>) => void;
@@ -360,6 +362,7 @@ export function MaterialStep(props: MaterialStepProps) {
     onRetry,
     onCancel,
     onBack,
+    onNext,
     meta,
     form,
     onFormChange,
@@ -782,7 +785,7 @@ export function MaterialStep(props: MaterialStepProps) {
           </button>
         )}
         {task.status === "completed" && (
-          <button className="primary" type="button" disabled={busy} onClick={onBack}>
+          <button className="primary" type="button" disabled={busy} onClick={onNext}>
             {t("material.backToRender")}
           </button>
         )}
