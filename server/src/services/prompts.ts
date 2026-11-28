@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { speakerNames, type SpeakerNames } from "../config.js";
+import { pick, type Bilingual, type Lang } from "../i18n.js";
 import { ensureDir, promptsDir, userPromptsDir } from "../paths.js";
 
 export interface PromptPair {
@@ -129,63 +130,153 @@ export interface PromptDoc {
   fields: PromptField[];
 }
 
-/** 可在「设置 → 提示词」里编辑的文档，顺序即展示顺序 */
-export const PROMPT_DOCS: PromptDoc[] = [
+/** 内部定义：文案保留双语，出站前再按语言取 */
+interface DocText {
+  file: string;
+  title: Bilingual;
+  description: Bilingual;
+  fields: { key: string; label: Bilingual; hint: Bilingual }[];
+}
+
+/** 可编辑的提示词文档，顺序即展示顺序 */
+const DOC_TEXTS: DocText[] = [
   {
     file: "podcast.json",
-    title: "播客",
-    description: "两人对谈。改这里会影响下一次写稿，已生成的任务不受影响。",
+    title: { zh: "播客", en: "Podcast" },
+    description: {
+      zh: "两人对谈。改这里会影响下一次写稿，已生成的任务不受影响。",
+      en: "Two-host chat. Edits apply to the next script; finished tasks keep their version.",
+    },
     fields: [
-      { key: "prompt_writer", label: "写稿", hint: "决定结构、段数与语气" },
-      { key: "prompt_rewriter", label: "润色", hint: "压字数、改口语，容易磨平人味" },
+      {
+        key: "prompt_writer",
+        label: { zh: "写稿", en: "Draft" },
+        hint: { zh: "决定结构、段数与语气", en: "Sets structure, paragraph count and tone" },
+      },
+      {
+        key: "prompt_rewriter",
+        label: { zh: "润色", en: "Polish" },
+        hint: { zh: "压字数、改口语，容易磨平人味", en: "Trims length and colloquializes; can flatten personality" },
+      },
     ],
   },
   {
     file: "crosstalk.json",
-    title: "相声",
-    description: "捧逗互动，包袱节奏快。",
+    title: { zh: "相声", en: "Crosstalk" },
+    description: { zh: "捧逗互动，包袱节奏快。", en: "Straight man and comic, fast-paced punchlines." },
     fields: [
-      { key: "prompt_writer", label: "写稿", hint: "决定结构与包袱密度" },
-      { key: "prompt_rewriter", label: "润色", hint: "压字数、改口语" },
+      {
+        key: "prompt_writer",
+        label: { zh: "写稿", en: "Draft" },
+        hint: { zh: "决定结构与包袱密度", en: "Sets structure and punchline density" },
+      },
+      {
+        key: "prompt_rewriter",
+        label: { zh: "润色", en: "Polish" },
+        hint: { zh: "压字数、改口语", en: "Trims length, colloquializes" },
+      },
     ],
   },
   {
     file: "talkshow.json",
-    title: "脱口秀",
-    description: "单人吐槽，口语化强。",
+    title: { zh: "脱口秀", en: "Stand-up" },
+    description: { zh: "单人吐槽，口语化强。", en: "Solo rant, highly colloquial." },
     fields: [
-      { key: "prompt_writer", label: "写稿", hint: "决定结构与吐槽方式" },
-      { key: "prompt_rewriter", label: "润色", hint: "压字数、改口语" },
+      {
+        key: "prompt_writer",
+        label: { zh: "写稿", en: "Draft" },
+        hint: { zh: "决定结构与吐槽方式", en: "Sets structure and comedic angle" },
+      },
+      {
+        key: "prompt_rewriter",
+        label: { zh: "润色", en: "Polish" },
+        hint: { zh: "压字数、改口语", en: "Trims length, colloquializes" },
+      },
     ],
   },
   {
     file: "critic.json",
-    title: "审稿与返修",
-    description: "所有风格共用。分数低于阈值会触发返修，返修提示词写得太严会把稿子改回工整。",
+    title: { zh: "审稿与返修", en: "Review and repair" },
+    description: {
+      zh: "所有风格共用。分数低于阈值会触发返修，返修提示词写得太严会把稿子改回工整。",
+      en: "Shared by all styles. Scores below the threshold trigger repair; an over-strict repair prompt makes scripts stilted again.",
+    },
     fields: [
-      { key: "prompt_critic", label: "审稿", hint: "打分维度与阈值说明" },
-      { key: "prompt_repair", label: "按意见返修", hint: "拿到意见后如何改稿" },
+      {
+        key: "prompt_critic",
+        label: { zh: "审稿", en: "Review" },
+        hint: { zh: "打分维度与阈值说明", en: "Scoring dimensions and thresholds" },
+      },
+      {
+        key: "prompt_repair",
+        label: { zh: "按意见返修", en: "Apply feedback" },
+        hint: { zh: "拿到意见后如何改稿", en: "How to revise given the feedback" },
+      },
     ],
   },
   {
     file: "material.json",
-    title: "素材检索词",
-    description: "把每段台词转成外网检索用的英文关键词。",
-    fields: [{ key: "prompt_search_terms", label: "检索词", hint: "每段 3~5 个词" }],
+    title: { zh: "素材检索词", en: "Footage search terms" },
+    description: {
+      zh: "把每段台词转成外网检索用的英文关键词。",
+      en: "Turns each line into English keywords for stock footage search.",
+    },
+    fields: [
+      {
+        key: "prompt_search_terms",
+        label: { zh: "检索词", en: "Search terms" },
+        hint: { zh: "每段 3~5 个词", en: "3-5 terms per paragraph" },
+      },
+    ],
   },
   {
     file: "video_select.json",
-    title: "素材选片",
-    description: "看完候选素材后，挑出与台词最搭的一条。",
-    fields: [{ key: "prompt_video_select", label: "选片", hint: "按标签与画面挑片" }],
+    title: { zh: "素材选片", en: "Clip selection" },
+    description: {
+      zh: "看完候选素材后，挑出与台词最搭的一条。",
+      en: "Picks the clip that best matches each line.",
+    },
+    fields: [
+      {
+        key: "prompt_video_select",
+        label: { zh: "选片", en: "Select" },
+        hint: { zh: "按标签与画面挑片", en: "Choose by tags and visuals" },
+      },
+    ],
   },
   {
     file: "vision_select.json",
-    title: "视觉选片",
-    description: "看缩略图挑片，比纯文本选片更准，也更容易挑到不相关画面。",
-    fields: [{ key: "prompt_vision_select", label: "视觉选片", hint: "看画面判断是否贴合台词" }],
+    title: { zh: "视觉选片", en: "Visual selection" },
+    description: {
+      zh: "看缩略图挑片，比纯文本选片更准，也更容易挑到不相关画面。",
+      en: "Picks from thumbnails: more accurate than text-only, but can also favor irrelevant frames.",
+    },
+    fields: [
+      {
+        key: "prompt_vision_select",
+        label: { zh: "视觉选片", en: "Visual select" },
+        hint: { zh: "看画面判断是否贴合台词", en: "Judge whether the frame fits the line" },
+      },
+    ],
   },
 ];
+
+/** 按语言展开文档文案 */
+export function promptDocs(lang: Lang = "zh"): PromptDoc[] {
+  return DOC_TEXTS.map((doc) => ({
+    file: doc.file,
+    title: pick(lang, doc.title),
+    description: pick(lang, doc.description),
+    fields: doc.fields.map((field) => ({
+      key: field.key,
+      label: pick(lang, field.label),
+      hint: pick(lang, field.hint),
+    })),
+  }));
+}
+
+/** 中文文档，供内部校验与报错使用 */
+export const PROMPT_DOCS: PromptDoc[] = promptDocs("zh");
 
 export function findPromptDoc(file: string): PromptDoc | undefined {
   return PROMPT_DOCS.find((doc) => doc.file === file);

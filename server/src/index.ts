@@ -4,6 +4,7 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import fastifyStatic from "@fastify/static";
 import { bool, isLlmConfigured, loadConfig } from "./config.js";
+import { langOf } from "./i18n.js";
 import { dataDir, ensureDir, outDir } from "./paths.js";
 import { probeDeps } from "./services/deps.js";
 import { metaPayload } from "./meta.js";
@@ -61,7 +62,7 @@ async function build() {
   });
 
   app.get("/api/health", async () => healthPayload());
-  app.get("/api/meta", async () => metaPayload());
+  app.get("/api/meta", async (req) => metaPayload(langOf(req.headers["accept-language"])));
   await registerConfigRoutes(app);
   await registerPromptRoutes(app);
   await registerTaskRoutes(app);

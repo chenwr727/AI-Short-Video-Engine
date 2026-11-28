@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
-import { PROMPT_DOCS, readPromptValue, resetPromptValue, writePromptValue } from "../services/prompts.js";
+import { langOf } from "../i18n.js";
+import { PROMPT_DOCS, promptDocs, readPromptValue, resetPromptValue, writePromptValue } from "../services/prompts.js";
 
 interface PromptBody {
   file?: unknown;
@@ -16,15 +17,18 @@ function target(body: PromptBody): { file: string; key: string } {
 
 export async function registerPromptRoutes(app: FastifyInstance): Promise<void> {
   /** 编辑器用的目录与全部当前值 */
-  app.get("/api/prompts", async () => ({
-    docs: PROMPT_DOCS,
-    values: PROMPT_DOCS.flatMap((doc) =>
-      doc.fields.map((field) => {
-        const item = readPromptValue(doc.file, field.key);
-        return { file: item.file, key: item.key, value: item.value, overridden: item.overridden };
-      }),
-    ),
-  }));
+  app.get("/api/prompts", async (req) => {
+    const docs = promptDocs(langOf(req.headers["accept-language"]));
+    return {
+      docs,
+      values: PROMPT_DOCS.flatMap((doc) =>
+        doc.fields.map((field) => {
+          const item = readPromptValue(doc.file, field.key);
+          return { file: item.file, key: item.key, value: item.value, overridden: item.overridden };
+        }),
+      ),
+    };
+  });
 
   app.get("/api/prompts/one", async (req, reply) => {
     const { file, key } = target((req.query ?? {}) as PromptBody);

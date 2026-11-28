@@ -10,8 +10,10 @@ import {
   speakerNames,
   type AppConfig,
 } from "./config.js";
+import { pick, type Bilingual, type Lang } from "./i18n.js";
 import { COSY_VOICES, EDGE_VOICES, SEED_VOICES } from "./voices.js";
 
+/** 下发给前端的选项：文案已按语言展开 */
 export interface Option {
   id: string;
   label: string;
@@ -29,29 +31,66 @@ export interface TtsEngineOption extends Option {
   voices: VoiceOption[];
 }
 
-export const PROMPT_SOURCES: Option[] = [
-  { id: "podcast", label: "播客", description: "两人对谈，信息密度高", speakers: 2 },
-  { id: "crosstalk", label: "相声", description: "捧逗互动，包袱节奏快", speakers: 2 },
-  { id: "talkshow", label: "脱口秀", description: "单人吐槽，口语化强", speakers: 1 },
+/** 内部定义：文案保留双语，出站前再按语言取 */
+interface TextOption {
+  id: string;
+  label: Bilingual;
+  description?: Bilingual;
+  speakers?: number;
+}
+
+export const PROMPT_SOURCES: TextOption[] = [
+  {
+    id: "podcast",
+    label: { zh: "播客", en: "Podcast" },
+    description: { zh: "两人对谈，信息密度高", en: "Two-host chat, dense" },
+    speakers: 2,
+  },
+  {
+    id: "crosstalk",
+    label: { zh: "相声", en: "Crosstalk" },
+    description: { zh: "捧逗互动，包袱节奏快", en: "Banter with quick punchlines" },
+    speakers: 2,
+  },
+  {
+    id: "talkshow",
+    label: { zh: "脱口秀", en: "Stand-up" },
+    description: { zh: "单人吐槽，口语化强", en: "Solo rant, very colloquial" },
+    speakers: 1,
+  },
 ];
 
-export const MATERIAL_SOURCES: Option[] = [
-  { id: "pixabay", label: "Pixabay", description: "横竖版素材多，免费额度宽" },
-  { id: "pexels", label: "Pexels", description: "画质高，中文检索体验好" },
+export const MATERIAL_SOURCES: TextOption[] = [
+  {
+    id: "pixabay",
+    label: { zh: "Pixabay", en: "Pixabay" },
+    description: { zh: "横竖版素材多，免费额度宽", en: "Plenty of clips, generous free tier" },
+  },
+  {
+    id: "pexels",
+    label: { zh: "Pexels", en: "Pexels" },
+    description: { zh: "画质高，中文检索体验好", en: "High quality, good search" },
+  },
 ];
 
-export const RESOLUTIONS: Option[] = [
-  { id: "1080x1920", label: "1080 × 1920（竖屏高清）" },
-  { id: "720x1280", label: "720 × 1280（竖屏快速）" },
+export const RESOLUTIONS: TextOption[] = [
+  { id: "1080x1920", label: { zh: "1080 × 1920（竖屏高清）", en: "1080 × 1920 (portrait HD)" } },
+  { id: "720x1280", label: { zh: "720 × 1280（竖屏快速）", en: "720 × 1280 (portrait fast)" } },
 ];
+
+/** 内部定义：引擎文案保留双语 */
+interface TextTtsEngine extends TextOption {
+  description: Bilingual;
+  voices: VoiceOption[];
+}
 
 /** Edge 始终可用，其余需配置 Key；首个为默认 */
-export function ttsEngines(cfg: AppConfig): TtsEngineOption[] {
-  const engines: TtsEngineOption[] = [
+export function ttsEngines(cfg: AppConfig, lang: Lang = "zh"): TtsEngineOption[] {
+  const engines: TextTtsEngine[] = [
     {
       id: "edge",
-      label: "Edge 在线语音",
-      description: "免费、无需 Key，默认引擎",
+      label: { zh: "Edge 在线语音", en: "Edge online voices" },
+      description: { zh: "免费、无需 Key，默认引擎", en: "Free, no key needed, default" },
       voices: EDGE_VOICES,
     },
   ];
@@ -59,8 +98,8 @@ export function ttsEngines(cfg: AppConfig): TtsEngineOption[] {
   if (cfg.DASHSCOPE_API_KEY) {
     engines.push({
       id: "cosyvoice",
-      label: "CosyVoice（流式）",
-      description: "WebSocket 流式合成，长句韵律更自然",
+      label: { zh: "CosyVoice（流式）", en: "CosyVoice (streaming)" },
+      description: { zh: "WebSocket 流式合成，长句韵律更自然", en: "Streaming synthesis, smoother long lines" },
       voices: COSY_VOICES,
     });
   }
@@ -68,20 +107,35 @@ export function ttsEngines(cfg: AppConfig): TtsEngineOption[] {
   if (cfg.SEED_TTS_API_KEY) {
     engines.push({
       id: "seedtts",
-      label: "豆包 Seed-TTS（火山引擎）",
-      description: "需要 SEED_TTS_API_KEY，情绪与韵律表现更好",
+      label: { zh: "豆包 Seed-TTS（火山引擎）", en: "Doubao Seed-TTS (Volcano)" },
+      description: { zh: "需要 SEED_TTS_API_KEY，情绪与韵律表现更好", en: "Needs SEED_TTS_API_KEY, richer prosody" },
       voices: SEED_VOICES,
     });
   }
 
-  return engines;
+  return engines.map((engine) => ({
+    id: engine.id,
+    label: pick(lang, engine.label),
+    description: pick(lang, engine.description),
+    voices: engine.voices,
+  }));
 }
 
-export function metaPayload(cfg: AppConfig = loadConfig()) {
+/** 把双语选项展开成当前语言 */
+function localize(options: TextOption[], lang: Lang): Option[] {
+  return options.map((option) => ({
+    id: option.id,
+    label: pick(lang, option.label),
+    ...(option.description ? { description: pick(lang, option.description) } : {}),
+    ...(option.speakers === undefined ? {} : { speakers: option.speakers }),
+  }));
+}
+
+export function metaPayload(lang: Lang = "zh", cfg: AppConfig = loadConfig()) {
   return {
-    promptSources: PROMPT_SOURCES,
+    promptSources: localize(PROMPT_SOURCES, lang),
     speakers: speakerNames(cfg),
-    ttsEngines: ttsEngines(cfg),
+    ttsEngines: ttsEngines(cfg, lang),
     ttsSpeed: num(cfg.TTS_SPEED, 1.1),
     render: {
       // 0 表示自动，换算成具体 px 返回；竖屏基准宽度固定 1080
@@ -89,16 +143,12 @@ export function metaPayload(cfg: AppConfig = loadConfig()) {
       bgmEnabled: bool(cfg.BGM_ENABLED, true),
       bgmVolume: numberOrZero(cfg.BGM_VOLUME, 0.1),
     },
-    materialSources: MATERIAL_SOURCES,
-    resolutions: RESOLUTIONS,
+    materialSources: localize(MATERIAL_SOURCES, lang),
+    resolutions: localize(RESOLUTIONS, lang),
     /** 版式确认页的配色与模板选项 */
     cardAccents: cardAccentPalette(cfg),
     cardTemplates: CARD_TEMPLATES,
-    /**
-     * 版式确认页要显示的配置现值。
-     * 之前页面只拿到色板，片头/章节/片尾的时长与开关全靠猜，
-     * 用户改了设置却看不出有没有生效。
-     */
+    /** 版式确认页要显示的配置现值 */
     cardDefaults: {
       ...cardDefaults(cfg),
       /** 章节卡上限：每段之间最多一张，另有 6 张的总量上限 */
