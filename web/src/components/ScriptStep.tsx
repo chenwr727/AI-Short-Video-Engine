@@ -270,6 +270,12 @@ export function ScriptStep(props: ScriptStepProps) {
                 {t("common.back")}
               </button>
             )}
+            {/* 已确认时可直接进下一步 */}
+            {transcript && (
+              <button className="primary" type="button" onClick={onNext} disabled={busy}>
+                {t("script.nextTts")}
+              </button>
+            )}
           </>
         )}
       </div>

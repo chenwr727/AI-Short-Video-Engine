@@ -674,10 +674,10 @@ export default function App() {
     setPhase(target);
   }
 
-  /** 前进恢复自动跟随 */
+  /** 目标就是任务当前应停的位置才恢复跟随，否则只切画面 */
   function goNext(target: Phase) {
     setError("");
-    setFollowing(true);
+    setFollowing(target === derivePhase(task));
     setPhase(target);
   }
 

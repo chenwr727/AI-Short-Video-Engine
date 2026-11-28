@@ -250,7 +250,8 @@ export function RenderStep(props: RenderStepProps) {
             {t("tts.start")}
           </button>
         )}
-        {showAudio && task.status === "awaiting_material" && (
+        {/* 有配音且不在跑就能进下一步 */}
+        {showAudio && task.audio && !running && !failed && (
           <button className="primary" type="button" onClick={onNext} disabled={busy}>
             {t("tts.nextMaterial")}
           </button>

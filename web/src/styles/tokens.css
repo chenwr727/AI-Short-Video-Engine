@@ -121,11 +121,12 @@
   --aisv-menu-fill: rgb(252 253 254 / 72%);
   --aisv-menu-filter: blur(40px) saturate(150%);
 
-  /* 文字：primary 读正文，secondary 读标签，tertiary 读说明，caption 读最弱的计数/耗时 */
+  /* 文字：primary 读正文，secondary 读标签，tertiary 读说明，caption 读次级说明
+     每档都要过 AA（4.5:1） */
   --aisv-label-primary: var(--aisv-static-neutral-1000);
   --aisv-label-secondary: var(--aisv-static-neutral-700);
-  --aisv-label-tertiary: var(--aisv-static-neutral-600);
-  --aisv-label-caption: var(--aisv-static-neutral-400);
+  --aisv-label-tertiary: rgb(110, 114, 121);
+  --aisv-label-caption: rgb(110, 114, 121);
   --aisv-label-on-fill: var(--aisv-static-neutral-00);
   --aisv-label-inverted: var(--aisv-static-neutral-00);
 
@@ -217,7 +218,7 @@
   --aisv-label-primary: var(--aisv-static-neutral-50);
   --aisv-label-secondary: var(--aisv-static-neutral-300);
   --aisv-label-tertiary: var(--aisv-static-neutral-400);
-  --aisv-label-caption: var(--aisv-static-neutral-600);
+  --aisv-label-caption: rgb(151, 157, 166);
   --aisv-label-on-fill: var(--aisv-static-neutral-00);
   --aisv-label-inverted: var(--aisv-static-neutral-800);
 
