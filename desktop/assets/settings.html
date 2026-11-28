@@ -533,7 +533,8 @@
       /* ---------- 控件 ---------- */
 
       input[type="text"],
-      input[type="password"] {
+      input[type="password"],
+      input[type="number"] {
         width: 100%;
         height: 36px;
         border: 1px solid var(--border-l4);
@@ -548,6 +549,12 @@
         transition:
           border-color var(--t-base) var(--ease),
           background var(--t-base) var(--ease);
+      }
+
+      /* 数字框在 with-unit 里撑满剩余宽度，与文本字段对齐 */
+      .with-unit input[type="number"] {
+        min-width: 0;
+        flex: 1;
       }
 
       input::placeholder {
@@ -1500,6 +1507,13 @@
 
         if (field.kind !== "number") return input;
 
+        /* 数字字段用 number 型拿原生步进器；step 按 int 推导，留 0.1 让 1.1 进得来 */
+        input.type = "number";
+        input.inputMode = field.int ? "numeric" : "decimal";
+        if (field.min !== undefined) input.min = String(field.min);
+        if (field.max !== undefined) input.max = String(field.max);
+        input.step = field.int ? "1" : "0.1";
+
         const wrap = document.createElement("div");
         wrap.className = "with-unit";
         wrap.appendChild(input);
@@ -1725,6 +1739,7 @@
           if (field.max && raw.length > field.max) return t("err.maxLength", { max: field.max });
           return "";
         }
+        /* 脚本写入或带单位的值仍需拦一次 */
         if (!raw) return "";
 
         // 带单位会被后端当成非法值静默回退默认值
