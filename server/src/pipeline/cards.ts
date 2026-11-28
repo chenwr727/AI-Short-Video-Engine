@@ -19,6 +19,8 @@ import type {
   TaskContext,
   Transcript,
 } from "../types.js";
+import { stageText, UNKNOWN_REASON } from "../errors.js";
+import { logText } from "../logs.js";
 
 const DEFAULT_LABEL: Record<CardKind, string> = {
   intro: "AI 摘要",
@@ -637,11 +639,18 @@ async function pickAccentByVision(
     const wanted = typeof raw?.accent === "string" ? raw.accent.trim().toLowerCase() : "";
     const hit = palette.find((color) => color.toLowerCase() === wanted);
     if (!hit) return null;
-    ctx.log(`按画面主色选配色：${hit}${raw?.reason ? `（${cleanCardText(raw.reason, 12)}）` : ""}`);
+    ctx.log(
+      logText("accentFromFrame", {
+        accent: hit,
+        note: raw?.reason
+          ? { zh: `（${cleanCardText(raw.reason, 12)}）`, en: ` (${cleanCardText(raw.reason, 12)})` }
+          : "",
+      }),
+    );
     return hit;
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") throw error;
-    ctx.log(`视觉选色失败，用默认主色：${error instanceof Error ? error.message : String(error)}`, "warn");
+    ctx.log(logText("accentVisionFailed", { reason: error instanceof Error ? error.message : String(error) }), "warn");
     return null;
   }
 }
@@ -808,21 +817,19 @@ export async function runCardsStage(
   const plan = cardPlan(cfg, paragraphs, prefs ?? {});
   const fallback = fallbackManifest(cfg, transcript, width, height, fps, prefs);
   if (plan.introSec === 0 && plan.chapterSec === 0 && plan.outroSec === 0) {
-    ctx.log("没有可用的卡片类型，跳过版式", "warn");
+    ctx.log(logText("noCardTypes"), "warn");
     return fallback;
   }
 
-  ctx.markStage("cards", "running", "AI 设计版式");
+  ctx.markStage("cards", "running", stageText("designingCards"));
   if (plan.auto) {
-    ctx.log(
-      "未单独开启片头 / 章节卡 / 片尾，按「片头时长」与「过场卡时长」出片头与章节卡；不想要卡片请在版式页把时长改成 0",
-    );
+    ctx.log(logText("cardTypesHint"));
   }
-  ctx.log("正在让 AI 为片头 / 章节 / 片尾写文案并选模板…");
+  ctx.log(logText("aiDrafting"));
 
   // 手动点过配色就用它，否则交给视觉模型，再不行用色板第一个
   const manual = manualAccent(prefs, palette);
-  if (manual) ctx.log(`按你的选择用主色：${manual}`);
+  if (manual) ctx.log(logText("accentManual", { accent: manual }));
   const accent = manual ?? (await pickAccentByVision(ctx, material, palette, cfg)) ?? palette[0] ?? "#ff5a3c";
 
   const system = "你是短视频内容编辑，擅长把长文提炼成封面钩子和章节标题。只输出 JSON，不要 markdown，不要解释。";
@@ -838,7 +845,7 @@ export async function runCardsStage(
     draft = json ? (JSON.parse(json) as DraftChapters) : null;
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") throw error;
-    ctx.log(`AI 设计版式失败，改用内置模板：${error instanceof Error ? error.message : String(error)}`, "warn");
+    ctx.log(logText("aiDraftFailed", { reason: error instanceof Error ? error.message : String(error) }), "warn");
   }
 
   if (!draft) return fallback;
@@ -934,7 +941,7 @@ export async function runCardsStage(
   // 结果挂在 material.items[].infoCard 上。版式阶段只管片头/章节/片尾。
 
   const style = cleanCardText(draft.style, 24) || "AI 定制";
-  ctx.log(`版式已生成：${items.length} 张卡 · 风格 ${style}`);
+  ctx.log(logText("cardsGenerated", { n: items.length, style }));
   for (const item of items) {
     const where = item.paragraph ? `第 ${item.paragraph} 段` : item.kind === "intro" ? "片头" : "片尾";
     ctx.log(`  ${where}：${item.title}（${item.durationSec}s · ${item.compositionId}）`);
@@ -977,12 +984,12 @@ export async function rewriteCardTitle(
     const json = extractJsonObject(text);
     const title = cleanCardText(json ? (JSON.parse(json) as { title?: string }).title : "", MAX_CHAPTER);
     if (title && !used.includes(title)) {
-      ctx.log(`换文案：${title}`);
+      ctx.log(logText("rewriteTitle", { title }));
       return title;
     }
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") throw error;
-    ctx.log(`换文案失败：${error instanceof Error ? error.message : String(error)}`, "warn");
+    ctx.log(logText("rewriteFailed", { reason: error instanceof Error ? error.message : String(error) }), "warn");
   }
 
   return null;
@@ -1127,7 +1134,10 @@ export async function ensureCardVideo(
   });
 
   if (!ok) {
-    ctx.log(`「${spec.title}」卡片渲染失败：${lastRenderErrorMessage() || "未知原因"}`, "error");
+    ctx.log(
+      logText("cardRenderFailed", { title: spec.title, reason: lastRenderErrorMessage() || UNKNOWN_REASON }),
+      "error",
+    );
     return null;
   }
   spec.videoPath = video;
@@ -1176,7 +1186,7 @@ async function renderCardStillNow(ctx: TaskContext, spec: CardSpec, total: numbe
   });
 
   if (!ok) {
-    ctx.log(`卡片静帧渲染失败：${lastRenderErrorMessage() || "未知原因"}`, "warn");
+    ctx.log(logText("stillRenderFailed", { reason: lastRenderErrorMessage() || UNKNOWN_REASON }), "warn");
     return null;
   }
   spec.stillPath = still;
@@ -1233,13 +1243,13 @@ export async function generateInfoCardForParagraph(
   );
 
   if (!spec) {
-    ctx.log(`第 ${paragraph} 段不适合做信息卡，或模型没给出可用字段`, "warn");
+    ctx.log(logText("notFitCard", { n: paragraph }), "warn");
     return null;
   }
 
   // 一键配置时，同一主题已经出现在别的段落就别再出一张 —— 两张同名卡比没有更难看
   if (usedTopics && usedTopics.length > 0 && usedTopics.includes(spec.title)) {
-    ctx.log(`第 ${paragraph} 段的主题「${spec.title}」已在别处用过，跳过以免重复`, "warn");
+    ctx.log(logText("titleUsed", { n: paragraph, title: spec.title }), "warn");
     return null;
   }
 
@@ -1403,7 +1413,13 @@ export async function ensureCardLayer(
   });
 
   if (!ok) {
-    ctx.log(`「${layerSpec.title}」信息层渲染失败：${lastRenderErrorMessage() || "未知原因"}`, "warn");
+    ctx.log(
+      logText("infoLayerRenderFailed", {
+        title: layerSpec.title,
+        reason: lastRenderErrorMessage() || UNKNOWN_REASON,
+      }),
+      "warn",
+    );
     return null;
   }
   return file;

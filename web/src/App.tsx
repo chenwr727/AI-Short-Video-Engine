@@ -170,10 +170,9 @@ export default function App() {
     let alive = true;
     (async () => {
       try {
-        const [h, m, t] = await Promise.all([getHealth(), getMeta(), getTask()]);
+        const [h, t] = await Promise.all([getHealth(), getTask()]);
         if (!alive) return;
         setHealth(h);
-        setMeta(m);
         setTask(t);
 
         // 有快照说明恢复了上次任务，定位到停下的一步
@@ -191,6 +190,21 @@ export default function App() {
       alive = false;
     };
   }, []);
+
+  // meta 的选项文案由后端按 Accept-Language 展开，语言一变就得重拉
+  useEffect(() => {
+    let alive = true;
+    getMeta()
+      .then((next) => {
+        if (alive) setMeta(next);
+      })
+      .catch((e) => {
+        if (alive) setError(e instanceof Error ? e.message : String(e));
+      });
+    return () => {
+      alive = false;
+    };
+  }, [language]);
 
   // 清空界面后忽略 SSE 推回来的旧快照
   const ignoreTaskRef = useRef(false);

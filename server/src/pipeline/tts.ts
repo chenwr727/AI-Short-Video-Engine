@@ -14,6 +14,8 @@ import type {
   TtsEngine,
 } from "../types.js";
 import { voicesFor } from "../voices.js";
+import { stageText } from "../errors.js";
+import { logText } from "../logs.js";
 
 const MANIFEST = "_durations.json";
 
@@ -58,7 +60,7 @@ async function synthesizeWithRetry(
       lastError = error;
       if (ctx.signal.aborted) throw error;
       const message = error instanceof Error ? error.message : String(error);
-      ctx.log(`配音失败（第 ${attempt + 1}/${retries} 次）：${message}`, "warn");
+      ctx.log(logText("ttsAttemptFailed", { i: attempt + 1, total: retries, reason: message }), "warn");
       if (attempt < retries - 1) await sleep(2000, ctx.signal);
     }
   }
@@ -83,11 +85,11 @@ export async function runTtsStage(ctx: TaskContext, transcript: Transcript): Pro
     const cached = JSON.parse(fs.readFileSync(manifestFile, "utf-8")) as AudioManifest;
     // 台词改过则清单与音频一并失效
     if (audioMatchesTranscript(cached, transcript)) {
-      ctx.log("复用已生成的配音清单（_durations.json）");
-      ctx.markStage("tts", "skipped", "命中缓存");
+      ctx.log(logText("reuseAudioManifest"));
+      ctx.markStage("tts", "skipped", stageText("cached"));
       return cached;
     }
-    ctx.log("台词有改动，重新生成配音", "warn");
+    ctx.log(logText("ttsScriptChanged"), "warn");
     fs.rmSync(manifestFile, { force: true });
     for (const name of fs.readdirSync(ctx.workspace)) {
       if (/^\d+_\d+_\d+\.(wav|mp3)$/i.test(name)) fs.rmSync(path.join(ctx.workspace, name), { force: true });
@@ -99,7 +101,7 @@ export async function runTtsStage(ctx: TaskContext, transcript: Transcript): Pro
   const speed = ctx.options.ttsSpeed > 0 ? ctx.options.ttsSpeed : num(cfg.TTS_SPEED, 1.1);
   const engine = createTtsEngine({ ...cfg, TTS_SPEED: String(speed) }, ctx.options.ttsEngine);
   const voices = voiceList(ctx.options.ttsEngine);
-  ctx.log(`配音引擎：${ctx.options.ttsEngine} / ${engine.model} · 语速 ${speed.toFixed(2)}×`);
+  ctx.log(logText("ttsEngineLog", { engine: ctx.options.ttsEngine, model: engine.model, speed: speed.toFixed(2) }));
 
   // 同一角色固定音色：指定的优先，否则按音色表轮换
   const speakerVoice = new Map<string, string>();
@@ -115,7 +117,11 @@ export async function runTtsStage(ctx: TaskContext, transcript: Transcript): Pro
       }
     }
   }
-  ctx.log(`音色分配：${[...speakerVoice].map(([speaker, voice]) => `${speaker}=${voice}`).join("，")}`);
+  ctx.log(
+    logText("voiceAssign", {
+      list: [...speakerVoice].map(([speaker, voice]) => `${speaker}=${voice}`).join(" / "),
+    }),
+  );
 
   const paragraphs: AudioParagraph[] = [];
   let totalDuration = 0;
@@ -123,7 +129,7 @@ export async function runTtsStage(ctx: TaskContext, transcript: Transcript): Pro
   for (let pi = 0; pi < transcript.paragraphs.length; pi++) {
     const paragraph = transcript.paragraphs[pi];
     if (!paragraph) continue;
-    ctx.markStage("tts", "running", `第 ${pi + 1}/${transcript.paragraphs.length} 段`);
+    ctx.markStage("tts", "running", stageText("progress", { i: pi + 1, total: transcript.paragraphs.length }));
 
     const dialogues: AudioDialogue[] = [];
     let paragraphDuration = 0;
@@ -143,7 +149,7 @@ export async function runTtsStage(ctx: TaskContext, transcript: Transcript): Pro
 
         let file = existingAudio(ctx.workspace, `${base}_${si + 1}`);
         if (file) {
-          ctx.log(`复用音频 ${path.basename(file)}`);
+          ctx.log(logText("reuseAudio", { file: path.basename(file) }));
         } else {
           const buf = await synthesizeWithRetry(ctx, engine, text, voice);
           file = path.join(ctx.workspace, `${base}_${si + 1}.${detectAudioExt(buf)}`);
@@ -158,7 +164,13 @@ export async function runTtsStage(ctx: TaskContext, transcript: Transcript): Pro
       const dialogueDuration = files.reduce((sum, f) => sum + f.duration, 0);
       dialogues.push({ speaker: dialogue.speaker, voice, duration: dialogueDuration, files });
       ctx.log(
-        `第 ${pi + 1} 段 · ${dialogue.speaker}（${voice}）：${files.length} 句 / ${dialogueDuration.toFixed(1)}s`,
+        logText("dialogueDone", {
+          n: pi + 1,
+          speaker: dialogue.speaker,
+          voice,
+          lines: files.length,
+          sec: dialogueDuration.toFixed(1),
+        }),
       );
     }
 

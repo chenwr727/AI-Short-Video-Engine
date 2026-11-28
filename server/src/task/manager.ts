@@ -18,6 +18,18 @@ import {
   materialFrameDataUri,
 } from "../pipeline/cards.js";
 import { runComposeStage } from "../pipeline/compose.js";
+import {
+  ERRORS,
+  errorMessage,
+  NO_MUSIC_REASON,
+  reasonOf,
+  STAGE_TEXT,
+  TaskError,
+  UNKNOWN_REASON,
+  userError,
+} from "../errors.js";
+import { pick, type Bilingual, type Lang } from "../i18n.js";
+import { logText } from "../logs.js";
 import { resolveMusicFile } from "../services/bgm.js";
 import { downloadMaterial } from "../services/material.js";
 import { lastRenderErrorMessage } from "../services/remotion.js";
@@ -145,16 +157,6 @@ export function nextResumeStep(state: TaskState): "match" | "cards" | "compose" 
   return "other";
 }
 
-export class TaskError extends Error {
-  readonly statusCode: number;
-
-  constructor(message: string, statusCode = 400) {
-    super(message);
-    this.name = "TaskError";
-    this.statusCode = statusCode;
-  }
-}
-
 type Listener = (event: TaskEvent) => void;
 
 export interface MaterialReplacement extends MaterialInfo {
@@ -167,8 +169,16 @@ class TaskManager {
   private listeners = new Set<Listener>();
   private currentStageId: string | null = null;
   private saveTimer: NodeJS.Timeout | null = null;
+  /** 当前界面语言：任务状态里的日志与文案按它定稿，见 index.ts 的 onRequest */
+  private lang: Lang = "zh";
 
-  constructor() {
+  /** 恢复旧快照会写「应用退出时中断」这类文案，得等第一个请求带来语言之后再做 */
+  private restored = false;
+
+  setLang(lang: Lang): void {
+    this.lang = lang;
+    if (this.restored) return;
+    this.restored = true;
     this.restore();
   }
 
@@ -194,9 +204,9 @@ class TaskManager {
         current.status === "awaiting_material" ||
         current.status === "awaiting_cards")
     ) {
-      throw new TaskError("已有任务未结束，请等待完成或先取消", 409);
+      throw userError("busy", 409);
     }
-    if (!input.trim()) throw new TaskError("内容不能为空", 400);
+    if (!input.trim()) throw userError("emptyInput", 400);
 
     const workspace = newWorkspace();
     const now = new Date().toISOString();
@@ -225,7 +235,7 @@ class TaskManager {
     this.controller = controller;
     this.currentStageId = null;
 
-    this.log(`任务开始：${workspace}`);
+    this.log(logText("taskStart", { path: workspace }));
     void this.execute(controller);
     return this.state;
   }
@@ -256,11 +266,11 @@ class TaskManager {
   confirm(raw?: RawTranscript, patch?: Partial<GenerateOptions>): TaskState {
     const state = this.requireState();
     if (state.status !== "awaiting_script") {
-      throw new TaskError("当前任务不在等待确认状态", 400);
+      throw userError("notAwaitingScript", 400);
     }
 
     const transcript = raw ? persistConfirmed(state.workspace, raw) : state.transcript;
-    if (!transcript) throw new TaskError("剧本为空，无法确认", 400);
+    if (!transcript) throw userError("emptyTranscript", 400);
 
     this.currentStageId = null;
     state.runStartedAt = Date.now();
@@ -273,20 +283,28 @@ class TaskManager {
       state.options = { ...state.options, ...patch };
       const voices = Object.values(patch.voiceMap ?? {});
       this.log(
-        `配音设置：${state.options.ttsEngine}${voices.length ? ` · ${voices.join("/")}` : ""} · ${state.options.ttsSpeed}× 语速`,
+        logText("voiceSettings", {
+          engine: state.options.ttsEngine,
+          voices: voices.length ? ` · ${voices.join("/")}` : "",
+          speed: state.options.ttsSpeed,
+        }),
         "info",
         "tts",
       );
     }
 
     state.transcript = transcript;
-    if (raw) this.log("已保存修改后的剧本", "info", "split");
-    this.log(`剧本已确认：${transcript.paragraphs.length} 段 / ${sentenceCount(transcript)} 句`, "info", "split");
+    if (raw) this.log(logText("scriptSaved"), "info", "split");
+    this.log(
+      logText("scriptConfirmed", { n: transcript.paragraphs.length, sent: sentenceCount(transcript) }),
+      "info",
+      "split",
+    );
 
     const controller = new AbortController();
     this.controller = controller;
     this.setStatus("running");
-    this.log("开始生成配音…", "info", "tts");
+    this.log(logText("ttsStart"), "info", "tts");
     this.emit();
     void this.executeTts(controller, transcript);
     return state;
@@ -295,7 +313,7 @@ class TaskManager {
   /** 只重做配音，会中断当前一轮 */
   regenerateTts(patch?: Partial<GenerateOptions>): TaskState {
     const state = this.requireState();
-    if (!state.transcript) throw new TaskError("还没有剧本，无法生成配音", 400);
+    if (!state.transcript) throw userError("noTranscriptForTts", 400);
 
     if (patch) state.options = { ...state.options, ...patch };
 
@@ -309,7 +327,7 @@ class TaskManager {
     const controller = new AbortController();
     this.controller = controller;
     this.setStatus("running");
-    this.log(`重新生成配音：${state.options.ttsEngine} · ${state.options.ttsSpeed}× 语速`, "info", "tts");
+    this.log(logText("ttsRegen", { engine: state.options.ttsEngine, speed: state.options.ttsSpeed }), "info", "tts");
     this.emit();
     void this.executeTts(controller, state.transcript);
     return state;
@@ -320,14 +338,14 @@ class TaskManager {
     const state = this.requireState();
     const retrying = state.status === "failed" || state.status === "cancelled";
     if (state.status === "running" && !force) {
-      throw new TaskError("正在生成，等这一轮结束再重来", 409);
+      throw userError("generating", 409);
     }
     if (!force && state.status !== "awaiting_material" && !retrying) {
-      throw new TaskError("当前任务不在等待素材确认状态", 400);
+      throw userError("notAwaitingMaterial", 400);
     }
-    if (!force && state.material) throw new TaskError("素材已经匹配过了", 400);
+    if (!force && state.material) throw userError("materialDone", 400);
     if (!state.transcript || !state.audio) {
-      throw new TaskError("配音还没完成，无法匹配素材", 400);
+      throw userError("ttsIncomplete", 400);
     }
 
     if (force) {
@@ -376,14 +394,14 @@ class TaskManager {
           state.options.subtitleFontSize = autoSubtitleFontSize(state.options.width);
         }
       }
-      this.log(`素材来源：${state.options.materialSource}`, "info", "material");
-      this.log(`成片分辨率：${state.options.width}×${state.options.height}`, "info", "material");
+      this.log(logText("materialSource", { source: state.options.materialSource }), "info", "material");
+      this.log(logText("resolution", { w: state.options.width, h: state.options.height }), "info", "material");
     }
 
     const controller = new AbortController();
     this.controller = controller;
     this.setStatus("running");
-    this.log("开始按台词匹配素材…", "info", "material");
+    this.log(logText("materialStart"), "info", "material");
     this.emit();
     void this.executeMatch(controller, state.transcript, state.audio);
     return state;
@@ -397,7 +415,7 @@ class TaskManager {
   ): Promise<TaskState> {
     const state = this.requireState();
     if ((state.status !== "awaiting_material" && state.status !== "material_ready") || !state.material) {
-      throw new TaskError("当前任务不在等待素材确认状态", 400);
+      throw userError("notAwaitingMaterial", 400);
     }
 
     // 版式参数要在生成前落库，runCardsStage 读的是 state.cardPrefs
@@ -417,7 +435,7 @@ class TaskManager {
           state.options.subtitleFontSize = autoSubtitleFontSize(state.options.width);
         }
       }
-      this.log(`成片分辨率：${state.options.width}×${state.options.height}`, "info", "compose");
+      this.log(logText("resolution", { w: state.options.width, h: state.options.height }), "info", "compose");
     }
 
     const controller = new AbortController();
@@ -427,7 +445,7 @@ class TaskManager {
     } catch (error) {
       if (this.controller === controller) this.controller = null;
       if (error instanceof TaskError) throw error;
-      throw new TaskError(`更换素材失败：${error instanceof Error ? error.message : String(error)}`, 500);
+      throw userError("replaceFailed", 500, { reason: reasonOf(error) });
     } finally {
       if (this.controller === controller) this.controller = null;
     }
@@ -454,18 +472,18 @@ class TaskManager {
         return state;
       }
       this.setStatus("material_ready");
-      this.log("素材已确认，去「成片预览」设置字幕与 BGM 后生成成片", "info", "compose");
+      this.log(logText("materialConfirmed"), "info", "compose");
       this.emit();
       return state;
     }
 
     if (this.cardStagePresent(state)) {
-      this.markStage("cards", "skipped", "版式已关闭，本次不出卡片");
-      this.log("版式开关已关闭，本次成片不含卡片", "info", "compose");
+      this.markStage("cards", "skipped", STAGE_TEXT.cardsOff);
+      this.log(logText("cardsOff"), "info", "compose");
     }
 
     this.setStatus("material_ready");
-    this.log("素材已确认，去「成片预览」设置字幕与 BGM 后生成成片", "info", "compose");
+    this.log(logText("materialConfirmed"), "info", "compose");
     this.emit();
     return state;
   }
@@ -488,7 +506,7 @@ class TaskManager {
 
     this.setStatus("running");
     this.markStage("cards", "running");
-    this.log("按当前参数生成版式…", "info", "cards");
+    this.log(logText("cardsStart"), "info", "cards");
     this.emit();
 
     try {
@@ -496,14 +514,17 @@ class TaskManager {
       if (!this.state || !this.owns(controller)) return;
 
       state.cards = manifest;
-      this.markStage("cards", "done", `${manifest.items.length} 张`);
+      // 数字摘要走 counts，前端按语言拼「N 张卡 / N cards」
+      this.markStage("cards", "done", undefined, { cards: manifest.items.length });
       this.setStatus("material_ready");
       this.log(
-        manifest.items.length > 0 ? `版式已生成并确认：${manifest.items.length} 张卡` : "版式已确认：本次不加任何卡片",
+        manifest.items.length > 0
+          ? logText("cardsBuilt", { n: manifest.items.length })
+          : logText("cardsConfirmedEmpty"),
         "info",
         "cards",
       );
-      this.log("素材与版式都确认了，去「成片预览」设置字幕与 BGM 后生成成片", "info", "compose");
+      this.log(logText("bothConfirmed"), "info", "compose");
       this.emit();
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") throw error;
@@ -511,9 +532,9 @@ class TaskManager {
       // 版式失败不挡成片：退回不带卡片的版本
       state.cards = null;
       this.setStatus("material_ready");
-      this.markStage("cards", "skipped", "生成失败，本次不带卡片");
+      this.markStage("cards", "skipped", STAGE_TEXT.cardsFailed);
       this.log(
-        `版式生成失败，本次成片不含卡片：${error instanceof Error ? error.message : String(error)}`,
+        logText("cardsFailed", { reason: error instanceof Error ? error.message : String(error) }),
         "warn",
         "cards",
       );
@@ -527,18 +548,18 @@ class TaskManager {
   async rewriteCard(id: string, mode: "text" | "accent" = "text"): Promise<TaskState> {
     const state = this.requireState();
     if (!this.canEditCards(state)) {
-      throw new TaskError("当前任务不在可编辑版式的状态", 400);
+      throw userError("cardsNotEditable", 400);
     }
     const manifest = state.cards;
-    if (!manifest || !state.transcript) throw new TaskError("版式清单为空", 400);
+    if (!manifest || !state.transcript) throw userError("emptyCards", 400);
 
     const index = manifest.items.findIndex((item) => item.id === id);
     const spec = manifest.items[index];
-    if (!spec) throw new TaskError(`没有这张卡：${id}`, 400);
+    if (!spec) throw userError("noSuchCard", 400, { id });
 
     const controller = new AbortController();
     const ctx = this.makeCtx(controller, "cards");
-    if (!ctx) throw new TaskError("任务状态异常", 500);
+    if (!ctx) throw userError("badState", 500);
 
     const cfg = loadConfig();
     const used = manifest.items
@@ -560,7 +581,7 @@ class TaskManager {
     // 没拿到新文案就换配色兜底
     if (!changed) {
       next.accent = nextAccent(spec, cfg);
-      this.log(`配色换成 ${next.accent}`, "info", "cards");
+      this.log(logText("accentChanged", { accent: next.accent }), "info", "cards");
     }
 
     delete next.videoPath;
@@ -570,7 +591,7 @@ class TaskManager {
     state.result = null;
     this.removeOutput(state.workspace);
     this.reopenCards(state);
-    this.log(`「${manifest.items[index]?.title ?? spec.title}」已更新`, "info", "cards");
+    this.log(logText("cardUpdated", { title: manifest.items[index]?.title ?? spec.title }), "info", "cards");
     this.emit();
     return state;
   }
@@ -588,7 +609,7 @@ class TaskManager {
     const spec =
       state.material?.items.find((item) => item.infoCard?.id === id)?.infoCard ??
       state.cards?.items.find((item) => item.id === id);
-    if (!spec) throw new TaskError(`没有这张卡：${id}`, 400);
+    if (!spec) throw userError("noSuchCard", 400, { id });
 
     /*
      * 已渲好的直接给文件，不进渲染队列。
@@ -601,11 +622,11 @@ class TaskManager {
     }
 
     const ctx = this.makeCtx(new AbortController(), "cards");
-    if (!ctx) throw new TaskError("任务状态异常", 500);
+    if (!ctx) throw userError("badState", 500);
 
     const still = await ensureCardStill(ctx, spec, state.transcript?.paragraphs.length ?? 1);
     if (!still) {
-      throw new TaskError(`卡片预览渲染失败：${lastRenderErrorMessage() || "未知原因"}`, 500);
+      throw userError("cardStillFailed", 500, { reason: lastRenderErrorMessage() || UNKNOWN_REASON });
     }
     this.emit();
     return still;
@@ -615,7 +636,7 @@ class TaskManager {
     const state = this.requireState();
     const spec = state.cards?.items.find((item) => item.id === id);
     if (!spec?.videoPath || !fs.existsSync(spec.videoPath)) {
-      throw new TaskError("这张卡还没渲染", 404);
+      throw userError("cardNotRendered", 404);
     }
     return spec.videoPath;
   }
@@ -624,17 +645,17 @@ class TaskManager {
   render(patch?: RenderPatch): TaskState {
     const state = this.requireState();
     if (!state.transcript || !state.audio || !state.material) {
-      throw new TaskError("还没有可合成的内容，先跑完素材确认", 400);
+      throw userError("nothingToCompose", 400);
     }
     if (state.status === "running") {
-      throw new TaskError("正在合成，等这一版出来再改参数", 409);
+      throw userError("composing", 409);
     }
     if (state.status === "awaiting_cards") {
-      throw new TaskError("先确认版式，再生成成片", 400);
+      throw userError("confirmCardsFirst", 400);
     }
     // 只有这条任务真的带 cards 阶段时才要求先确认版式
     if (this.cardStagePresent(state) && !state.cards) {
-      throw new TaskError("还没有生成版式，先跑完「版式确认」", 400);
+      throw userError("cardsNotBuilt", 400);
     }
 
     const before = state.options;
@@ -648,7 +669,7 @@ class TaskManager {
 
     if (next.bgmFile) {
       const resolved = resolveMusicFile(next.bgmFile);
-      if (!resolved.file) throw new TaskError(resolved.reason ?? "音乐文件不可用", 400);
+      if (!resolved.file) throw userError("badMusic", 400, { reason: resolved.reason ?? NO_MUSIC_REASON });
     }
 
     state.options = next;
@@ -658,7 +679,7 @@ class TaskManager {
     this.clearLogsFrom(state, "compose");
 
     if ((before.subtitleFontSize ?? 0) !== (next.subtitleFontSize ?? 0)) {
-      this.log("字幕字号变了，分段片段会重新渲染", "info", "compose");
+      this.log(logText("subtitleResize"), "info", "compose");
     }
 
     this.currentStageId = null;
@@ -666,9 +687,11 @@ class TaskManager {
     this.controller = controller;
     this.setStatus("running");
     this.log(
-      `生成成片：字号 ${next.subtitleFontSize ?? 0}（0=自动） · BGM ${next.bgmEnabled === false ? "关" : "开"}${
-        next.bgmFile ? ` · ${path.basename(next.bgmFile)}` : ""
-      }`,
+      logText("renderStart", {
+        size: next.subtitleFontSize ?? 0,
+        bgm: next.bgmEnabled === false ? { zh: "关", en: "off" } : { zh: "开", en: "on" },
+        file: next.bgmFile ? ` · ${path.basename(next.bgmFile)}` : "",
+      }),
       "info",
       "compose",
     );
@@ -687,9 +710,9 @@ class TaskManager {
     options: { overwrite?: boolean; onProgress?: (done: number, total: number, paragraph: number) => void } = {},
   ): Promise<{ applied: number[]; skipped: number[]; failed: { paragraph: number; reason: string }[] }> {
     const state = this.requireState();
-    if (!state.material) throw new TaskError("还没有素材，先生成素材", 400);
+    if (!state.material) throw userError("noMaterial", 400);
     if (!["awaiting_material", "material_ready", "completed"].includes(state.status)) {
-      throw new TaskError("当前任务不可编辑", 400);
+      throw userError("notEditable", 400);
     }
 
     const paragraphs = state.material.items.map((item) => item.paragraph).sort((a, b) => a - b);
@@ -710,7 +733,7 @@ class TaskManager {
           (paragraph) => !state.material?.items.find((entry) => entry.paragraph === paragraph)?.infoCard,
         ).length;
     if (pending > 0) {
-      this.log(`开始为 ${pending} 段配信息卡：逐段判断适合做成哪种卡，每段要调一次模型`, "info", "material");
+      this.log(logText("infoCardBatch", { n: pending }), "info", "material");
       this.emit();
     }
 
@@ -731,7 +754,11 @@ class TaskManager {
           applied.push(paragraph);
           usedTopics.push(card.title);
           // 逐段留痕：配卡要串行调好几次模型，只报总数用户会以为卡住了
-          this.log(`第 ${paragraph} 段信息卡：${card.compositionId}「${card.title}」`, "info", "material");
+          this.log(
+            logText("infoCardAdded", { n: paragraph, kind: card.compositionId, title: card.title }),
+            "info",
+            "material",
+          );
         } else {
           skipped.push(paragraph);
         }
@@ -789,7 +816,7 @@ class TaskManager {
       await ensureCardStill(ctx, spec, total);
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") throw error;
-      this.log(`第 ${paragraph} 段卡片预览生成失败，稍后打开页面会重试`, "warn", "material");
+      this.log(logText("cardPreviewFailed", { n: paragraph }), "warn", "material");
     }
     return spec;
   }
@@ -802,17 +829,17 @@ class TaskManager {
      * 是正常诉求，不该逼他重走整条流水线。改完把旧成片作废即可（见下方 invalidateResult）。
      */
     if (state.status !== "awaiting_material" && state.status !== "material_ready" && state.status !== "completed") {
-      throw new TaskError("当前任务不在可编辑状态", 400);
+      throw userError("notEditableState", 400);
     }
-    if (!state.material) throw new TaskError(`第 ${paragraph} 段还没有素材`, 400);
+    if (!state.material) throw userError("noMaterialForParagraph", 400, { n: paragraph });
 
     const item = state.material.items.find((entry) => entry.paragraph === paragraph);
-    if (!item) throw new TaskError(`第 ${paragraph} 段还没有素材`, 400);
+    if (!item) throw userError("noMaterialForParagraph", 400, { n: paragraph });
 
     const controller = new AbortController();
     this.controller = controller;
     const ctx = this.makeCtx(controller, "material");
-    if (!ctx) throw new TaskError("任务状态异常", 500);
+    if (!ctx) throw userError("badState", 500);
 
     try {
       // 主色取色板首位，和版式卡一致：CARD_ACCENT 直接当主色，不必再过一遍色板
@@ -829,8 +856,8 @@ class TaskManager {
       this.scheduleSave();
       return spec;
     } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") throw new TaskError("已取消", 400);
-      throw new TaskError(`生成信息卡失败：${error instanceof Error ? error.message : String(error)}`, 500);
+      if (error instanceof Error && error.name === "AbortError") throw userError("cancelled", 400);
+      throw userError("infoCardFailed", 500, { reason: reasonOf(error) });
     } finally {
       if (this.controller === controller) this.controller = null;
     }
@@ -840,10 +867,10 @@ class TaskManager {
   clearInfoCard(paragraph: number): void {
     const state = this.requireState();
     if (state.status !== "awaiting_material" && state.status !== "material_ready" && state.status !== "completed") {
-      throw new TaskError("当前任务不在可编辑状态", 400);
+      throw userError("notEditableState", 400);
     }
     const item = state.material?.items.find((entry) => entry.paragraph === paragraph);
-    if (!item) throw new TaskError(`第 ${paragraph} 段还没有素材`, 400);
+    if (!item) throw userError("noMaterialForParagraph", 400, { n: paragraph });
     item.infoCard = undefined;
     this.invalidateResult(state);
     this.scheduleSave();
@@ -871,23 +898,23 @@ class TaskManager {
   async searchMaterial(paragraph: number, terms?: string[]): Promise<MaterialInfo[]> {
     const state = this.requireState();
     if ((state.status !== "awaiting_material" && state.status !== "material_ready") || !state.material) {
-      throw new TaskError("当前任务不在等待素材确认状态", 400);
+      throw userError("notAwaitingMaterial", 400);
     }
     const current = state.material.items.find((item) => item.paragraph === paragraph);
-    if (!current) throw new TaskError(`第 ${paragraph} 段还没有素材`, 400);
+    if (!current) throw userError("noMaterialForParagraph", 400, { n: paragraph });
 
     const controller = new AbortController();
     this.controller = controller;
     const ctx = this.makeCtx(controller, "material");
-    if (!ctx) throw new TaskError("任务状态异常", 500);
+    if (!ctx) throw userError("badState", 500);
 
     try {
       const used = new Set(state.material.items.map((item) => item.url));
       const keywords = (terms ?? []).filter((term) => term.trim().length > 0);
       return await searchCandidates(ctx, keywords.length > 0 ? keywords : current.searchTerms, used);
     } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") throw new TaskError("检索已取消", 400);
-      throw new TaskError(`检索候选失败：${error instanceof Error ? error.message : String(error)}`, 500);
+      if (error instanceof Error && error.name === "AbortError") throw userError("searchCancelled", 400);
+      throw userError("searchFailed", 500, { reason: reasonOf(error) });
     } finally {
       if (this.controller === controller) this.controller = null;
     }
@@ -897,7 +924,7 @@ class TaskManager {
   retry(): TaskState {
     const state = this.requireState();
     if (state.status !== "failed" && state.status !== "cancelled") {
-      throw new TaskError("只有失败或已停止的任务可以继续", 400);
+      throw userError("onlyFailedCanRetry", 400);
     }
 
     this.controller?.abort();
@@ -916,7 +943,7 @@ class TaskManager {
     const controller = new AbortController();
     this.controller = controller;
     this.setStatus("running");
-    this.log("继续未完成的步骤（已完成的阶段会命中缓存）");
+    this.log(logText("resumeLog"));
     this.emit();
 
     /*
@@ -952,7 +979,7 @@ class TaskManager {
       state.status !== "awaiting_material" &&
       state.status !== "awaiting_cards"
     ) {
-      throw new TaskError("任务已结束，无需取消", 400);
+      throw userError("nothingToCancel", 400);
     }
 
     this.controller?.abort();
@@ -967,7 +994,7 @@ class TaskManager {
     }
 
     this.setStatus("cancelled");
-    this.log("任务已取消", "warn");
+    this.log(logText("cancelled"), "warn");
     this.emit();
     return state;
   }
@@ -1047,7 +1074,7 @@ class TaskManager {
     removeWithRetry(marker);
     // 标记先删：标记没了，即使文件删不掉也不会被当成有效成片复用
     if (!removeWithRetry(target)) {
-      this.log("旧成片被占用，暂时删不掉；合成时会覆盖它", "warn", "compose");
+      this.log(logText("oldVideoBusy"), "warn", "compose");
     }
   }
 
@@ -1082,12 +1109,12 @@ class TaskManager {
       for (const stage of state.stages) {
         if (stage.status === "running") {
           stage.status = "failed";
-          stage.message = "应用退出时中断";
+          stage.message = pick(this.lang, STAGE_TEXT.appQuit);
           stage.endedAt = Date.now();
         }
       }
       state.status = "failed";
-      state.error = "上次运行被中断，点「重试失败步骤」接着跑（已完成的阶段会命中缓存）";
+      this.recordError(state, ERRORS.interrupted);
     }
 
     if (state.result && !fs.existsSync(state.result)) {
@@ -1099,7 +1126,7 @@ class TaskManager {
       state.material = null;
       state.result = null;
       state.status = state.audio ? "awaiting_material" : "failed";
-      if (state.status === "failed") state.error = "上次的配音产物也找不到了，请重新生成";
+      if (state.status === "failed") this.recordError(state, ERRORS.audioMissing);
     }
     if (!state.audio && state.transcript) {
       state.status = state.status === "completed" ? "script_confirmed" : state.status;
@@ -1128,7 +1155,7 @@ class TaskManager {
   }
 
   private requireState(): TaskState {
-    if (!this.state) throw new TaskError("当前没有任务", 400);
+    if (!this.state) throw userError("noTask", 400);
     return this.state;
   }
 
@@ -1166,7 +1193,7 @@ class TaskManager {
       if (!this.state || !this.owns(controller)) return;
       this.state.transcript = transcript;
       this.setStatus("awaiting_script");
-      this.log("剧本已生成，确认后进入配音");
+      this.log(logText("scriptReady"));
       this.emit();
     } catch (error) {
       this.fail(error, controller);
@@ -1184,9 +1211,9 @@ class TaskManager {
       const manifest = await runTtsStage(ctx, transcript);
       if (!this.state || !this.owns(controller)) return;
       this.state.audio = manifest;
-      this.log(`配音已完成：${manifest.paragraphs.length} 段，总时长 ${manifest.totalDuration.toFixed(1)} 秒`);
+      this.log(logText("ttsDone", { n: manifest.paragraphs.length, sec: manifest.totalDuration.toFixed(1) }));
       this.setStatus("awaiting_material");
-      this.log("配音就绪，去「素材确认」点「开始匹配素材」", "info", "material");
+      this.log(logText("ttsReady"), "info", "material");
       this.emit();
     } catch (error) {
       this.fail(error, controller);
@@ -1236,20 +1263,27 @@ class TaskManager {
               item.infoCard = spec;
               usedTopics.push(spec.title);
               carded++;
-              this.log(`第 ${item.paragraph} 段信息卡：${spec.compositionId}「${spec.title}」`, "info", "material");
+              this.log(
+                logText("infoCardAdded", { n: item.paragraph, kind: spec.compositionId, title: spec.title }),
+                "info",
+                "material",
+              );
             }
           } catch (error) {
             if (error instanceof Error && error.name === "AbortError") throw error;
             cardFailed++;
             this.log(
-              `第 ${item.paragraph} 段信息卡生成失败，只保留实拍：${error instanceof Error ? error.message : String(error)}`,
+              logText("infoCardFailed", {
+                n: item.paragraph,
+                reason: error instanceof Error ? error.message : String(error),
+              }),
               "warn",
               "material",
             );
           }
         }
 
-        this.log(`第 ${item.paragraph} 段就绪`, "info", "material");
+        this.log(logText("sectionReady", { n: item.paragraph }), "info", "material");
         this.emit();
       });
 
@@ -1257,18 +1291,21 @@ class TaskManager {
       // markStage 内部会 emit，先赋值再标阶段
       this.state.material = material;
       this.setStatus("awaiting_material");
-      this.markStage("material", "done", `${material.items.length} 段`);
-      this.log(`素材已就绪：${material.items.length} 段`, "info", "material");
+      this.markStage("material", "done", undefined, { sections: material.items.length });
+      this.log(logText("materialReady", { n: material.items.length }), "info", "material");
       if (autoCards) {
         this.log(
           carded > 0
-            ? `已为 ${carded} 段生成信息卡${cardFailed > 0 ? `，${cardFailed} 段失败` : ""}`
-            : "本次没有段落配信息卡",
+            ? logText("infoCardSummary", {
+                n: carded,
+                failed: cardFailed > 0 ? { zh: `，${cardFailed} 段失败`, en: `, ${cardFailed} failed` } : "",
+              })
+            : logText("infoCardNone"),
           "info",
           "material",
         );
       }
-      this.log("素材已匹配，确认后开始合成视频", "info", "material");
+      this.log(logText("materialMatched"), "info", "material");
       this.emit();
     } catch (error) {
       this.fail(error, controller);
@@ -1281,7 +1318,7 @@ class TaskManager {
   private async applyMaterialChanges(next: MaterialReplacement[], signal: AbortSignal): Promise<void> {
     const state = this.requireState();
     const manifest = state.material;
-    if (!manifest) throw new TaskError("素材清单为空", 400);
+    if (!manifest) throw userError("emptyMaterial", 400);
 
     const byParagraph = new Map(manifest.items.map((item) => [item.paragraph, item]));
     const changed: number[] = [];
@@ -1309,7 +1346,7 @@ class TaskManager {
       };
       byParagraph.set(paragraph, updated);
       changed.push(paragraph);
-      this.log(`第 ${paragraph} 段换成新素材：${updated.tags || updated.id}`, "info", "material");
+      this.log(logText("clipReplaced", { n: paragraph, label: updated.tags || updated.id }), "info", "material");
     }
 
     if (changed.length === 0) return;
@@ -1376,13 +1413,13 @@ class TaskManager {
     const current = state.cardPrefs ?? {};
     const wanted = typeof patch.accent === "string" ? patch.accent.trim().toLowerCase() : "";
     const accent = wanted ? cardAccentPalette(loadConfig()).find((c) => c.toLowerCase() === wanted) : undefined;
-    if (wanted && !accent) throw new TaskError("配色不在允许的色板里", 400);
+    if (wanted && !accent) throw userError("badAccent", 400);
 
-    const pickSec = (raw: number | undefined, fallback: number | undefined, label: string) => {
+    const pickSec = (raw: number | undefined, fallback: number | undefined, label: Bilingual) => {
       if (raw === undefined) return fallback;
       const value = Number(raw);
       if (!Number.isFinite(value) || value < 0 || value > 15) {
-        throw new TaskError(`${label}时长要在 0–15 秒之间`, 400);
+        throw userError("durationRange", 400, { label });
       }
       return Math.round(value * 10) / 10;
     };
@@ -1391,9 +1428,9 @@ class TaskManager {
     const finalAccent = accent ?? current.accent;
     if (finalAccent) next.accent = finalAccent;
 
-    const intro = pickSec(patch.introDurationSec, current.introDurationSec, "片头");
-    const chapter = pickSec(patch.chapterDurationSec, current.chapterDurationSec, "章节卡");
-    const outro = pickSec(patch.outroDurationSec, current.outroDurationSec, "片尾");
+    const intro = pickSec(patch.introDurationSec, current.introDurationSec, { zh: "片头", en: "Intro" });
+    const chapter = pickSec(patch.chapterDurationSec, current.chapterDurationSec, { zh: "章节卡", en: "Chapter card" });
+    const outro = pickSec(patch.outroDurationSec, current.outroDurationSec, { zh: "片尾", en: "Outro" });
     if (intro !== undefined) next.introDurationSec = intro;
     if (chapter !== undefined) next.chapterDurationSec = chapter;
     if (outro !== undefined) next.outroDurationSec = outro;
@@ -1412,11 +1449,11 @@ class TaskManager {
   private reopenCards(state: TaskState): void {
     if (state.status === "awaiting_cards") return;
     if (state.status === "awaiting_material" || state.status === "material_ready") {
-      this.log("版式有改动，成片会按新卡片重新合成", "warn", "cards");
+      this.log(logText("cardsChangedResume"), "warn", "cards");
       return;
     }
     this.setStatus("awaiting_cards");
-    this.log("版式有改动，需要重新确认后再合成", "warn", "cards");
+    this.log(logText("cardsChangedConfirm"), "warn", "cards");
   }
 
   private async executeCards(controller: AbortController, resetStage = false): Promise<void> {
@@ -1440,8 +1477,8 @@ class TaskManager {
       if (!this.state || !this.owns(controller)) return;
       this.state.cards = manifest;
       this.setStatus("awaiting_cards");
-      this.markStage("cards", "done", `${manifest.items.length} 张`);
-      this.log("版式已就绪：可以预览、换一个或删掉不要的卡，确认后进入合成");
+      this.markStage("cards", "done", undefined, { cards: manifest.items.length });
+      this.log(logText("cardsReady"));
       this.emit();
     } catch (error) {
       this.fail(error, controller);
@@ -1457,12 +1494,12 @@ class TaskManager {
 
     const { transcript, audio, material, cards } = state;
     try {
-      if (!transcript || !audio || !material) throw new Error("缺少剧本、配音或素材，无法合成");
+      if (!transcript || !audio || !material) throw userError("composeIncomplete", 500);
       const output = await runComposeStage(ctx, transcript, audio, material, cards);
       if (!this.state || !this.owns(controller)) return;
       this.state.result = output;
       this.setStatus("completed");
-      this.log(`视频已生成：${output}`);
+      this.log(logText("videoDone", { path: output }));
       this.emit();
     } catch (error) {
       this.fail(error, controller);
@@ -1483,19 +1520,19 @@ class TaskManager {
     if (!state) return;
 
     const aborted = error instanceof Error && error.name === "AbortError";
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error, this.lang);
 
     for (const stage of state.stages) {
       if (stage.status === "running") {
         stage.status = aborted ? "skipped" : "failed";
-        stage.message = aborted ? "已取消" : message.slice(0, 200);
+        stage.message = aborted ? pick(this.lang, ERRORS.cancelled) : message.slice(0, 200);
         stage.endedAt = Date.now();
       }
     }
 
     if (aborted) {
       this.setStatus("cancelled");
-      this.log("任务已取消", "warn");
+      this.log(ERRORS.cancelled, "warn");
     } else {
       this.setStatus("failed", message);
       this.log(message, "error");
@@ -1503,13 +1540,13 @@ class TaskManager {
     this.emit();
   }
 
-  /** stage 缺省时归到当前阶段 */
-  private log(text: string, level: LogLine["level"] = "info", stage?: string): void {
+  /** 写一条日志：按此刻的界面语言定稿，只留一份，切语言不追改历史 */
+  private log(text: string | Bilingual, level: LogLine["level"] = "info", stage?: string): void {
     if (!this.state) return;
     this.state.logs.push({
       time: new Date().toISOString(),
       level,
-      text,
+      text: typeof text === "string" ? text : pick(this.lang, text),
       stage: stage ?? this.currentStageId ?? undefined,
     });
     if (this.state.logs.length > MAX_LOGS) {
@@ -1518,14 +1555,21 @@ class TaskManager {
     this.emit();
   }
 
-  private markStage(id: string, status: StageStatus, message?: string, counts?: StageState["counts"]): void {
+  private markStage(
+    id: string,
+    status: StageStatus,
+    message?: string | Bilingual,
+    counts?: StageState["counts"],
+  ): void {
     const state = this.state;
     if (!state) return;
     const stage: StageState | undefined = state.stages.find((s) => s.id === id);
     if (!stage) return;
 
     stage.status = status;
-    if (message !== undefined) stage.message = message;
+    if (message !== undefined) {
+      stage.message = typeof message === "string" ? message : pick(this.lang, message);
+    }
     if (counts !== undefined) stage.counts = counts;
     if (status === "running") {
       stage.startedAt = Date.now();
@@ -1540,6 +1584,11 @@ class TaskManager {
     this.state.status = status;
     this.state.error = error ?? null;
     this.state.updatedAt = new Date().toISOString();
+  }
+
+  /** 写失败原因：同样按此刻的界面语言定稿 */
+  private recordError(state: TaskState, text: Bilingual): void {
+    state.error = pick(this.lang, text);
   }
 
   private emit(): void {

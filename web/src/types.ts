@@ -172,7 +172,7 @@ export interface StageState {
   /** 后端写入的中文名；界面按 id 从词典取词，这里只作兜底 */
   label: string;
   status: StageStatus;
-  /** 落盘的中文摘要；老任务只有这个 */
+  /** 摘要：按写入时的界面语言定稿 */
   message?: string;
   /** 结构化摘要，有它时按当前语言现拼 */
   counts?: {
@@ -308,6 +308,7 @@ export interface AudioManifest {
 export interface LogLine {
   time: string;
   level: "info" | "warn" | "error";
+  /** 写入时的界面语言，只有这一份 */
   text: string;
   /** 所属阶段，任务级日志没有 */
   stage?: string;
@@ -347,6 +348,7 @@ export interface TaskState {
   /** 手动指定的配色与章节时长；null 表示没选过 */
   cardPrefs: CardPrefs | null;
   result: string | null;
+  /** 失败原因：按失败那一刻的界面语言定稿 */
   error: string | null;
   createdAt: string;
   updatedAt: string;

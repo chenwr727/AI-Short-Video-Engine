@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { findBinary } from "./deps.js";
+import { userError } from "../errors.js";
 
 export interface FfmpegOptions {
   signal?: AbortSignal;
@@ -13,7 +14,7 @@ export interface FfmpegOptions {
 export function ffmpegPath(): string {
   const bin = findBinary("ffmpeg");
   if (!bin) {
-    throw new Error("未检测到 ffmpeg，请安装 ffmpeg 或使用带内置 ffmpeg 的安装包");
+    throw userError("noFfmpeg", 500);
   }
   return bin;
 }

@@ -5,6 +5,8 @@ import { fetchContent } from "../services/fetcher.js";
 import { loadCriticPrompts, loadPrompts } from "../services/prompts.js";
 import { splitContent } from "./split.js";
 import type { PromptSource, RawTranscript, TaskContext, Transcript } from "../types.js";
+import { stageText, userError } from "../errors.js";
+import { logText } from "../logs.js";
 
 const FILES = {
   html: "_html.txt",
@@ -149,19 +151,19 @@ export function scriptIssues(raw: RawTranscript, rules: ScriptRules): string[] {
 
 function normalizeRaw(input: unknown): RawTranscript {
   const obj = input as Record<string, unknown> | null;
-  if (!obj || typeof obj !== "object") throw new Error("剧本格式错误：顶层不是对象");
+  if (!obj || typeof obj !== "object") throw userError("scriptTopLevel", 500);
 
   const title = typeof obj.title === "string" ? obj.title.trim() : "";
 
   const rawParagraphs = obj.paragraphs;
   if (!Array.isArray(rawParagraphs) || rawParagraphs.length === 0) {
-    throw new Error("剧本格式错误：缺少 paragraphs");
+    throw userError("scriptNoParagraphs", 500);
   }
 
   const paragraphs: RawTranscript["paragraphs"] = [];
   rawParagraphs.forEach((p, index) => {
     const paragraph = p as Record<string, unknown> | null;
-    if (!paragraph || typeof paragraph !== "object") throw new Error(`剧本格式错误：第 ${index + 1} 段不是对象`);
+    if (!paragraph || typeof paragraph !== "object") throw userError("scriptParagraphShape", 500, { n: index + 1 });
 
     const rawDialogues = paragraph.dialogues;
     const dialogues: RawTranscript["paragraphs"][number]["dialogues"] = [];
@@ -175,13 +177,13 @@ function normalizeRaw(input: unknown): RawTranscript {
     }
 
     // 整段没有可用台词视为结构错误，交给修复回路处理
-    if (dialogues.length === 0) throw new Error(`剧本格式错误：第 ${index + 1} 段没有有效对话`);
+    if (dialogues.length === 0) throw userError("scriptParagraphEmpty", 500, { n: index + 1 });
 
     const description = typeof paragraph.description === "string" ? paragraph.description.trim() : "";
     paragraphs.push({ description, dialogues });
   });
 
-  if (paragraphs.length === 0) throw new Error("剧本格式错误：没有有效对话");
+  if (paragraphs.length === 0) throw userError("scriptNoDialogue", 500);
   return { title, paragraphs };
 }
 
@@ -212,13 +214,13 @@ function errorText(error: unknown): string {
 
 function parseScript(answer: string): RawTranscript {
   const json = extractJsonObject(answer);
-  if (!json) throw new Error("剧本改写失败：模型没有返回合法 JSON");
+  if (!json) throw userError("rewriteNoJson", 500);
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(json);
   } catch {
-    throw new Error(`剧本改写失败：JSON 解析出错\n${json.slice(0, 300)}`);
+    throw userError("rewriteBadJson", 500, { detail: json.slice(0, 300) });
   }
   return normalizeRaw(parsed);
 }
@@ -246,7 +248,7 @@ async function fixScript(
     return await requestScript(ctx, prompt, JSON.stringify({ draft, script, issues }), temperature);
   } catch (error) {
     if (ctx.signal.aborted) throw error;
-    ctx.log(`修复调用失败：${errorText(error)}`, "warn");
+    ctx.log(logText("fixCallFailed", { reason: errorText(error) }), "warn");
     return null;
   }
 }
@@ -262,19 +264,25 @@ async function enforceRules(
   const issues = scriptIssues(script, rules);
   if (issues.length === 0) return script;
 
-  ctx.log(`剧本未达约束：${issues[0]}${issues.length > 1 ? `（共 ${issues.length} 项）` : ""}`, "warn");
-  ctx.markStage("rewrite", "running", "按约束修复");
+  ctx.log(
+    logText("rulesMissed", {
+      issue: issues[0] ?? "",
+      more: issues.length > 1 ? { zh: `（共 ${issues.length} 项）`, en: ` (${issues.length} issues)` } : "",
+    }),
+    "warn",
+  );
+  ctx.markStage("rewrite", "running", stageText("fixing"));
 
   const fixed = await fixScript(ctx, prompt, script, issues, draft, 0.5);
   if (!fixed) return script;
 
   const left = scriptIssues(fixed, rules);
   if (left.length >= issues.length) {
-    ctx.log("修复未收敛，保留原稿", "warn");
+    ctx.log(logText("repairNotConverged"), "warn");
     return script;
   }
 
-  ctx.log(left.length ? `修复后仍有 ${left.length} 项偏差` : "约束已修正", left.length ? "warn" : "info");
+  ctx.log(left.length ? logText("stillOff", { n: left.length }) : logText("rulesFixed"), left.length ? "warn" : "info");
   return fixed;
 }
 
@@ -326,11 +334,11 @@ async function critiqueScript(
     });
     const answer = await chat(prompt, input, { json: true, signal: ctx.signal, temperature: 0.2 });
     const critique = parseCritique(answer);
-    if (!critique) ctx.log("审稿结果无法解析，跳过返修", "warn");
+    if (!critique) ctx.log(logText("critiqueUnparsable"), "warn");
     return critique;
   } catch (error) {
     if (ctx.signal.aborted) throw error;
-    ctx.log(`审稿失败，跳过：${errorText(error)}`, "warn");
+    ctx.log(logText("critiqueFailed", { reason: errorText(error) }), "warn");
     return null;
   }
 }
@@ -340,10 +348,10 @@ export async function runScriptStages(ctx: TaskContext): Promise<Transcript> {
   const scriptFile = path.join(ctx.workspace, FILES.script);
 
   if (fs.existsSync(scriptFile)) {
-    ctx.log("复用已生成的剧本（_transcript.json）");
+    ctx.log(logText("reuseTranscript"));
     const raw = normalizeRaw(readJson<unknown>(scriptFile));
     const transcript = toTranscript(raw);
-    for (const id of SCRIPT_STAGES) ctx.markStage(id, "skipped", "命中缓存");
+    for (const id of SCRIPT_STAGES) ctx.markStage(id, "skipped", stageText("cached"));
     ctx.markStage("split", "done", `${transcript.paragraphs.length} 段 / ${sentenceCount(transcript)} 句`, {
       sections: transcript.paragraphs.length,
       sentences: sentenceCount(transcript),
@@ -359,12 +367,12 @@ export async function runScriptStages(ctx: TaskContext): Promise<Transcript> {
   let content: string;
   if (fs.existsSync(htmlFile)) {
     content = fs.readFileSync(htmlFile, "utf-8");
-    ctx.log("复用已抓取的正文");
+    ctx.log(logText("reuseHtml"));
   } else {
     content = await fetchContent(ctx.input, ctx.signal, ctx.log);
     fs.writeFileSync(htmlFile, content, "utf-8");
   }
-  ctx.markStage("fetch", "done", `${content.length} 字`);
+  ctx.markStage("fetch", "done", undefined, { chars: content.length });
 
   ctx.markStage("write", "running");
   const draftFile = path.join(ctx.workspace, FILES.draft);
@@ -373,13 +381,13 @@ export async function runScriptStages(ctx: TaskContext): Promise<Transcript> {
   let draft: string;
   if (cachedDraft.trim()) {
     draft = cachedDraft;
-    ctx.log("复用已生成的草稿");
+    ctx.log(logText("reuseDraft"));
   } else {
-    ctx.log(`正在用「${ctx.options.promptSource}」风格撰写草稿…`);
+    ctx.log(logText("writingDraft", { style: ctx.options.promptSource }));
     draft = await chat(prompts.writer, content, { signal: ctx.signal, temperature: 0.9 });
     fs.writeFileSync(draftFile, draft, "utf-8");
   }
-  ctx.markStage("write", "done", `${draft.length} 字`);
+  ctx.markStage("write", "done", undefined, { chars: draft.length });
 
   ctx.markStage("rewrite", "running");
   const review = loadCriticPrompts();
@@ -387,30 +395,34 @@ export async function runScriptStages(ctx: TaskContext): Promise<Transcript> {
   script = await enforceRules(ctx, review.repair, script, rules, draft);
 
   if (REVIEW_ENABLED) {
-    ctx.markStage("rewrite", "running", "审稿中");
+    ctx.markStage("rewrite", "running", stageText("reviewing"));
     const critique = await critiqueScript(ctx, review.critic, script, draft);
     if (critique) {
       const score = Math.round(critique.overall * 100);
       ctx.log(
-        `审稿评分 ${score} 分（阈值 ${Math.round(REVIEW_THRESHOLD * 100)}）${critique.issues[0] ? `：${critique.issues[0]}` : ""}`,
+        logText("critiqueScore", {
+          score,
+          threshold: Math.round(REVIEW_THRESHOLD * 100),
+          first: critique.issues[0] ? { zh: `：${critique.issues[0]}`, en: `: ${critique.issues[0]}` } : "",
+        }),
         critique.overall < REVIEW_THRESHOLD ? "warn" : "info",
       );
 
       if (critique.overall < REVIEW_THRESHOLD && critique.issues.length > 0) {
-        ctx.markStage("rewrite", "running", "按审稿意见返修");
+        ctx.markStage("rewrite", "running", stageText("repairing"));
         const revised = await fixScript(ctx, review.repair, script, critique.issues, draft, 0.6);
         if (revised && scriptIssues(revised, rules).length <= scriptIssues(script, rules).length) {
           script = revised;
-          ctx.log("已按审稿意见返修一次");
+          ctx.log(logText("repairedOnce"));
         } else {
-          if (revised) ctx.log("返修后约束变差，保留原稿", "warn");
+          if (revised) ctx.log(logText("repairWorse"), "warn");
         }
       }
     }
   }
 
   fs.writeFileSync(scriptFile, JSON.stringify(script, null, 2), "utf-8");
-  ctx.markStage("rewrite", "done", `${script.paragraphs.length} 段`);
+  ctx.markStage("rewrite", "done", undefined, { sections: script.paragraphs.length });
 
   ctx.markStage("split", "running");
   const transcript = toTranscript(script);
@@ -418,7 +430,7 @@ export async function runScriptStages(ctx: TaskContext): Promise<Transcript> {
     sections: transcript.paragraphs.length,
     sentences: sentenceCount(transcript),
   });
-  ctx.log(`剧本已就绪：${transcript.title}`);
+  ctx.log(logText("scriptReadyLog", { title: transcript.title }));
 
   return transcript;
 }

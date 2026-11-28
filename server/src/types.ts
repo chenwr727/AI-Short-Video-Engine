@@ -1,3 +1,5 @@
+import type { Bilingual } from "./i18n.js";
+
 export type PromptSource = "podcast" | "crosstalk" | "talkshow";
 export type TtsEngine = "cosyvoice" | "edge" | "seedtts";
 export type MaterialSource = "pixabay" | "pexels";
@@ -78,6 +80,7 @@ export interface StageState {
   id: string;
   label: string;
   status: StageStatus;
+  /** 摘要：纯数字走 counts 由前端拼，固定说法按写那一刻的语言定稿 */
   message?: string;
   /**
    * 结构化的完成摘要，前端按界面语言组装文案。
@@ -314,6 +317,7 @@ export interface CardPrefs {
 export interface LogLine {
   time: string;
   level: "info" | "warn" | "error";
+  /** 写入时的界面语言，只存这一份 */
   text: string;
   /** 任务级日志不带 */
   stage?: string;
@@ -335,6 +339,7 @@ export interface TaskState {
   /** 手动指定的配色与章节时长；null 表示没选过，跟随 AI 与配置 */
   cardPrefs: CardPrefs | null;
   result: string | null;
+  /** 失败原因：按失败那一刻的界面语言定稿 */
   error: string | null;
   createdAt: string;
   updatedAt: string;
@@ -352,6 +357,7 @@ export interface TaskContext {
   options: GenerateOptions;
   workspace: string;
   signal: AbortSignal;
-  log: (text: string, level?: LogLine["level"]) => void;
-  markStage: (id: string, status: StageStatus, message?: string, counts?: StageState["counts"]) => void;
+  /** 双语对象由 manager 按当时语言定稿；字符串表示纯数据（路径、标签、数字） */
+  log: (text: string | Bilingual, level?: LogLine["level"]) => void;
+  markStage: (id: string, status: StageStatus, message?: string | Bilingual, counts?: StageState["counts"]) => void;
 }

@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { findBinary } from "./deps.js";
+import { userError } from "../errors.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -45,7 +46,7 @@ async function probeWithFfprobe(bin: string, file: string): Promise<VideoProbe> 
   }
 
   if (!Number.isFinite(duration) || duration <= 0 || !width || !height) {
-    throw new Error(`素材文件无法解析：${file}`);
+    throw userError("probeFailed", 500, { file });
   }
   return { duration, width, height };
 }
@@ -103,5 +104,5 @@ export async function probeVideo(file: string): Promise<VideoProbe> {
   const fallback = await probeWithFfmpeg(file);
   if (fallback) return fallback;
 
-  throw new Error(`未检测到 ffprobe，ffmpeg 也读不出素材信息：${file}`);
+  throw userError("probeNoTools", 500, { file });
 }

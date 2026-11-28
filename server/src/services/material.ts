@@ -7,6 +7,7 @@ import type { ReadableStream as WebReadableStream } from "node:stream/web";
 import { cacheDir, ensureDir } from "../paths.js";
 import { probeVideo } from "./probe.js";
 import type { MaterialInfo, MaterialSource, Relevance } from "../types.js";
+import { userError } from "../errors.js";
 
 export interface MaterialQuery {
   apiKey: string;
@@ -29,7 +30,7 @@ async function getJson(url: string, headers: Record<string, string> = {}): Promi
     signal: AbortSignal.timeout(30_000),
   });
   if (!res.ok) {
-    throw new Error(`素材接口失败（HTTP ${res.status}）：${url.split("?")[0]}`);
+    throw userError("stockApiFailed", 500, { status: res.status, url: url.split("?")[0] ?? "" });
   }
   return res.json();
 }
@@ -368,7 +369,7 @@ export async function downloadMaterial(url: string, signal: AbortSignal, idleTim
     const res = await fetch(url, {
       signal: AbortSignal.any([controller.signal, AbortSignal.timeout(300_000)]),
     });
-    if (!res.ok || !res.body) throw new Error(`素材下载失败（HTTP ${res.status}）`);
+    if (!res.ok || !res.body) throw userError("clipDownloadFailed", 500, { status: res.status });
 
     const stream = Readable.fromWeb(res.body as unknown as WebReadableStream);
     stream.on("data", resetIdle);
@@ -383,7 +384,7 @@ export async function downloadMaterial(url: string, signal: AbortSignal, idleTim
     return file;
   } catch (error) {
     fs.rmSync(temp, { force: true });
-    if (idle) throw new Error(`素材下载超时（${idleTimeoutMs / 1000}s 无数据）：${key.slice(0, 80)}`, { cause: error });
+    if (idle) throw userError("clipDownloadTimeout", 500, { sec: idleTimeoutMs / 1000, key: key.slice(0, 80) }, error);
     throw error;
   } finally {
     if (idleTimer) clearTimeout(idleTimer);

@@ -11,7 +11,7 @@ import {
   type AppConfig,
 } from "./config.js";
 import { pick, type Bilingual, type Lang } from "./i18n.js";
-import { COSY_VOICES, EDGE_VOICES, SEED_VOICES } from "./voices.js";
+import { COSY_VOICES, EDGE_VOICES, SEED_VOICES, type VoiceDef } from "./voices.js";
 
 /** 下发给前端的选项：文案已按语言展开 */
 export interface Option {
@@ -78,10 +78,10 @@ export const RESOLUTIONS: TextOption[] = [
   { id: "720x1280", label: { zh: "720 × 1280（竖屏快速）", en: "720 × 1280 (portrait fast)" } },
 ];
 
-/** 内部定义：引擎文案保留双语 */
+/** 内部定义：引擎与音色文案都保留双语 */
 interface TextTtsEngine extends TextOption {
   description: Bilingual;
-  voices: VoiceOption[];
+  voices: VoiceDef[];
 }
 
 /** Edge 始终可用，其余需配置 Key；首个为默认 */
@@ -117,7 +117,7 @@ export function ttsEngines(cfg: AppConfig, lang: Lang = "zh"): TtsEngineOption[]
     id: engine.id,
     label: pick(lang, engine.label),
     description: pick(lang, engine.description),
-    voices: engine.voices,
+    voices: engine.voices.map((voice) => ({ id: voice.id, label: pick(lang, voice.label) })),
   }));
 }
 

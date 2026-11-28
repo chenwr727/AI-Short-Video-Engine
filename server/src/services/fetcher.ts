@@ -1,6 +1,9 @@
 import crypto from "node:crypto";
 import * as cheerio from "cheerio";
+import type { Bilingual } from "../i18n.js";
 import type { LogLine } from "../types.js";
+import { userError } from "../errors.js";
+import { logText } from "../logs.js";
 
 const MAX_CONTENT = 60_000;
 /** 网页正文下限，低于此值多半是登录页、验证页或纯脚本渲染 */
@@ -55,7 +58,7 @@ const BOT_MARKERS = [
 ];
 const BOT_HTML = /cf-browser-verification|challenge-platform|__cf_chl_|geetest|captcha/i;
 
-type Logger = (text: string, level?: LogLine["level"]) => void;
+type Logger = (text: string | Bilingual, level?: LogLine["level"]) => void;
 
 /** 36kr 正文加密在 window.initialState 里 */
 function decode36kr(html: string): string {
@@ -381,25 +384,25 @@ async function fetchHtml(url: string, signal: AbortSignal, log: Logger): Promise
     } catch (error) {
       if (signal.aborted) throw error;
       if (attempt === 1) throw error;
-      log("抓取失败，重试一次…", "warn");
+      log(logText("fetchRetry"), "warn");
       await sleep(600, signal);
       continue;
     }
 
     if (res.status === 403 || res.status === 429) {
-      throw new Error(`站点拒绝抓取（HTTP ${res.status}），可能有反爬限制。请打开页面复制正文粘贴到输入框。`);
+      throw userError("fetchBlocked", 400, { status: res.status });
     }
     if (res.status >= 500 && attempt === 0) {
-      log(`站点返回 ${res.status}，重试一次…`, "warn");
+      log(logText("serverRetry", { status: res.status }), "warn");
       await sleep(600, signal);
       continue;
     }
-    if (!res.ok) throw new Error(`抓取失败（HTTP ${res.status}）：${url}`);
+    if (!res.ok) throw userError("fetchHttpFailed", 400, { status: res.status, url });
 
     return decodeHtml(await res.arrayBuffer(), res.headers.get("content-type"));
   }
 
-  throw new Error(`抓取失败：${url}`);
+  throw userError("fetchFailed", 400, { url });
 }
 
 function truncate(text: string): string {
@@ -414,19 +417,17 @@ export async function fetchContent(input: string, signal: AbortSignal, log: Logg
   const trimmed = input.trim();
   if (!/^https?:\/\//i.test(trimmed)) {
     const text = truncate(normalize(trimmed));
-    log(`使用粘贴的正文（${text.length} 字）`);
+    log(logText("pastedText", { n: text.length }));
     return text;
   }
 
-  log(`抓取网页：${trimmed}`);
+  log(logText("fetching", { url: trimmed }));
   const html = await fetchHtml(trimmed, signal, log);
   let article = extractArticle(html);
 
   const botReason = detectAntiBot(article.title, article.text, html);
   if (botReason) {
-    throw new Error(
-      `抓到的是一张验证页（命中「${botReason}」），不是文章正文。请用浏览器打开页面，复制正文粘贴到输入框。`,
-    );
+    throw userError("fetchBotPage", 400, { reason: botReason });
   }
 
   if (/^https?:\/\/(www\.)?36kr\.com\/p\//.test(trimmed)) {
@@ -437,34 +438,31 @@ export async function fetchContent(input: string, signal: AbortSignal, log: Logg
         text: trimChrome(dedupeParagraphs([...extra.split(/\n{2,}/), ...article.text.split(/\n{2,}/)]).join("\n\n")),
         source: "script",
       };
-      log("已解密 36kr 正文数据");
+      log(logText("decrypted"));
     } else if (!isSubstantial(article.text)) {
-      log("36kr 正文解密失败，页面可见文本也不足", "warn");
+      log(logText("decryptFailed"), "warn");
     }
   }
 
   const chars = countChars(article.text);
   if (!isSubstantial(article.text)) {
-    throw new Error(
-      `抓到的正文只有 ${chars} 字，可能是登录页、验证页，或内容由脚本动态渲染。` +
-        `请用浏览器打开页面，复制正文粘贴到输入框。`,
-    );
+    throw userError("fetchTooShort", 400, { n: chars });
   }
 
   // 列表页字数够、但全是短标题，放过去会让模型从标题里瞎猜主题
   const listing = looksLikeListing(article.text);
   if (listing) {
-    throw new Error(`抓到的不是文章正文（${listing}）。请打开具体文章页，或复制正文粘贴到输入框。`);
+    throw userError("fetchListing", 400, { reason: listing });
   }
 
   const text = truncate(article.text);
   const paragraphs = text.split(/\n{2,}/).length;
-  log(`抓取完成：正文 ${chars} 字 · ${paragraphs} 段 · 来源 ${article.source}`);
+  log(logText("fetched", { chars, paragraphs, source: article.source }));
 
   if (article.linkDensity > 0.25) {
-    log(`正文里链接占比 ${Math.round(article.linkDensity * 100)}%，可能混入了导航或推荐位`, "warn");
+    log(logText("linkDensity", { percent: Math.round(article.linkDensity * 100) }), "warn");
   }
-  if (text.length < article.text.length) log(`正文过长，截断到 ${MAX_CONTENT} 字`, "warn");
+  if (text.length < article.text.length) log(logText("truncated", { n: MAX_CONTENT }), "warn");
 
   return text;
 }

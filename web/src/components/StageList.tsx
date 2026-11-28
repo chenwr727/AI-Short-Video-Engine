@@ -37,12 +37,7 @@ function cost(stage: StageState): string {
   return sec < 60 ? `${sec.toFixed(1)}s` : `${Math.floor(sec / 60)}m${Math.round(sec % 60)}s`;
 }
 
-/**
- * 阶段完成摘要。
- *
- * 后端同时给了结构化数值和一份落盘的中文快照：
- * 有数值就按当前语言现拼，老任务没有数值则显示原文（只能是中文）。
- */
+/** 阶段摘要：有 counts 就按当前语言现拼，固定说法用写入时的语言 */
 function summary(stage: StageState, t: (key: MessageKey, vars?: Record<string, string | number>) => string) {
   const c = stage.counts;
   if (!c) return stage.message;

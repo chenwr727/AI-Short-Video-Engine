@@ -1,4 +1,5 @@
 import { bool, joinApiPath, loadConfig, type AppConfig } from "../config.js";
+import { userError } from "../errors.js";
 
 export interface ChatOptions {
   json?: boolean;
@@ -135,14 +136,14 @@ async function callOnce(cfg: AppConfig, system: string, user: string, opts: Chat
     text = await res.text();
   }
   if (!res.ok) {
-    throw new Error(`LLM 请求失败（${res.status}）：${text.slice(0, 400)}`);
+    throw userError("llmHttp", 500, { status: res.status, detail: text.slice(0, 400) });
   }
 
   let data: ChatResponse;
   try {
     data = JSON.parse(text) as ChatResponse;
   } catch {
-    throw new Error(`LLM 返回的不是合法 JSON：${text.slice(0, 200)}`);
+    throw userError("llmBadJson", 500, { detail: text.slice(0, 200) });
   }
 
   const choice = data.choices?.[0];
@@ -179,7 +180,7 @@ async function callOnce(cfg: AppConfig, system: string, user: string, opts: Chat
 export async function chat(system: string, user: string, opts: ChatOptions = {}): Promise<string> {
   const cfg = opts.config ?? loadConfig();
   if (!cfg.LLM_API_KEY) {
-    throw new Error("未配置 LLM_API_KEY，请编辑 config.json 后重启应用");
+    throw userError("noLlmKey", 500);
   }
 
   const retries = opts.retries ?? 2;

@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
-import { langOf } from "../i18n.js";
+import { errorMessage, userText } from "../errors.js";
+import { langOf, type Lang } from "../i18n.js";
 import { PROMPT_DOCS, promptDocs, readPromptValue, resetPromptValue, writePromptValue } from "../services/prompts.js";
 
 interface PromptBody {
@@ -32,31 +33,36 @@ export async function registerPromptRoutes(app: FastifyInstance): Promise<void> 
 
   app.get("/api/prompts/one", async (req, reply) => {
     const { file, key } = target((req.query ?? {}) as PromptBody);
+    const lang: Lang = langOf(req.headers["accept-language"]);
     try {
       return reply.send(readPromptValue(file, key));
     } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : String(error) });
+      return reply.code(400).send({ error: errorMessage(error, lang) });
     }
   });
 
   app.post("/api/prompts", async (req, reply) => {
     const body = (req.body ?? {}) as PromptBody;
     const { file, key } = target(body);
-    if (typeof body.value !== "string") return reply.code(400).send({ error: "value 必须是字符串" });
+    const lang: Lang = langOf(req.headers["accept-language"]);
+    if (typeof body.value !== "string") {
+      return reply.code(400).send({ error: userText("promptValueInvalid", lang) });
+    }
     try {
       return reply.send(writePromptValue(file, key, body.value));
     } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : String(error) });
+      return reply.code(400).send({ error: errorMessage(error, lang) });
     }
   });
 
   /** 恢复内置默认，删掉该键的覆盖 */
   app.post("/api/prompts/reset", async (req, reply) => {
     const { file, key } = target((req.body ?? {}) as PromptBody);
+    const lang: Lang = langOf(req.headers["accept-language"]);
     try {
       return reply.send(resetPromptValue(file, key));
     } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : String(error) });
+      return reply.code(400).send({ error: errorMessage(error, lang) });
     }
   });
 }

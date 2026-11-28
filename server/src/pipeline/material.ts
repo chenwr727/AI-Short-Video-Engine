@@ -14,6 +14,9 @@ import type {
   TaskContext,
   Transcript,
 } from "../types.js";
+import { userError } from "../errors.js";
+import { stageText } from "../errors.js";
+import { logText } from "../logs.js";
 
 const TERMS_FILE = "_terms.json";
 const VIDEOS_FILE = "_videos.json";
@@ -126,13 +129,13 @@ async function generateTerms(ctx: TaskContext, transcript: Transcript, audio?: A
     try {
       const cached = JSON.parse(fs.readFileSync(file, "utf-8")) as { prompt?: string; terms?: string[][] } | string[][];
       if (!Array.isArray(cached) && cached.prompt === promptStamp && Array.isArray(cached.terms)) {
-        ctx.log("复用检索词（_terms.json）");
+        ctx.log(logText("reuseTerms"));
         return cached.terms;
       }
     } catch {
       // 坏文件按过期处理
     }
-    ctx.log("检索词提示词有更新，重新生成检索词", "warn");
+    ctx.log(logText("termsPromptUpdated"), "warn");
   }
 
   const portrait = ctx.options.height > ctx.options.width;
@@ -183,7 +186,17 @@ async function generateTerms(ctx: TaskContext, transcript: Transcript, audio?: A
     }
     const done = covered();
     if (done < payload.length) {
-      ctx.log(`检索词只覆盖 ${done}/${payload.length} 段，${attempt < 3 ? "整批重试" : "改为逐段补问"}`, "warn");
+      ctx.log(
+        logText("termsPartial", {
+          done,
+          total: payload.length,
+          action:
+            attempt < 3
+              ? { zh: "整批重试", en: "retrying the whole batch" }
+              : { zh: "改为逐段补问", en: "asking section by section" },
+        }),
+        "warn",
+      );
     }
   }
 
@@ -205,13 +218,13 @@ async function generateTerms(ctx: TaskContext, transcript: Transcript, audio?: A
   const terms = payload.map((item) => {
     const got = collected.get(item.id);
     if (got && got.length > 0) return fitOrientation(got.slice(0, 5), portrait);
-    ctx.log(`第 ${item.id} 段拿不到英文检索词，改用台词关键词`, "warn");
+    ctx.log(logText("noEnglishTerms", { n: item.id }), "warn");
     return fallbackTerms(item.content);
   });
 
   fs.writeFileSync(file, JSON.stringify({ prompt: promptStamp, terms }, null, 2), "utf-8");
   const sample = terms[0]?.[0] ?? "";
-  ctx.log(`检索词已生成：${terms.length} 段 × ${terms[0]?.length ?? 0} 个（示例：${sample}）`);
+  ctx.log(logText("termsReady", { n: terms.length, k: terms[0]?.length ?? 0, sample }));
   return terms;
 }
 
@@ -351,7 +364,7 @@ async function visionSelect(
   });
 
   const json = extractJsonObject(answer);
-  if (!json) throw new Error("视觉选片返回格式不符");
+  if (!json) throw userError("visionSelectShape", 500);
 
   const data = JSON.parse(json) as { selected_ids?: unknown };
   const ids = Array.isArray(data.selected_ids) ? data.selected_ids : [];
@@ -359,7 +372,13 @@ async function visionSelect(
   if (!picked) return null;
 
   ctx.log(
-    `视觉选片：看 ${ordered.length} 张缩略图 → ${picked.tags || picked.id}（${picked.duration}s, ${picked.width}×${picked.height}）`,
+    logText("visionPicked", {
+      n: ordered.length,
+      label: picked.tags || picked.id,
+      sec: picked.duration,
+      w: picked.width,
+      h: picked.height,
+    }),
   );
   return picked;
 }
@@ -384,17 +403,12 @@ async function aiSelect(
     try {
       const picked = await visionSelect(ctx, content, candidates, audioLength);
       if (picked) return { item: picked, visionUnsupported: false };
-      ctx.log("视觉选片没有给出可用画面，回退到标签选片", "warn");
+      ctx.log(logText("visionNoPick"), "warn");
     } catch (error) {
       if (ctx.signal.aborted) throw error;
       const unsupported = isVisionUnsupported(error);
       const reason = error instanceof Error ? error.message : String(error);
-      ctx.log(
-        unsupported
-          ? `模型不支持图片输入，本次任务改用标签选片：${reason}`
-          : `本段视觉选片失败，先退回标签选片，下一段继续尝试看图：${reason}`,
-        "warn",
-      );
+      ctx.log(unsupported ? logText("visionUnsupported", { reason }) : logText("visionFailed", { reason }), "warn");
       return { item: null, visionUnsupported: unsupported };
     }
   }
@@ -425,7 +439,7 @@ async function aiSelect(
     if (picked) return { item: picked, visionUnsupported: false };
   } catch (error) {
     if (ctx.signal.aborted) throw error;
-    ctx.log(`AI 选片失败，改用时长匹配：${error instanceof Error ? error.message : String(error)}`, "warn");
+    ctx.log(logText("aiSelectFailed", { reason: error instanceof Error ? error.message : String(error) }), "warn");
   }
   return { item: null, visionUnsupported: false };
 }
@@ -534,9 +548,9 @@ export async function searchCandidates(
   const source = ctx.options.materialSource;
   const apiKey = source === "pexels" ? cfg.PEXELS_API_KEY : cfg.PIXABAY_API_KEY;
   if (!apiKey) {
-    throw new Error(
-      `未配置 ${source === "pexels" ? "PEXELS_API_KEY" : "PIXABAY_API_KEY"}，无法检索素材。请编辑 config.json 后重启应用`,
-    );
+    throw userError("noStockKey", 500, {
+      key: source === "pexels" ? "PEXELS_API_KEY" : "PIXABAY_API_KEY",
+    });
   }
 
   const candidates: MaterialInfo[] = [];
@@ -577,7 +591,7 @@ export async function searchCandidates(
     if (got.some((c) => relevanceOf(c) === 2)) return;
 
     for (const short of shortenTerms(term)) {
-      ctx.log(`「${term}」没有贴切素材，改用「${short}」重搜`, "warn");
+      ctx.log(logText("termFallback", { term, short }), "warn");
       if ((await fetchPage(short, 1)) === 0) continue;
 
       // 有收获时清掉这批低分候选，别让猫和壁炉挤占候选池
@@ -611,7 +625,7 @@ export async function searchCandidates(
 
     barren = gained < MIN_GAIN_PER_TERM ? barren + 1 : 0;
     if (barren >= 2) {
-      ctx.log(`连续两个检索词几乎没带来新素材（当前 ${candidates.length} 个），停止继续检索`, "warn");
+      ctx.log(logText("noNewCandidates", { n: candidates.length }), "warn");
       break;
     }
 
@@ -660,10 +674,10 @@ export async function runMaterialStage(
   if (fs.existsSync(manifestFile)) {
     const cached = JSON.parse(fs.readFileSync(manifestFile, "utf-8")) as MaterialManifest;
     if (cached.signature === signature && Array.isArray(cached.items) && cached.items.length > 0) {
-      ctx.log("复用已匹配的素材（_videos.json）");
+      ctx.log(logText("reuseMaterial"));
       return cached;
     }
-    ctx.log(`素材来源、画幅或时长门槛变了，重新匹配素材（${source}）`, "warn");
+    ctx.log(logText("signatureChanged", { source }), "warn");
     fs.rmSync(manifestFile, { force: true });
   }
 
@@ -690,27 +704,27 @@ export async function runMaterialStage(
 
     const paragraphTerms = terms[pi] ?? [];
     const audioLength = audio.paragraphs[pi]?.duration ?? 0;
-    ctx.markStage("material", "running", `第 ${pi + 1}/${transcript.paragraphs.length} 段`);
-    ctx.log(`第 ${pi + 1} 段匹配素材（需 ${audioLength.toFixed(1)}s）：${paragraphTerms.join(" / ")}`);
+    ctx.markStage("material", "running", stageText("progress", { i: pi + 1, total: transcript.paragraphs.length }));
+    ctx.log(logText("matchStart", { n: pi + 1, sec: audioLength.toFixed(1), terms: paragraphTerms.join(" / ") }));
 
     const candidates = await searchCandidates(ctx, paragraphTerms);
 
     if (candidates.length === 0) {
       if (quoteFallback) {
-        ctx.log(`第 ${pi + 1} 段没有检索到素材，改用设计卡`, "warn");
+        ctx.log(logText("noCandidatesForSection", { n: pi + 1 }), "warn");
         const placeholder = fallbackItem(pi + 1, paragraphTerms);
         items.push(placeholder);
         await report(placeholder);
         continue;
       }
-      throw new Error(`第 ${pi + 1} 段没有检索到可用素材（关键词没搜到，或时长/画幅不达标）`);
+      throw userError("noCandidate", 500, { n: pi + 1 });
     }
 
     // 已用过的素材尽量避开，但后面段落不能因此没得选，否则越往后画面越差
     const fresh = candidates.filter((c) => !used.has(c.url));
     const pool = fresh.length >= MIN_FRESH_CANDIDATES ? fresh : candidates;
     if (fresh.length < MIN_FRESH_CANDIDATES) {
-      ctx.log(`第 ${pi + 1} 段新素材只有 ${fresh.length} 个，放宽到已用过的候选（共 ${candidates.length} 个）`, "warn");
+      ctx.log(logText("fewCandidates", { n: pi + 1, fresh: fresh.length, total: candidates.length }), "warn");
     }
 
     const content = paragraph.dialogues.map((d) => `${d.speaker}：${d.contents.join("")}`).join("\n");
@@ -728,13 +742,13 @@ export async function runMaterialStage(
     picked ??= chooseMaterial(preferred, pool, audioLength, new Set());
     if (!picked) {
       if (quoteFallback) {
-        ctx.log(`第 ${pi + 1} 段没有可选素材，改用设计卡`, "warn");
+        ctx.log(logText("noPickForSection", { n: pi + 1 }), "warn");
         const placeholder = fallbackItem(pi + 1, paragraphTerms);
         items.push(placeholder);
         await report(placeholder);
         continue;
       }
-      throw new Error(`第 ${pi + 1} 段没有可用素材`);
+      throw userError("noClip", 500, { n: pi + 1 });
     }
 
     // 下载失败则顺延到下一个候选
@@ -743,7 +757,11 @@ export async function runMaterialStage(
     while (picked) {
       if (picked.loop) {
         ctx.log(
-          `第 ${pi + 1} 段没有 ${audioLength.toFixed(1)}s 以上的整条素材，用 ${picked.item.duration}s 的素材循环铺满`,
+          logText("loopFill", {
+            n: pi + 1,
+            need: audioLength.toFixed(1),
+            have: picked.item.duration,
+          }),
           "warn",
         );
       }
@@ -755,7 +773,10 @@ export async function runMaterialStage(
         failedCount++;
         used.add(picked.item.url);
         ctx.log(
-          `第 ${pi + 1} 段下载失败，换下一个候选：${error instanceof Error ? error.message : String(error)}`,
+          logText("downloadRetry", {
+            n: pi + 1,
+            reason: error instanceof Error ? error.message : String(error),
+          }),
           "warn",
         );
         picked =
@@ -765,18 +786,26 @@ export async function runMaterialStage(
 
     if (!picked || !videoPath) {
       if (quoteFallback) {
-        ctx.log(`第 ${pi + 1} 段素材下载全部失败（已试 ${failedCount} 个），改用设计卡`, "warn");
+        ctx.log(logText("downloadAllFailed", { n: pi + 1, tried: failedCount }), "warn");
         const placeholder = fallbackItem(pi + 1, paragraphTerms);
         items.push(placeholder);
         await report(placeholder);
         continue;
       }
-      throw new Error(`第 ${pi + 1} 段素材下载失败（已尝试 ${failedCount} 个候选）`);
+      throw userError("downloadAllFailed", 500, { n: pi + 1, tried: failedCount });
     }
 
     const item = picked.item;
     used.add(item.url);
-    ctx.log(`第 ${pi + 1} 段 → ${item.tags || item.id}（${item.duration}s, ${item.width}×${item.height}）`);
+    ctx.log(
+      logText("clipChosen", {
+        n: pi + 1,
+        label: item.tags || item.id,
+        sec: item.duration,
+        w: item.width,
+        h: item.height,
+      }),
+    );
 
     // 段内补充镜头：一条素材撑满整段最容易显得呆板
     const shots: MaterialInfo[] = [];
@@ -810,7 +839,7 @@ export async function runMaterialStage(
     };
     items.push(finished);
     if (shots.length > 0) {
-      ctx.log(`第 ${pi + 1} 段共 ${shots.length + 1} 个镜头`);
+      ctx.log(logText("shotCount", { n: pi + 1, shots: shots.length + 1 }));
     }
     // 这一段素材落地了，立刻让上层露出来，不必等整条跑完
     await report(finished);

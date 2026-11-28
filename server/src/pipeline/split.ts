@@ -1,7 +1,9 @@
+import { userError } from "../errors.js";
+
 /** 按标点拆句并合并过短片段，一句对应一条配音与字幕 */
 export function splitContent(content: string, minLength = 10): string[] {
   const trimmed = content.trim();
-  if (!trimmed) throw new Error("台词内容为空");
+  if (!trimmed) throw userError("emptyLines", 400);
 
   const parts = trimmed.split(/([。！？；])/);
   const sentences: string[] = [];

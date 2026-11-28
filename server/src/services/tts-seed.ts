@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { num, type AppConfig } from "../config.js";
 import type { TtsRequest } from "./tts.js";
+import { userError } from "../errors.js";
 
 /** NDJSON 流：code 0/3000 为 base64 音频分片，20000000 为结束 */
 const ENDPOINT = "https://openspeech.bytedance.com/api/v3/tts/unidirectional";
@@ -32,16 +33,19 @@ function readEvent(line: string, push: (chunk: Buffer) => void): "continue" | "d
     if (event.data) push(Buffer.from(event.data, "base64"));
     return "continue";
   }
-  throw new Error(`豆包 TTS 合成失败（${event.code ?? "unknown"}）：${event.message ?? "未知错误"}`);
+  throw userError("seedSynthFailed", 500, {
+    code: event.code ?? "unknown",
+    message: event.message ?? { zh: "未知错误", en: "unknown error" },
+  });
 }
 
 async function fetchSeed(body: string, headers: Record<string, string>, signal: AbortSignal): Promise<Buffer> {
   const res = await fetch(ENDPOINT, { method: "POST", headers, body, signal });
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
-    throw new Error(`豆包 TTS HTTP ${res.status}：${detail.slice(0, 300)}`);
+    throw userError("seedHttp", 500, { status: res.status, detail: detail.slice(0, 300) });
   }
-  if (!res.body) throw new Error("豆包 TTS 响应无数据流");
+  if (!res.body) throw userError("seedNoStream", 500);
 
   const chunks: Buffer[] = [];
   const reader = res.body.getReader();
@@ -64,7 +68,7 @@ async function fetchSeed(body: string, headers: Record<string, string>, signal: 
     }
   }
 
-  if (chunks.length === 0) throw new Error("豆包 TTS 未返回音频数据");
+  if (chunks.length === 0) throw userError("seedNoAudio", 500);
   return Buffer.concat(chunks);
 }
 
@@ -132,7 +136,7 @@ function curlSeed(body: string, headers: Record<string, string>, signal: AbortSi
 /** fetch 失败时回退到 curl，兼容部分环境下的流式响应 */
 export async function synthesizeSeed(cfg: AppConfig, req: TtsRequest): Promise<Buffer> {
   if (!cfg.SEED_TTS_API_KEY) {
-    throw new Error("未配置 SEED_TTS_API_KEY，无法使用豆包 TTS。请编辑 config.json 后重启应用");
+    throw userError("noSeedKey", 500);
   }
 
   const speed = num(cfg.TTS_SPEED, 1);

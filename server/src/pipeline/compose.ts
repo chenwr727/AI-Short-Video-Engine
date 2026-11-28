@@ -37,6 +37,8 @@ import type {
   TaskContext,
   Transcript,
 } from "../types.js";
+import { stageText, userError } from "../errors.js";
+import { logText } from "../logs.js";
 
 /** 其他平台由 libass 回退 */
 const SUBTITLE_FONT = "Microsoft YaHei";
@@ -456,12 +458,12 @@ async function renderFallbackCard(
   });
 
   if (ok) {
-    ctx.log(`第 ${plan.index} 段使用设计卡：「${quoteText}」`);
+    ctx.log(logText("designCardUsed", { n: plan.index, quote: quoteText }));
     return quoteFile;
   }
 
   const placeholder = path.join(clipsDir, `${plan.index}.placeholder.mp4`);
-  ctx.log(`第 ${plan.index} 段设计卡渲染失败，改用纯色底`, "warn");
+  ctx.log(logText("designCardFailed", { n: plan.index }), "warn");
   return makePlaceholder(ctx, ctx.options.width, ctx.options.height, fps, placeholder);
 }
 
@@ -561,10 +563,10 @@ async function renderParagraph(
       // 无签名视为不匹配
     }
     if (cached === fullSignature) {
-      ctx.log(`复用已渲染片段 ${path.basename(clipFile)}`);
+      ctx.log(logText("reuseClip", { file: path.basename(clipFile) }));
       return clipFile;
     }
-    ctx.log(`第 ${plan.index} 段的素材或参数变了，重新渲染片段`);
+    ctx.log(logText("clipStale", { n: plan.index }));
     fs.rmSync(clipFile, { force: true });
   }
 
@@ -769,7 +771,7 @@ async function clipDurations(ctx: TaskContext, clips: string[], totalDurationMs:
     return probes.map((probe) => probe.duration);
   } catch {
     const average = totalDurationMs / 1000 / clips.length;
-    ctx.log("无法探测片段时长，按平均时长估算转场偏移", "warn");
+    ctx.log(logText("probeFailedAvg"), "warn");
     return clips.map(() => average);
   }
 }
@@ -796,7 +798,7 @@ async function mergeWithTransitions(options: MergeOptions): Promise<void> {
   const shortest = Math.min(...durations);
   const fade = Math.max(0.1, Math.min(transition, shortest / 2));
   if (fade < transition) {
-    ctx.log(`转场 ${transition}s 对最短片段 ${shortest.toFixed(2)}s 过长，已收敛为 ${fade.toFixed(2)}s`, "warn");
+    ctx.log(logText("transitionClamped", { t: transition, short: shortest.toFixed(2), fade: fade.toFixed(2) }), "warn");
   }
 
   const filters: string[] = [];
@@ -1111,13 +1113,13 @@ export async function runComposeStage(
   const fingerprint = composeFingerprint(ctx, transcript, audio, material, cards, cfg, fps);
 
   if (isComposedOutput(output, fingerprint)) {
-    ctx.log("复用已生成的成片（_output.mp4）");
-    ctx.markStage("compose", "skipped", "命中缓存");
+    ctx.log(logText("reuseOutput"));
+    ctx.markStage("compose", "skipped", stageText("cached"));
     return output;
   }
   if (fs.existsSync(output) && fs.statSync(output).size > 0) {
     // 分两种原因，方便用户判断是「上次没跑完」还是「改了参数」
-    ctx.log(fs.existsSync(marker) ? "成片参数已变，重新合成" : "上次合成没跑完，丢弃不完整的成片重新合成", "warn");
+    ctx.log(fs.existsSync(marker) ? logText("outputStale") : logText("outputPartial"), "warn");
     fs.rmSync(output, { force: true });
   }
   fs.rmSync(marker, { force: true });
@@ -1131,9 +1133,10 @@ export async function runComposeStage(
   const look = lookOptions(cfg);
   if (look.motion > 0 || look.grade > 0) {
     ctx.log(
-      `画面增强：运镜 ${look.motion > 0 ? `${look.motion} 级` : "关"} · 调色 ${
-        look.grade > 0 ? `${look.grade} 级` : "关"
-      }`,
+      logText("lookBoost", {
+        motion: look.motion > 0 ? { zh: `${look.motion} 级`, en: `level ${look.motion}` } : { zh: "关", en: "off" },
+        grade: look.grade > 0 ? { zh: `${look.grade} 级`, en: `level ${look.grade}` } : { zh: "关", en: "off" },
+      }),
     );
   }
   let titleDuration = numberOrZero(cfg.TITLE_DURATION, 0);
@@ -1155,45 +1158,45 @@ export async function runComposeStage(
   if (cards) {
     const introSpec = cards.items.find((item) => item.kind === "intro");
     if (introSpec) {
-      ctx.markStage("compose", "running", "渲染片头");
+      ctx.markStage("compose", "running", stageText("renderIntro"));
       const file = await ensureCardVideo(ctx, introSpec, cardTotal);
       if (file) {
         introClip = file;
         introSec = await clipSeconds(file, introSpec.durationSec);
         // 片头占了标题的时长，ASS 就不再画标题，避免重复
         titleDuration = 0;
-        ctx.log(`片头：${introSpec.title}`);
+        ctx.log(logText("introTitle", { title: introSpec.title }));
       } else {
         missingCards++;
-        ctx.log("片头卡没渲染出来，本次成片不含片头（原因见上一条渲染日志）", "error");
+        ctx.log(logText("introCardFailed"), "error");
       }
     }
 
     const outroSpec = cards.items.find((item) => item.kind === "outro");
     if (outroSpec) {
-      ctx.markStage("compose", "running", "渲染片尾");
+      ctx.markStage("compose", "running", stageText("renderOutro"));
       const file = await ensureCardVideo(ctx, outroSpec, cardTotal);
       if (file) {
         outroClip = file;
         outroActualSec = await clipSeconds(file, outroSpec.durationSec);
-        ctx.log(`片尾：${outroSpec.title}`);
+        ctx.log(logText("outroTitle", { title: outroSpec.title }));
       } else {
         missingCards++;
-        ctx.log("片尾卡没渲染出来，本次成片不含片尾（原因见上一条渲染日志）", "error");
+        ctx.log(logText("outroCardFailed"), "error");
       }
     }
   } else {
     // 没开版式阶段时沿用配置开关
     if (bool(cfg.INTRO_ENABLED, false) && titleDuration <= 0) {
-      ctx.log("已勾选用 Remotion 渲染片头，但「片头时长」是 0，本次不出片头", "warn");
+      ctx.log(logText("introZeroDuration"), "warn");
     }
     if (bool(cfg.INTRO_ENABLED, false) && titleDuration > 0) {
       const introFile = path.join(ctx.workspace, "intro.mp4");
       if (fs.existsSync(introFile) && fs.statSync(introFile).size > 0) {
         introClip = introFile;
-        ctx.log("复用已渲染的 Remotion 片头");
+        ctx.log(logText("reuseRemotionIntro"));
       } else {
-        ctx.markStage("compose", "running", "渲染片头");
+        ctx.markStage("compose", "running", stageText("renderIntro"));
         const ok = await renderIntro({
           title: transcript.title,
           width: ctx.options.width,
@@ -1205,9 +1208,9 @@ export async function runComposeStage(
         });
         if (ok) {
           introClip = introFile;
-          ctx.log("片头使用 Remotion 模板");
+          ctx.log(logText("remotionIntroUsed"));
         } else {
-          ctx.log("Remotion 片头不可用，回退到字幕标题", "warn");
+          ctx.log(logText("remotionIntroUnavailable"), "warn");
         }
       }
       if (introClip) {
@@ -1222,9 +1225,9 @@ export async function runComposeStage(
       const outroFile = path.join(ctx.workspace, "outro.mp4");
       if (fs.existsSync(outroFile) && fs.statSync(outroFile).size > 0) {
         outroClip = outroFile;
-        ctx.log("复用已渲染的 Remotion 片尾");
+        ctx.log(logText("reuseRemotionOutro"));
       } else {
-        ctx.markStage("compose", "running", "渲染片尾");
+        ctx.markStage("compose", "running", stageText("renderOutro"));
         const ok = await renderOutro({
           title: (cfg.OUTRO_TITLE ?? "").trim() || "关注我，下期见",
           handle: (cfg.OUTRO_HANDLE ?? "").trim() || undefined,
@@ -1237,9 +1240,9 @@ export async function runComposeStage(
         });
         if (ok) {
           outroClip = outroFile;
-          ctx.log("片尾使用 Remotion 模板");
+          ctx.log(logText("remotionOutroUsed"));
         } else {
-          ctx.log("Remotion 片尾不可用，本次不加片尾", "warn");
+          ctx.log(logText("remotionOutroUnavailable"), "warn");
         }
       }
       if (outroClip) outroActualSec = outroSec;
@@ -1253,7 +1256,7 @@ export async function runComposeStage(
 
   // 多段且有转场时才补首尾留白
   const bare = planParagraphs(transcript, audio, { ...timeline, padLead: 0, padTail: 0 });
-  if (bare.length === 0) throw new Error("没有可合成的段落");
+  if (bare.length === 0) throw userError("noComposeParagraphs", 500);
 
   const withTransition = bare.length >= 2 && transition > 0;
   const pad = withTransition ? transition : 0;
@@ -1299,7 +1302,7 @@ export async function runComposeStage(
     if (!plan) continue;
 
     const materialItem = material.items.find((item) => item.paragraph === plan.index) ?? material.items[i];
-    if (!materialItem) throw new Error(`第 ${plan.index} 段缺少素材`);
+    if (!materialItem) throw userError("composeMissingClip", 500, { n: plan.index });
 
     const materialPaths: string[] = [];
     /*
@@ -1315,7 +1318,7 @@ export async function runComposeStage(
     if (infoSpec) {
       const hasMaterial =
         !materialItem.fallback && Boolean(materialItem.videoPath) && fs.existsSync(materialItem.videoPath ?? "");
-      ctx.markStage("compose", "running", `第 ${i + 1} 段信息层`);
+      ctx.markStage("compose", "running", stageText("infoLayer", { i: i + 1 }));
       /*
        * 信息层要跟着旁白逐条上屏：把本段的分句时间交给它，
        * 卡片上的要点各自算出「第几秒出现」。分句时间本来就为字幕算过，直接用。
@@ -1327,10 +1330,16 @@ export async function runComposeStage(
         const layerPath = await ensureCardLayer(ctx, infoSpec, cardTotal, plan.duration, sentences);
         if (layerPath) {
           overlayLayer = layerPath;
-          ctx.log(`第 ${plan.index} 段叠加信息层「${infoSpec.title}」（${infoSpec.compositionId}）`);
+          ctx.log(
+            logText("infoLayerOverlay", {
+              n: plan.index,
+              title: infoSpec.title,
+              kind: infoSpec.compositionId,
+            }),
+          );
         } else {
           missingCards++;
-          ctx.log(`第 ${plan.index} 段信息层没渲染出来，本段只用实拍`, "warn");
+          ctx.log(logText("infoLayerMissing", { n: plan.index }), "warn");
         }
       } else {
         // 没有可用素材：整段用卡片顶上（卡片自带背景）
@@ -1338,10 +1347,10 @@ export async function runComposeStage(
         if (file) {
           materialPaths.push(file);
           cardAsWhole = true;
-          ctx.log(`第 ${plan.index} 段无素材，用信息卡「${infoSpec.title}」整段替代`);
+          ctx.log(logText("infoCardReplaces", { n: plan.index, title: infoSpec.title }));
         } else {
           missingCards++;
-          ctx.log(`第 ${plan.index} 段信息卡没渲染出来，回退实拍`, "warn");
+          ctx.log(logText("infoCardFallback", { n: plan.index }), "warn");
         }
       }
     }
@@ -1362,7 +1371,7 @@ export async function runComposeStage(
     if (cards) {
       const chapterSpec = cardChapters.get(plan.index);
       if (chapterSpec) {
-        ctx.markStage("compose", "running", `第 ${i + 1} 段过场卡`);
+        ctx.markStage("compose", "running", stageText("chapterTransition", { i: i + 1 }));
         const file = await ensureCardVideo(ctx, chapterSpec, cardTotal);
         if (file) {
           addClip(file, "fade");
@@ -1371,7 +1380,7 @@ export async function runComposeStage(
           chapterMs += (await clipSeconds(file, chapterSpec.durationSec)) * 1000;
         } else {
           missingCards++;
-          ctx.log(`第 ${i + 1} 段过场卡「${chapterSpec.title}」没渲染出来，成片缺这张卡`, "error");
+          ctx.log(logText("chapterMissing", { n: i + 1, title: chapterSpec.title }), "error");
         }
       }
     } else if (useChapters && i > 0) {
@@ -1379,7 +1388,7 @@ export async function runComposeStage(
       let ok = fs.existsSync(chapterFile) && fs.statSync(chapterFile).size > 0;
 
       if (!ok) {
-        ctx.markStage("compose", "running", `第 ${i + 1} 段过场卡`);
+        ctx.markStage("compose", "running", stageText("chapterTransition", { i: i + 1 }));
         ok = await renderChapter({
           title: chapterTitle(plan),
           index: i + 1,
@@ -1399,15 +1408,21 @@ export async function runComposeStage(
         chapterCount++;
         chapterMs += chapterSec * 1000;
       } else {
-        ctx.log(`第 ${i + 1} 段过场卡渲染失败，本次跳过`, "warn");
+        ctx.log(logText("chapterSkipped", { n: i + 1 }), "warn");
       }
     }
 
-    ctx.markStage("compose", "running", `第 ${plan.index}/${plans.length} 段`);
+    ctx.markStage("compose", "running", stageText("progress", { i: plan.index, total: plans.length }));
     ctx.log(
-      `合成第 ${plan.index} 段（${plan.duration.toFixed(1)}s，${plan.sentences.length} 句${
-        materialPaths.length > 1 ? `，${materialPaths.length} 个镜头` : ""
-      }）`,
+      logText("sectionCompose", {
+        n: plan.index,
+        sec: plan.duration.toFixed(1),
+        lines: plan.sentences.length,
+        shots:
+          materialPaths.length > 1
+            ? { zh: `，${materialPaths.length} 个镜头`, en: `, ${materialPaths.length} shots` }
+            : "",
+      }),
     );
 
     let lastPercent = -1;
@@ -1420,7 +1435,11 @@ export async function runComposeStage(
         const percent = Math.floor((ratio * 100) / 10) * 10;
         if (percent !== lastPercent) {
           lastPercent = percent;
-          ctx.markStage("compose", "running", `第 ${plan.index}/${plans.length} 段 ${percent}%`);
+          ctx.markStage(
+            "compose",
+            "running",
+            stageText("progressPercent", { i: plan.index, total: plans.length, percent }),
+          );
         }
       },
       cardAsWhole,
@@ -1438,12 +1457,12 @@ export async function runComposeStage(
   if (chapterCount > 0) {
     ctx.log(
       cards
-        ? `已插入 ${chapterCount} 张章节卡（共 ${(chapterMs / 1000).toFixed(1)}s）`
-        : `已插入 ${chapterCount} 张段落过场卡（每张 ${chapterSec}s）`,
+        ? logText("chapterInsertedCards", { n: chapterCount, sec: (chapterMs / 1000).toFixed(1) })
+        : logText("chapterInsertedPlain", { n: chapterCount, sec: chapterSec }),
     );
   }
 
-  ctx.markStage("compose", "running", "合并片段");
+  ctx.markStage("compose", "running", stageText("merging"));
 
   // 字幕整片一次性烧上去：片段本身是纯画面，改字号或文案只需重走这一步
   const subsFile = path.join(subsDir, "all.ass");
@@ -1480,7 +1499,7 @@ export async function runComposeStage(
         ...style,
       });
       if (ok) return { file: layerFile, kind: "webm" };
-      ctx.log(`Remotion 字幕层不可用，回退 libass：${lastRenderErrorMessage()}`, "warn");
+      ctx.log(logText("remotionSubtitleUnavailable", { reason: lastRenderErrorMessage() }), "warn");
     }
 
     fs.writeFileSync(subsFile, buildAss(merged, style), "utf-8");
@@ -1503,9 +1522,9 @@ export async function runComposeStage(
     bgm = prepared.plan?.file ?? null;
     bgmCustom = Boolean(prepared.plan?.custom);
     if (prepared.reason) ctx.log(prepared.reason, "warn");
-    if (!bgm) ctx.log("BGM 生成失败，跳过混音", "warn");
+    if (!bgm) ctx.log(logText("bgmFailed"), "warn");
   } else {
-    ctx.log("配置里关掉了 BGM，本次只保留配音");
+    ctx.log(logText("bgmOff"));
   }
 
   // 音效与 BGM 独立：关掉 BGM 也可以保留转场音效
@@ -1515,14 +1534,27 @@ export async function runComposeStage(
     if (whoosh || impact) {
       sfx = { whoosh, impact, volume: Math.min(1, numberOrZero(cfg.SFX_VOLUME, 0.2)) };
     } else {
-      ctx.log("音效生成失败，本次不加音效", "warn");
+      ctx.log(logText("sfxFailed"), "warn");
     }
   }
 
   ctx.log(
-    `合并 ${clips.length} 个片段${bgm ? ` 并混入${bgmCustom ? "自定义" : "程序合成"} BGM` : ""}${
-      withTransitions ? `，转场 ${transition}s（${mode === "mixed" ? "轮换" : "淡入淡出"}）` : ""
-    }${sfx ? "，已加转场音效" : ""}`,
+    logText("mergeSummary", {
+      n: clips.length,
+      bgm: bgm
+        ? {
+            zh: ` 并混入${bgmCustom ? "自定义" : "程序合成"} BGM`,
+            en: ` with ${bgmCustom ? "custom" : "generated"} BGM`,
+          }
+        : "",
+      transition: withTransitions
+        ? {
+            zh: `，转场 ${transition}s（${mode === "mixed" ? "轮换" : "淡入淡出"}）`,
+            en: `, ${transition}s transitions (${mode === "mixed" ? "alternating" : "crossfade"})`,
+          }
+        : "",
+      sfx: sfx ? { zh: "，已加转场音效", en: ", transition sound effects added" } : "",
+    }),
   );
 
   const encode = [
@@ -1565,7 +1597,7 @@ export async function runComposeStage(
   else await mergeByConcat(mergeOptions);
 
   if (missingCards > 0) {
-    ctx.log(`注意：本次成片缺少 ${missingCards} 张已确认的版式卡`, "error");
+    ctx.log(logText("missingCards", { n: missingCards }), "error");
   }
   // 合完才写完成标记：指纹 + 文件戳，下次复用前两样都要对得上
   fs.writeFileSync(marker, `${fingerprint}\n${outputStamp(output)}`, "utf-8");

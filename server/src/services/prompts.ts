@@ -3,6 +3,7 @@ import path from "node:path";
 import { speakerNames, type SpeakerNames } from "../config.js";
 import { pick, type Bilingual, type Lang } from "../i18n.js";
 import { ensureDir, promptsDir, userPromptsDir } from "../paths.js";
+import { userError } from "../errors.js";
 
 export interface PromptPair {
   writer: string;
@@ -36,13 +37,13 @@ function userPath(file: string): string {
 
 /** 按 mtime + size 判断要不要重读 */
 function readJsonFile(full: string): Record<string, unknown> {
-  if (!fs.existsSync(full)) throw new Error(`缺少 prompt 文件：${full}`);
+  if (!fs.existsSync(full)) throw userError("promptFileMissing", 500, { path: full });
 
   let stat: fs.Stats;
   try {
     stat = fs.statSync(full);
   } catch {
-    throw new Error(`无法读取 prompt 文件：${full}`);
+    throw userError("promptFileUnreadable", 500, { path: full });
   }
 
   const cached = cache.get(full);
@@ -54,7 +55,7 @@ function readJsonFile(full: string): Record<string, unknown> {
   try {
     raw = fs.readFileSync(full, "utf-8");
   } catch {
-    throw new Error(`无法读取 prompt 文件：${full}`);
+    throw userError("promptFileUnreadable", 500, { path: full });
   }
 
   const data = JSON.parse(raw) as Record<string, unknown>;
@@ -75,7 +76,7 @@ function pickFrom(full: string, key: string): string | null {
  */
 function readPrompt(file: string, key: string): string {
   const value = pickFrom(userPath(file), key) ?? pickFrom(builtinPath(file), key);
-  if (!value) throw new Error(`${builtinPath(file)} 缺少 ${key}`);
+  if (!value) throw userError("promptBuiltinMissing", 500, { path: builtinPath(file), key });
   return value;
 }
 
@@ -285,8 +286,9 @@ export function findPromptDoc(file: string): PromptDoc | undefined {
 /** 只允许 PROMPT_DOCS 里的文件与键，避免任意路径写入 */
 export function assertPromptTarget(file: string, key: string): PromptDoc {
   const doc = findPromptDoc(file);
-  if (!doc) throw new Error(`未知提示词文件：${file}`);
-  if (!doc.fields.some((field) => field.key === key)) throw new Error(`${doc.title} 没有 ${key}`);
+  if (!doc) throw userError("promptUnknownFile", 400, { file });
+  if (!doc.fields.some((field) => field.key === key))
+    throw userError("promptUnknownKey", 400, { title: doc.title, key });
   return doc;
 }
 
@@ -307,7 +309,7 @@ export function readPromptValue(file: string, key: string): PromptValue {
   const doc = assertPromptTarget(file, key);
 
   const builtinFile = builtinPath(doc.file);
-  if (!fs.existsSync(builtinFile)) throw new Error(`缺少内置提示词：${builtinFile}`);
+  if (!fs.existsSync(builtinFile)) throw userError("promptBuiltinFileMissing", 500, { path: builtinFile });
   const builtinData = JSON.parse(fs.readFileSync(builtinFile, "utf-8")) as Record<string, unknown>;
   const builtin = typeof builtinData[key] === "string" ? (builtinData[key] as string) : "";
 
@@ -326,7 +328,7 @@ export function readPromptValue(file: string, key: string): PromptValue {
 /** 写入用户覆盖层：只存改过的键，其余读取时回退到内置 */
 export function writePromptValue(file: string, key: string, value: string): PromptValue {
   const doc = assertPromptTarget(file, key);
-  if (!value.trim()) throw new Error("提示词不能为空");
+  if (!value.trim()) throw userError("promptEmpty", 400);
 
   const userFile = userPath(doc.file);
   const base: Record<string, unknown> = fs.existsSync(userFile)

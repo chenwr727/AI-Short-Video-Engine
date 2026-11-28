@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { getPrompt, getPrompts, savePrompt } from "../api";
-import { useT } from "../i18n";
+import { useLanguage, useT } from "../i18n";
 import type { PromptDoc, PromptSummary } from "../types";
 
 interface PromptEditorProps {
@@ -17,6 +17,8 @@ interface PromptEditorProps {
  */
 export function PromptEditor({ onClose, standalone = false }: PromptEditorProps) {
   const t = useT();
+  // 导航里的标题、说明由后端按 Accept-Language 展开，语言变了要重拉
+  const language = useLanguage();
   const [docs, setDocs] = useState<PromptDoc[]>([]);
   const [values, setValues] = useState<PromptSummary[]>([]);
   const [file, setFile] = useState("");
@@ -52,11 +54,10 @@ export function PromptEditor({ onClose, standalone = false }: PromptEditorProps)
         if (!alive) return;
         setDocs(data.docs);
         setValues(data.values);
+        // 只有首次加载才定位到第一篇；切语言只是刷新文案，别把用户选的键冲掉
         const first = data.docs[0];
-        if (first) {
-          setFile(first.file);
-          setKey(first.fields[0]?.key ?? "");
-        }
+        setFile((prev) => prev || first?.file || "");
+        setKey((prev) => prev || first?.fields[0]?.key || "");
       } catch (e) {
         if (alive) setError(e instanceof Error ? e.message : String(e));
       } finally {
@@ -66,7 +67,7 @@ export function PromptEditor({ onClose, standalone = false }: PromptEditorProps)
     return () => {
       alive = false;
     };
-  }, []);
+  }, [language]);
 
   // 换键时拉详情，拿到内置默认值
   useEffect(() => {

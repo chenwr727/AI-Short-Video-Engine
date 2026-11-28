@@ -1,6 +1,7 @@
 import { MsEdgeTTS, OUTPUT_FORMAT } from "msedge-tts";
 import { num, type AppConfig } from "../config.js";
 import type { TtsRequest } from "./tts.js";
+import { userError } from "../errors.js";
 
 /** Edge 朗读，无需 Key，返回 24kHz mp3 */
 export async function synthesizeEdge(cfg: AppConfig, req: TtsRequest): Promise<Buffer> {
@@ -24,6 +25,6 @@ export async function synthesizeEdge(cfg: AppConfig, req: TtsRequest): Promise<B
     }
   }
 
-  if (chunks.length === 0) throw new Error("Edge TTS 未返回音频数据");
+  if (chunks.length === 0) throw userError("edgeNoAudio", 500);
   return Buffer.concat(chunks);
 }

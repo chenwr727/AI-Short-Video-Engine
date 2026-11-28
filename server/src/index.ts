@@ -1,9 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
-import Fastify from "fastify";
+import Fastify, { type FastifyError } from "fastify";
 import cors from "@fastify/cors";
 import fastifyStatic from "@fastify/static";
 import { bool, isLlmConfigured, loadConfig } from "./config.js";
+import { errorMessage, TaskError } from "./errors.js";
 import { langOf } from "./i18n.js";
 import { dataDir, ensureDir, outDir } from "./paths.js";
 import { probeDeps } from "./services/deps.js";
@@ -59,6 +60,17 @@ async function build() {
   // 未知 Content-Type 按字符串处理，避免 415
   app.addContentTypeParser("*", { parseAs: "string" }, (_req, body, done) => {
     done(null, body);
+  });
+
+  // 任务状态里的文案只存一份，按写入时的界面语言定稿；这里把语言同步给 manager
+  app.addHook("onRequest", async (req) => {
+    taskManager.setLang(langOf(req.headers["accept-language"]));
+  });
+
+  // 兜住路由里没接住的 TaskError：文案按请求语言渲染，别让它漏成中文
+  app.setErrorHandler((error: FastifyError, req, reply) => {
+    const status = error instanceof TaskError ? error.statusCode : (error.statusCode ?? 500);
+    return reply.code(status).send({ error: errorMessage(error, langOf(req.headers["accept-language"])) });
   });
 
   app.get("/api/health", async () => healthPayload());

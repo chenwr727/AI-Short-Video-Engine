@@ -11,8 +11,9 @@ import {
   speakerNames,
 } from "../config.js";
 import { MATERIAL_SOURCES, PROMPT_SOURCES, RESOLUTIONS, ttsEngines } from "../meta.js";
-import { langOf, pick, type Lang } from "../i18n.js";
-import { TaskError, taskManager, type MaterialReplacement } from "../task/manager.js";
+import { langOf, type Lang } from "../i18n.js";
+import { type ErrorKey, errorMessage, TaskError, userError, userText } from "../errors.js";
+import { taskManager, type MaterialReplacement } from "../task/manager.js";
 import { mimeOf, sendFileWithRange } from "./send.js";
 import type {
   CardPrefs,
@@ -41,38 +42,24 @@ const CARD_ID_PATTERN = /^[a-z0-9-]+$/i;
 /** 卡片接口共用：顺手挡掉路径分隔符 */
 function requireCardId(raw: unknown): string {
   const id = String(raw ?? "").trim();
-  if (!CARD_ID_PATTERN.test(id)) throw new TaskError("卡片标识不合法", 400);
+  if (!CARD_ID_PATTERN.test(id)) throw userError("cardIdInvalid", 400);
   return id;
 }
-
-/**
- * 面向用户的错误文案：中英对照。
- *
- * 只收「会直接显示在界面上」的那些；内部断言类的报错原样透出即可，
- * 那种信息是给开发者看的，翻译反而妨碍排查。
- */
-const ERRORS = {
-  badParagraph: { zh: "段号不合法", en: "Invalid section number" },
-  cardNotFit: {
-    zh: "这段内容不适合做信息卡，换一段或换个模板试试",
-    en: "This section doesn't suit an info card. Try another section or template.",
-  },
-  badFile: { zh: "文件名不合法", en: "Invalid file name" },
-  noAudio: { zh: "音频不存在", en: "Audio not found" },
-  noVideo: { zh: "还没有生成成片", en: "No final cut yet" },
-} as const;
 
 /** 当前请求该用哪种语言 */
 function langOfRequest(reply: FastifyReply): Lang {
   return langOf(reply.request.headers["accept-language"]);
 }
 
+/** 只回一句话、不走异常时用 */
+function failText(reply: FastifyReply, key: ErrorKey, statusCode: number) {
+  return reply.code(statusCode).send({ error: userText(key, langOfRequest(reply)) });
+}
+
 function fail(reply: FastifyReply, error: unknown) {
-  if (error instanceof TaskError) {
-    return reply.code(error.statusCode).send({ error: error.message });
-  }
-  const message = error instanceof Error ? error.message : String(error);
-  return reply.code(500).send({ error: message });
+  return reply
+    .code(error instanceof TaskError ? error.statusCode : 500)
+    .send({ error: errorMessage(error, langOfRequest(reply)) });
 }
 
 function parseOptions(body: GenerateBody): GenerateOptions {
@@ -88,9 +75,9 @@ function parseOptions(body: GenerateBody): GenerateOptions {
 
   const engines = ttsEngines(cfg);
   const engine = engines.find((e) => e.id === body.ttsEngine) ?? engines[0];
-  if (!engine) throw new TaskError("没有可用的 TTS 引擎", 500);
+  if (!engine) throw userError("noTtsEngine", 500);
   const voice = engine.voices.find((v) => v.id === body.voice)?.id ?? engine.voices[0]?.id;
-  if (!voice) throw new TaskError(`TTS 引擎 ${engine.id} 没有可用音色`, 500);
+  if (!voice) throw userError("noVoice", 500, { engine: engine.id });
 
   const materialSource = (MATERIAL_SOURCES.find((o) => o.id === body.materialSource)?.id ??
     MATERIAL_SOURCES[0]?.id ??
@@ -325,8 +312,7 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
   app.post<{ Body: { paragraph?: number; terms?: string[] } }>("/api/task/material/search", async (req, reply) => {
     try {
       const paragraph = Number(req.body?.paragraph);
-      if (!Number.isFinite(paragraph) || paragraph <= 0)
-        throw new TaskError(pick(langOfRequest(reply), ERRORS.badParagraph), 400);
+      if (!Number.isFinite(paragraph) || paragraph <= 0) throw userError("badParagraph", 400);
       const candidates = await taskManager.searchMaterial(paragraph, req.body?.terms);
       return { candidates };
     } catch (error) {
@@ -338,11 +324,10 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
   app.post<{ Body: { paragraph?: number; template?: string } }>("/api/task/material/info-card", async (req, reply) => {
     try {
       const paragraph = Number(req.body?.paragraph);
-      if (!Number.isFinite(paragraph) || paragraph <= 0)
-        throw new TaskError(pick(langOfRequest(reply), ERRORS.badParagraph), 400);
+      if (!Number.isFinite(paragraph) || paragraph <= 0) throw userError("badParagraph", 400);
       const template = typeof req.body?.template === "string" ? req.body.template.trim() : "";
       const card = await taskManager.applyInfoCard(paragraph, template || undefined);
-      if (!card) return reply.code(422).send({ error: pick(langOfRequest(reply), ERRORS.cardNotFit) });
+      if (!card) return failText(reply, "cardNotFit", 422);
       return { card, state: taskManager.getState() };
     } catch (error) {
       return fail(reply, error);
@@ -363,8 +348,7 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
   app.post<{ Body: { paragraph?: number } }>("/api/task/material/info-card/clear", async (req, reply) => {
     try {
       const paragraph = Number(req.body?.paragraph);
-      if (!Number.isFinite(paragraph) || paragraph <= 0)
-        throw new TaskError(pick(langOfRequest(reply), ERRORS.badParagraph), 400);
+      if (!Number.isFinite(paragraph) || paragraph <= 0) throw userError("badParagraph", 400);
       taskManager.clearInfoCard(paragraph);
       return { state: taskManager.getState() };
     } catch (error) {
@@ -376,13 +360,13 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
   app.get<{ Params: { file: string } }>("/api/audio/:file", async (req, reply) => {
     const name = path.basename(req.params.file);
     if (!/^\d+_\d+_\d+\.(wav|mp3)$/i.test(name)) {
-      return reply.code(400).send({ error: pick(langOfRequest(reply), ERRORS.badFile) });
+      return failText(reply, "badFile", 400);
     }
 
     const state = taskManager.getState();
     const file = state ? path.join(state.workspace, name) : "";
     if (!file || !fs.existsSync(file)) {
-      return reply.code(404).send({ error: pick(langOfRequest(reply), ERRORS.noAudio) });
+      return failText(reply, "noAudio", 404);
     }
 
     return sendFileWithRange(reply, file, req.headers.range, { contentType: mimeOf(name) });
@@ -394,7 +378,9 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
     const paragraph = Number(req.params.paragraph);
     const item = state?.material?.items.find((entry) => entry.paragraph === paragraph);
     if (!item || !item.videoPath || !fs.existsSync(item.videoPath)) {
-      return reply.code(404).send({ error: `第 ${req.params.paragraph} 段还没有素材` });
+      return reply.code(404).send({
+        error: userText("noMaterialForParagraph", langOfRequest(reply), { n: req.params.paragraph }),
+      });
     }
 
     return sendFileWithRange(reply, item.videoPath, req.headers.range, { contentType: "video/mp4" });
@@ -463,7 +449,7 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
     const state = taskManager.getState();
     const file = state?.result;
     if (!file || !fs.existsSync(file)) {
-      return reply.code(404).send({ error: pick(langOfRequest(reply), ERRORS.noVideo) });
+      return failText(reply, "noVideo", 404);
     }
 
     const filename = `${state.transcript?.title ?? "video"}.mp4`.replace(/[\\/:*?"<>|]/g, "_");

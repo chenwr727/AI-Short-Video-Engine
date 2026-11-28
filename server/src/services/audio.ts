@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import fs from "node:fs";
 import { promisify } from "node:util";
 import { findBinary } from "./deps.js";
+import { userError } from "../errors.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -150,7 +151,7 @@ export function mp3Duration(buf: Buffer): number | null {
 
 async function ffprobeDuration(file: string): Promise<number> {
   const bin = findBinary("ffprobe");
-  if (!bin) throw new Error("未检测到 ffprobe，无法解析音频时长");
+  if (!bin) throw userError("noFfprobe", 500);
   const { stdout } = await execFileAsync(bin, [
     "-v",
     "error",
@@ -162,7 +163,7 @@ async function ffprobeDuration(file: string): Promise<number> {
   ]);
   const duration = Number(String(stdout).trim());
   if (!Number.isFinite(duration) || duration <= 0) {
-    throw new Error(`无法解析音频时长：${file}`);
+    throw userError("audioProbeFailed", 500, { file });
   }
   return duration;
 }
@@ -200,5 +201,5 @@ export async function audioDuration(file: string): Promise<number> {
   const fromFfmpeg = await ffmpegDuration(file);
   if (fromFfmpeg) return fromFfmpeg;
 
-  throw new Error(`无法解析音频时长：${file}（ffprobe 与 ffmpeg 均不可用）`);
+  throw userError("audioProbeFailedBoth", 500, { file });
 }
