@@ -167,14 +167,20 @@ export const SPEAKER_MAX_LEN = 8;
 
 export function speakerNames(cfg: AppConfig = loadConfig()): SpeakerNames {
   return {
-    main: (cfg.SPEAKER_MAIN || "").trim() || DEFAULTS.SPEAKER_MAIN,
-    guest: (cfg.SPEAKER_GUEST || "").trim() || DEFAULTS.SPEAKER_GUEST,
+    main: normalizeSpeaker(cfg.SPEAKER_MAIN, DEFAULTS.SPEAKER_MAIN),
+    guest: normalizeSpeaker(cfg.SPEAKER_GUEST, DEFAULTS.SPEAKER_GUEST),
   };
+}
+
+/** 过滤会污染整条剧本的角色名占位符 */
+function isSpeakerPlaceholder(text: string): boolean {
+  return !text || /^[?？]+$/.test(text) || text.startsWith("script.") || text.includes("{{SPEAKER_");
 }
 
 export function normalizeSpeaker(value: unknown, fallback: string): string {
   const text = typeof value === "string" ? value.trim() : "";
-  return text ? text.slice(0, SPEAKER_MAX_LEN) : fallback;
+  if (isSpeakerPlaceholder(text)) return fallback;
+  return text.slice(0, SPEAKER_MAX_LEN);
 }
 
 export function num(value: string, fallback: number): number {

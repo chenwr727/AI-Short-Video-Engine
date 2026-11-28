@@ -240,9 +240,10 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
     "/api/task/regenerate",
     async (req, reply) => {
       try {
+        const speakerDefaults = speakerNames(loadConfig());
         const speakers = {
-          main: normalizeSpeaker(req.body?.speakers?.main, ""),
-          guest: normalizeSpeaker(req.body?.speakers?.guest, ""),
+          main: normalizeSpeaker(req.body?.speakers?.main, speakerDefaults.main),
+          guest: normalizeSpeaker(req.body?.speakers?.guest, speakerDefaults.guest),
         };
         const promptSource = PROMPT_SOURCES.find((o) => o.id === req.body?.promptSource)?.id as
           PromptSource | undefined;

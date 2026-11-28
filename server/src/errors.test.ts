@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { normalizeSpeaker } from "./config.js";
 import { ERRORS, errorMessage, STAGE_TEXT, stageText, TaskError, userError, userText } from "./errors.js";
 import { LOG_TEXT, logText } from "./logs.js";
 
@@ -26,6 +27,14 @@ for (const [name, table] of [
     }
   });
 }
+
+test("问号和未替换模板不会被当成角色名", () => {
+  assert.equal(normalizeSpeaker("??", "小简"), "小简");
+  assert.equal(normalizeSpeaker("？？", "老陈"), "老陈");
+  assert.equal(normalizeSpeaker("script.speakerMain", "小简"), "小简");
+  assert.equal(normalizeSpeaker("{{SPEAKER_MAIN}}", "小简"), "小简");
+  assert.equal(normalizeSpeaker("  小简  ", "老陈"), "小简");
+});
 
 test("同一个错误按请求语言渲染", () => {
   assert.equal(userText("noTask", "zh"), "当前没有任务");

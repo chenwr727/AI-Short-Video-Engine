@@ -102,6 +102,13 @@ function speakersOf(raw: RawTranscript | null): string[] {
 /** 设置保存会重载窗口，草稿暂存 sessionStorage */
 const DRAFT_KEY = "aisv.form-draft";
 
+/** 过滤草稿和旧任务里的角色名占位符，避免整条剧本的 speaker 变成问号 */
+function validSpeaker(value: string | undefined | null): string {
+  const text = (value ?? "").trim();
+  if (!text || /^[?？]+$/.test(text) || text.startsWith("script.") || text.includes("{{SPEAKER_")) return "";
+  return text.slice(0, 8);
+}
+
 function readDraft(): FormState | null {
   try {
     const raw = sessionStorage.getItem(DRAFT_KEY);
@@ -110,8 +117,8 @@ function readDraft(): FormState | null {
     return {
       content: parsed.content ?? "",
       promptSource: parsed.promptSource ?? "",
-      speakerMain: parsed.speakerMain ?? "",
-      speakerGuest: parsed.speakerGuest ?? "",
+      speakerMain: validSpeaker(parsed.speakerMain),
+      speakerGuest: validSpeaker(parsed.speakerGuest),
     };
   } catch {
     return null;
@@ -168,6 +175,8 @@ export default function App() {
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const [resumed, setResumed] = useState<TaskState | null>(null);
   const restartingRef = useRef(false);
+  const metaRef = useRef(meta);
+  metaRef.current = meta;
 
   useEffect(() => {
     let alive = true;
@@ -272,8 +281,8 @@ export default function App() {
     setForm((prev) => ({
       ...prev,
       promptSource: prev.promptSource || meta.promptSources[0]?.id || "",
-      speakerMain: prev.speakerMain || meta.speakers.main,
-      speakerGuest: prev.speakerGuest || meta.speakers.guest,
+      speakerMain: validSpeaker(prev.speakerMain) || meta.speakers.main,
+      speakerGuest: validSpeaker(prev.speakerGuest) || meta.speakers.guest,
     }));
 
     setRenderForm((prev) => ({
@@ -329,8 +338,8 @@ export default function App() {
     setForm((prev) => ({
       content: prev.content || task.input,
       promptSource: promptSource || prev.promptSource,
-      speakerMain: speakers.main || prev.speakerMain,
-      speakerGuest: speakers.guest || prev.speakerGuest,
+      speakerMain: validSpeaker(speakers.main) || validSpeaker(prev.speakerMain) || metaRef.current?.speakers.main || "",
+      speakerGuest: validSpeaker(speakers.guest) || validSpeaker(prev.speakerGuest) || metaRef.current?.speakers.guest || "",
     }));
   }, [task?.id]);
 
@@ -430,7 +439,10 @@ export default function App() {
       const state = await startGenerate({
         input: form.content,
         promptSource: form.promptSource,
-        speakers: { main: form.speakerMain.trim(), guest: form.speakerGuest.trim() },
+        speakers: {
+          main: validSpeaker(form.speakerMain) || meta?.speakers.main || "",
+          guest: validSpeaker(form.speakerGuest) || meta?.speakers.guest || "",
+        },
         ttsEngine: renderForm.ttsEngine,
         voice: Object.values(renderForm.voices)[0] ?? renderEngine?.voices[0]?.id ?? "",
         materialSource: renderForm.materialSource,
@@ -512,7 +524,10 @@ export default function App() {
         await regenerateScript({
           input: form.content,
           promptSource: form.promptSource,
-          speakers: { main: form.speakerMain.trim(), guest: form.speakerGuest.trim() },
+          speakers: {
+            main: validSpeaker(form.speakerMain) || meta?.speakers.main || "",
+            guest: validSpeaker(form.speakerGuest) || meta?.speakers.guest || "",
+          },
         }),
       );
       setFollowing(true);
@@ -703,8 +718,13 @@ export default function App() {
     setFollowing(false);
     setPhase("input");
     setMaxStep(0);
-    // 保留参数设置，方便连做同系列
-    setForm((prev) => ({ ...prev, content: "" }));
+    // 保留参数；脏角色名回到默认
+    setForm((prev) => ({
+      ...prev,
+      content: "",
+      speakerMain: validSpeaker(prev.speakerMain) || meta?.speakers.main || "",
+      speakerGuest: validSpeaker(prev.speakerGuest) || meta?.speakers.guest || "",
+    }));
   }
 
   // 主进程回调，走 ref 才拿得到最新的 onRestart
@@ -816,19 +836,30 @@ export default function App() {
             {!bridge() && <ThemeToggle />}
             <EnvStatus health={health} />
             {task && <span className={`pill ${STATUS_TONE[task.status]}`}>{t(STATUS_TEXT[task.status])}</span>}
+            {/* 浏览器态常驻新建入口；恢复条已有按钮时不重复 */}
+            {!bridge() && task && !(resumed && task.id === resumed.id) && (
+              <button
+                className="secondary"
+                type="button"
+                onClick={() => void onRestart()}
+                disabled={pageLocked}
+              >
+                {t("menu.newTask")}
+              </button>
+            )}
           </div>
         </header>
 
         <StepBar current={phase} reached={reached} doneThrough={done} onSelect={onSelect} navLocked={pageLocked} />
 
-        {resumed && (
+        {resumed && task?.id === resumed.id && (
           <div className="resume-bar">
             <span className="resume-text">
               {t("app.resume", {
                 time: new Date(resumed.createdAt).toLocaleString(language === "en" ? "en-US" : "zh-CN", {
                   hour12: false,
                 }),
-                status: t(STATUS_TEXT[resumed.status]),
+                status: t(STATUS_TEXT[task.status]),
                 step: t(stepsFor()[indexOf(phase)]?.label ?? "steps.content"),
               })}
             </span>

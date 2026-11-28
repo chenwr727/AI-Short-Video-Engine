@@ -478,7 +478,9 @@ export function draftInfoToSpec(
       .filter((node) => node.time && node.text);
     // 少于两个节点就构不成「先后」，退回实拍更有意义
     if (nodes.length < 2) return null;
-    return { ...base, timeline: nodes };
+    // 模型偶尔不给标题，用首个节点兜底，避免卡面顶部空着
+    const title = cleanCardText(draft.title, MAX_TITLE) || cleanCardText(nodes[0]?.text, MAX_TITLE) || "时间线";
+    return { ...base, title, timeline: nodes };
   }
 
   if (baseTemplate === "StatCard") {

@@ -140,6 +140,22 @@ test("时间线少于两个节点就退回，因为构不成先后", () => {
   assert.equal(two.timeline.length, 2);
 });
 
+test("时间线卡没给标题时用首个节点兜底", () => {
+  const spec = draftInfoToSpec(
+    {
+      template: "TimelineCard",
+      timeline: [
+        { time: "1872年", text: "加州禁止竞业" },
+        { time: "2024年", text: "新法堵漏" },
+      ],
+    },
+    ACCENT,
+    5,
+    2,
+  );
+  assert.equal(spec?.title, "加州禁止竞业");
+});
+
 test("时间线节点缺时间或缺内容会被剔除", () => {
   const spec = draftInfoToSpec(
     {
