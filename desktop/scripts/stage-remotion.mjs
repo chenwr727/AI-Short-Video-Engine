@@ -1,5 +1,6 @@
 // 把 remotion 子工程瘦身后暂存到 build/resources/remotion，供带卡片版打进包。
 // 只保留渲染链路：预构建 bundle + @remotion/renderer + compositor + Chrome Headless Shell。
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,42 +18,8 @@ const KEEP_FILES = ["render.mjs", "package.json"];
 /** 瘦身模式：不带 Chrome Headless Shell（303 MB），改用系统 Edge / Chrome 渲染 */
 const slim = process.argv.includes("--slim") || process.env.SHORTDECK_REMOTION_SLIM === "1";
 
-/** 只在运行时打包 / 开发期用得上，打进去纯占体积 */
-const EXCLUDE_MODULES = new Set([
-  ".cache", // webpack 构建缓存，实测 266 MB
-  "typescript",
-  "@rspack",
-  "@babel",
-  "webpack",
-  "esbuild",
-  "@esbuild",
-  "@remotion/bundler",
-  "@remotion/cli",
-  "@remotion/studio",
-  "@remotion/studio-server",
-  "@remotion/studio-shared",
-  "@remotion/studio-protocol",
-  "@remotion/codemods",
-  "@remotion/effects",
-  "@remotion/player",
-  "@remotion/openai-whisper",
-  "@remotion/elevenlabs",
-  "@remotion/timeline-utils",
-  "@remotion/media-utils",
-  // 实测不影响渲染：类型声明、纯浏览器侧音频库、只给 bundle 用的校验库
-  "@types",
-  "mediabunny",
-  "@mediabunny",
-  "zod",
-  // 组件代码已经打进 bundle，渲染进程不需要再加载一份 React
-  "react",
-  "react-dom",
-]);
-
-const norm = (p) => p.split(path.sep).join("/");
-
-function copyDir(from, to, filter) {
-  fs.cpSync(from, to, { recursive: true, dereference: false, filter });
+function copyDir(from, to) {
+  fs.cpSync(from, to, { recursive: true, dereference: true });
 }
 
 /**
@@ -117,14 +84,34 @@ for (const file of KEEP_FILES) {
 copyDir(path.join(src, "build", "bundle"), path.join(dest, "build", "bundle"));
 const droppedMaps = stripBundleMaps(path.join(dest, "build", "bundle"));
 
-copyDir(path.join(src, "node_modules"), path.join(dest, "node_modules"), (source) => {
-  const rel = norm(path.relative(path.join(src, "node_modules"), source));
-  if (!rel) return true;
-  if (rel.endsWith(".map")) return false;
-  const head = rel.split("/")[0];
-  if (slim && head === ".remotion") return false;
-  return !EXCLUDE_MODULES.has(head);
-});
+// pnpm 的 node_modules 全是符号链接，Windows 无开发者模式时不能直接复制；
+// 按渲染入口的最小依赖以 hoisted 方式重装，得到无链接的真实文件树
+const runtimePkg = {
+  name: "shortdeck-remotion-runtime",
+  private: true,
+  type: "module",
+  dependencies: { "@remotion/renderer": "4.0.545" },
+};
+fs.writeFileSync(path.join(dest, "package.json"), JSON.stringify(runtimePkg, null, 2) + "\n");
+const pnpmBin = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+const args = [
+  "install",
+  "--prod",
+  "--node-linker=hoisted",
+  "--ignore-workspace",
+  "--ignore-scripts",
+  "--no-frozen-lockfile",
+];
+console.log(`[remotion] 安装运行时依赖（${args.join(" ")}）`);
+const r =
+  process.platform === "win32"
+    ? spawnSync("cmd.exe", ["/d", "/s", "/c", [pnpmBin, ...args].join(" ")], { cwd: dest, encoding: "utf-8" })
+    : spawnSync(pnpmBin, args, { cwd: dest, encoding: "utf-8" });
+if (r.status !== 0) {
+  console.error(`[remotion] 安装依赖失败：\n${r.stdout ?? ""}\n${r.stderr ?? ""}`);
+  process.exit(1);
+}
+fs.copyFileSync(path.join(src, "package.json"), path.join(dest, "package.json"));
 
 const required = ["render.mjs", "build/bundle/index.html", "node_modules/@remotion/renderer/package.json"];
 if (!slim) required.push("node_modules/.remotion/chrome-headless-shell");
