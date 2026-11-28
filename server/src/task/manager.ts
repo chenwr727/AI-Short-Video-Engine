@@ -6,7 +6,6 @@ import { persistConfirmed, runScriptStages, sentenceCount } from "../pipeline/sc
 import { runTtsStage, transcriptFingerprint } from "../pipeline/tts.js";
 import { runMaterialStage, saveMaterialManifest, searchCandidates } from "../pipeline/material.js";
 import {
-  cardsEnabled,
   cardFiles,
   ensureCardStill,
   nextAccent,
@@ -66,6 +65,13 @@ export const STAGE_DEFS: { id: string; label: string }[] = [
   { id: "cards", label: "生成版式" },
   { id: "compose", label: "合成视频" },
 ];
+
+/** 合成前是否还缺版式；阶段失败/跳过按「本次不带卡片」处理 */
+export function cardsMissingForRender(state: TaskState): boolean {
+  const stage = state.stages.find((entry) => entry.id === "cards");
+  if (!stage || state.cards) return false;
+  return stage.status === "pending" || stage.status === "running";
+}
 
 const MAX_LOGS = 300;
 
@@ -216,7 +222,7 @@ class TaskManager {
       options,
       workspace,
       status: "running",
-      stages: STAGE_DEFS.filter((d) => d.id !== "cards" || cardsEnabled()).map((d) => ({
+      stages: STAGE_DEFS.map((d) => ({
         ...d,
         status: "pending" as StageStatus,
       })),
@@ -389,8 +395,9 @@ class TaskManager {
       const before = state.options;
       state.options = { ...state.options, ...patch };
       if (state.options.width !== before.width) {
+        // 显式设过且等于旧自动值的，才按新画宽换算
         const oldAuto = autoSubtitleFontSize(before.width);
-        if ((state.options.subtitleFontSize ?? oldAuto) === oldAuto) {
+        if (state.options.subtitleFontSize !== undefined && state.options.subtitleFontSize === oldAuto) {
           state.options.subtitleFontSize = autoSubtitleFontSize(state.options.width);
         }
       }
@@ -430,8 +437,9 @@ class TaskManager {
         this.removeOutput(state.workspace);
       }
       if (state.options.width !== before.width) {
+        // 显式设过且等于旧自动值的，才按新画宽换算
         const oldAuto = autoSubtitleFontSize(before.width);
-        if ((state.options.subtitleFontSize ?? oldAuto) === oldAuto) {
+        if (state.options.subtitleFontSize !== undefined && state.options.subtitleFontSize === oldAuto) {
           state.options.subtitleFontSize = autoSubtitleFontSize(state.options.width);
         }
       }
@@ -454,34 +462,12 @@ class TaskManager {
     state.cards = null;
     this.emit();
 
-    /*
-     * 版式已并进素材页：确认素材这一步就顺带把版式按配置生成好并确认掉，
-     * 不再单独停在「版式确认」等用户再点一次。
-     * 生成失败不挡素材 —— 素材已经可用，退回不带卡片的成片即可。
-     *
-     * 只看当前配置，不看「这个任务有没有 cards 阶段」：
-     * 后者是建任务时按当时配置定下的，用户在设置里关掉版式后，
-     * 老任务照样会带着 cards 阶段，用 `cardStagePresent(state) ||` 判断等于开关失效。
-     * 关掉时要把遗留的 cards 阶段标成 skipped，否则 nextResumeStep 会一直认为
-     * 这步没做完，点「继续」就卡在这儿反复重跑。
-     */
-    if (cardsEnabled()) {
-      this.ensureCardsStage(state);
-      if (state.transcript) {
-        await this.buildAndConfirmCards();
-        return state;
-      }
-      this.setStatus("material_ready");
-      this.log(logText("materialConfirmed"), "info", "compose");
-      this.emit();
+    /** 确认素材时顺带生成并确认版式，失败则本次不带卡片 */
+    this.ensureCardsStage(state);
+    if (state.transcript) {
+      await this.buildAndConfirmCards();
       return state;
     }
-
-    if (this.cardStagePresent(state)) {
-      this.markStage("cards", "skipped", STAGE_TEXT.cardsOff);
-      this.log(logText("cardsOff"), "info", "compose");
-    }
-
     this.setStatus("material_ready");
     this.log(logText("materialConfirmed"), "info", "compose");
     this.emit();
@@ -653,8 +639,8 @@ class TaskManager {
     if (state.status === "awaiting_cards") {
       throw userError("confirmCardsFirst", 400);
     }
-    // 只有这条任务真的带 cards 阶段时才要求先确认版式
-    if (this.cardStagePresent(state) && !state.cards) {
+    // 只有版式还没跑完才挡合成；失败/跳过时按不带卡片继续
+    if (cardsMissingForRender(state)) {
       throw userError("cardsNotBuilt", 400);
     }
 
@@ -1098,7 +1084,7 @@ class TaskManager {
     state.cards = state.cards ?? null;
 
     // 开关打开后，旧任务补一个版式阶段，可以在已有素材上补做
-    if (cardsEnabled() && state.material && !state.stages.some((stage) => stage.id === "cards")) {
+    if (state.material && !state.stages.some((stage) => stage.id === "cards")) {
       const def = STAGE_DEFS.find((entry) => entry.id === "cards");
       const at = state.stages.findIndex((stage) => stage.id === "compose");
       if (def) state.stages.splice(at < 0 ? state.stages.length : at, 0, { ...def, status: "pending" });

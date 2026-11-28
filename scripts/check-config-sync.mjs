@@ -92,21 +92,27 @@ const html = fs.readFileSync(path.join(root, "desktop/assets/settings.html"), "u
  *     min: 1,
  *     max: 120,
  *   },
- * 按 "{ … }" 切出每个对象块再逐块检查，不假设写在一行。
+ * options 里也套对象，按相邻 key 切块。
  */
-const blocks = [...html.matchAll(/\{[^{}]*\bkey:\s*"[A-Z0-9_]+"[^{}]*\}/g)].map((m) => m[0]);
+const decls = [...html.matchAll(/\bkey:\s*"([A-Z0-9_]+)"/g)];
 
-for (const block of blocks) {
-  const key = (block.match(/\bkey:\s*"([A-Z0-9_]+)"/) ?? [])[1];
-  if (!key) continue;
+for (let i = 0; i < decls.length; i++) {
+  const key = decls[i][1];
+  const start = decls[i].index;
+  const next = decls[i + 1]?.index ?? html.length;
+  const block = html.slice(start, Math.min(next, start + 600));
 
   const kind = (block.match(/\bkind:\s*"([a-z]+)"/) ?? [])[1];
   if (!kind) {
-    problems.push(`settings.html 里 ${key} 没声明 kind（text / password / number / switch）`);
+    problems.push(`settings.html 里 ${key} 没声明 kind（text / password / number / select / color / switch）`);
     continue;
   }
-  if (!["text", "password", "number", "switch"].includes(kind)) {
+  if (!["text", "password", "number", "select", "color", "switch"].includes(kind)) {
     problems.push(`settings.html 里 ${key} 的 kind "${kind}" 不认识`);
+    continue;
+  }
+  if (kind === "select" && !/\boptions:\s*\[/.test(block)) {
+    problems.push(`settings.html 里 ${key} 是下拉项，必须声明 options`);
     continue;
   }
   if (kind !== "number") continue;

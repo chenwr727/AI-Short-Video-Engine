@@ -57,6 +57,14 @@ contextBridge.exposeInMainWorld("aisv", {
   announceLanguage: (language: "zh" | "en" | "system") => {
     ipcRenderer.send("app:language-changed", language);
   },
+  onConfigChanged: (handler: () => void) => {
+    const listener = () => handler();
+    ipcRenderer.on("app:config-changed", listener);
+    return () => ipcRenderer.off("app:config-changed", listener);
+  },
+  announceConfigChanged: () => {
+    ipcRenderer.send("app:config-changed");
+  },
   /** 新窗口打开时取当前偏好，避免不同源导致显示错语言 */
   getLanguage: () => ipcRenderer.invoke("app:language-get") as Promise<"zh" | "en" | "system">,
   /** 关于卡片的版本号与仓库地址 */

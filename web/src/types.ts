@@ -27,15 +27,15 @@ export interface Meta {
   ttsSpeed: number;
   /** 成片预览页的渲染默认值 */
   render: {
+    /** px，0 = 按画宽自动 */
     subtitleFontSize: number;
+    /** 自动字号比例：round(round(画宽 × widthRatio) / fontSizeRatio) */
+    subtitleAuto: { widthRatio: number; fontSizeRatio: number };
     bgmEnabled: boolean;
     bgmVolume: number;
   };
   materialSources: Option[];
   resolutions: Option[];
-  /** 版式页可选的卡片配色与模板 */
-  cardAccents: string[];
-  cardTemplates: Record<CardKind, { id: string; name: string; hint: string }[]>;
   /** 版式页要显示的配置现值（设置页里配的片头/章节/片尾） */
   cardDefaults?: CardDefaults;
 }
@@ -45,13 +45,6 @@ export interface CardDefaults {
   introSec: number;
   chapterSec: number;
   outroSec: number;
-  /** 三个开关全关，按上面的时长出一份默认清单 */
-  auto: boolean;
-  /** 章节卡总量上限 */
-  maxChapters: number;
-  accent: string;
-  outroTitle: string;
-  outroHandle: string;
 }
 
 export interface PromptField {
@@ -95,7 +88,6 @@ export interface Health {
     dashscope: { configured: boolean };
     tts: { edge: boolean; dashscope: boolean; seed: boolean };
     material: { pixabay: boolean; pexels: boolean };
-    cards: { enabled: boolean };
   };
   deps: { ffmpeg: string | null; ffprobe: string | null };
 }

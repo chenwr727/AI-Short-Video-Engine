@@ -48,7 +48,6 @@ export const LOG_TEXT = {
     en: "Section {n} switched to new footage: {label}",
   },
   cardsStart: { zh: "按当前参数生成版式…", en: "Generating cards with the current settings…" },
-  cardsOff: { zh: "版式开关已关闭，本次成片不含卡片", en: "Cards are off, so this video has no cards" },
   cardsBuilt: {
     zh: "版式已生成并确认：{n} 张卡",
     en: "Cards generated and confirmed: {n} cards",
@@ -276,10 +275,6 @@ export const LOG_TEXT = {
     en: "Visual accent selection failed, using the default: {reason}",
   },
   noCardTypes: { zh: "没有可用的卡片类型，跳过版式", en: "No card types are on, skipping cards" },
-  cardTypesHint: {
-    zh: "未单独开启片头 / 章节卡 / 片尾，按「片头时长」与「过场卡时长」出片头与章节卡；不想要卡片请在版式页把时长改成 0",
-    en: "Intro / chapter / outro aren't switched on individually; they follow the intro and transition durations. To drop cards, set those durations to 0 on the cards page.",
-  },
   aiDrafting: {
     zh: "正在让 AI 为片头 / 章节 / 片尾写文案并选模板…",
     en: "Asking the AI for intro / chapter / outro copy and templates…",
@@ -306,6 +301,14 @@ export const LOG_TEXT = {
   notFitCard: {
     zh: "第 {n} 段不适合做信息卡，或模型没给出可用字段",
     en: "Section {n} doesn't suit an info card, or the model returned no usable fields",
+  },
+  infoCardUngrounded: {
+    zh: "第 {n} 段信息卡没通过校验，已跳过：{what}",
+    en: "Section {n} info card failed validation; skipped: {what}",
+  },
+  infoCardTrimmed: {
+    zh: "第 {n} 段信息卡去掉 {k} 处台词里没有的内容",
+    en: "Section {n} info card dropped {k} items that aren't in the lines",
   },
   titleUsed: {
     zh: "第 {n} 段的主题「{title}」已在别处用过，跳过以免重复",
@@ -357,10 +360,6 @@ export const LOG_TEXT = {
   outroCardFailed: {
     zh: "片尾卡没渲染出来，本次成片不含片尾（原因见上一条渲染日志）",
     en: "The outro card didn't render, so this video has no outro (see the render log above)",
-  },
-  introZeroDuration: {
-    zh: "已勾选用 Remotion 渲染片头，但「片头时长」是 0，本次不出片头",
-    en: "Remotion intro is on, but the intro duration is 0, so there's no intro this time",
   },
   reuseRemotionIntro: { zh: "复用已渲染的 Remotion 片头", en: "Reusing the rendered Remotion intro" },
   remotionIntroUsed: { zh: "片头使用 Remotion 模板", en: "Intro uses the Remotion template" },

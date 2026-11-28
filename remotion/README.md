@@ -31,7 +31,7 @@ npm run bundle   # 产物：build/bundle
 
 ## 被后端调用
 
-主程序设置页打开「用 Remotion 模板渲染片头」后（配置项 `INTRO_ENABLED=1`），合成阶段会执行：
+主程序设置页把「片头 / 标题时长」设为大于 0（配置项 `TITLE_DURATION > 0`）后，合成阶段会执行：
 
 ```bash
 node render.mjs @props.json
@@ -41,12 +41,12 @@ node render.mjs @props.json
 
 | compositionId | 用途 | 触发配置 |
 | --- | --- | --- |
-| `TitleCard` | 片头标题卡，顶替 ASS 大字标题 | `INTRO_ENABLED=1` |
+| `TitleCard` | 片头标题卡，顶替 ASS 大字标题 | `TITLE_DURATION > 0` |
 | `OutroCard` | 片尾关注引导 | `OUTRO_DURATION > 0` |
 | `QuoteCard` | 兜底设计卡，没检索到素材时顶替实拍 | `QUOTE_FALLBACK=1` |
-| `ChapterCard` | 段落过场卡，大序号 + 本段主题 | `CHAPTER_CARD=1` |
+| `ChapterCard` | 段落过场卡，大序号 + 本段主题 | `CHAPTER_DURATION > 0` |
 
-版式阶段（`CARDS_ENABLED=1`）会按每张卡自己的 `compositionId` 渲染，备用模板为 `TitleHero`、`ChapterSplit`、`OutroMinimal`，清单在 `server/src/card-templates.ts`，新增模板要同时注册到 `src/Root.tsx`。
+版式阶段会按每张卡自己的 `compositionId` 渲染，备用模板为 `TitleHero`、`ChapterSplit`、`OutroMinimal`，清单在 `server/src/card-templates.ts`，新增模板要同时注册到 `src/Root.tsx`。
 
 渲染完成后后端会用 ffmpeg 补一条静音轨并统一编码参数，让卡片能和正文片段一起走转场拼接。
 

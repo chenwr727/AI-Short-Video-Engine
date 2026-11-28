@@ -33,7 +33,7 @@ let promptsWindow: BrowserWindow | null = null;
 let aboutWindow: BrowserWindow | null = null;
 
 /** 广播界面偏好，跳过发起窗口 —— 它自己已经切过了，回声会多一次重绘 */
-function broadcast<T>(origin: Electron.WebContents, channel: string, value: T): void {
+function broadcast<T>(origin: Electron.WebContents, channel: string, value?: T): void {
   for (const target of [mainWindow, settingsWindow, promptsWindow, aboutWindow]) {
     if (!target || target.isDestroyed()) continue;
     if (target.webContents === origin) continue;
@@ -178,6 +178,10 @@ function createMainWindow(url: string): BrowserWindow {
     if (theme !== "light" && theme !== "dark" && theme !== "system") return;
     saveUi({ theme });
     broadcast(event.sender, "app:theme-changed", theme);
+  });
+
+  ipcMain.on("app:config-changed", (event) => {
+    broadcast(event.sender, "app:config-changed");
   });
 
   // 菜单在渲染层，快捷键在此兜住

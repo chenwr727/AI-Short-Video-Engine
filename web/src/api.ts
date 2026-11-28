@@ -27,15 +27,39 @@ function withLanguage(init?: RequestInit): RequestInit {
   return { ...init, headers };
 }
 
-async function request<T>(path: string, init?: RequestInit, errKey: MessageKey = "error.request"): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, withLanguage(init));
-  if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { error?: string };
-    // 分隔符跟着语言走，不然英文界面里会混进一个中文全角冒号
-    const sep = currentLanguage() === "en" ? ": " : "：";
-    throw new Error(body.error ?? `${t(errKey)}${sep}${res.status}`);
+/** 普通请求的超时；会同步等模型和静帧渲染的接口单独放宽 */
+const DEFAULT_TIMEOUT = 60_000;
+const LONG_TIMEOUT = 300_000;
+
+/** 超时后后端任务可能还在跑，通知界面重新拉一次状态 */
+export const REQUEST_TIMEOUT_EVENT = "aisv:request-timeout";
+
+async function request<T>(
+  path: string,
+  init?: RequestInit,
+  errKey: MessageKey = "error.request",
+  timeoutMs = DEFAULT_TIMEOUT,
+): Promise<T> {
+  // 防止挂死时调用方的 finally 不执行
+  const signal = AbortSignal.timeout(timeoutMs);
+  try {
+    const res = await fetch(`${BASE}${path}`, withLanguage({ ...init, signal }));
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      // 分隔符跟着语言走，不然英文界面里会混进一个中文全角冒号
+      const sep = currentLanguage() === "en" ? ": " : "：";
+      throw new Error(body.error ?? `${t(errKey)}${sep}${res.status}`);
+    }
+    return (await res.json()) as T;
+  } catch (error) {
+    if (signal.aborted) {
+      if (timeoutMs === LONG_TIMEOUT && typeof window !== "undefined") {
+        window.dispatchEvent(new Event(REQUEST_TIMEOUT_EVENT));
+      }
+      throw new Error(t("error.timeout"), { cause: error });
+    }
+    throw error;
   }
-  return (await res.json()) as T;
 }
 
 export function getHealth(): Promise<Health> {
@@ -84,6 +108,13 @@ export async function savePrompt(file: string, key: string, value: string): Prom
     },
     "error.promptsSave",
   );
+}
+
+/** 关窗时用 sendBeacon 补发未保存的编辑 */
+export function flushPrompt(file: string, key: string, value: string): void {
+  if (typeof navigator === "undefined" || typeof navigator.sendBeacon !== "function") return;
+  const body = JSON.stringify({ file, key, value });
+  navigator.sendBeacon(`${BASE}/prompts`, new Blob([body], { type: "application/json" }));
 }
 
 export async function resetPrompt(file: string, key: string): Promise<PromptValue> {
@@ -189,6 +220,7 @@ export async function confirmMaterial(
       body: JSON.stringify({ items, resolution, cardPrefs }),
     },
     "error.materialConfirm",
+    LONG_TIMEOUT,
   );
   return data.state;
 }
@@ -225,6 +257,7 @@ export async function applyInfoCard(paragraph: number, template?: string): Promi
       body: JSON.stringify({ paragraph, template }),
     },
     "error.infoCard",
+    LONG_TIMEOUT,
   );
   return data.state;
 }
@@ -264,6 +297,7 @@ export async function applyInfoCardsAuto(overwrite = false): Promise<AutoInfoCar
       body: JSON.stringify({ overwrite }),
     },
     "error.infoCardAuto",
+    LONG_TIMEOUT,
   );
 }
 
@@ -282,6 +316,7 @@ export async function rewriteCard(id: string, mode: "text" | "accent"): Promise<
       body: JSON.stringify({ id, mode }),
     },
     "error.cardSwap",
+    LONG_TIMEOUT,
   );
   return data.state;
 }
@@ -304,7 +339,8 @@ export async function matchMaterial(
 
 /** 字号 / BGM 开关 / 自定义音乐 */
 export interface RenderPatch {
-  subtitleFontSize: number;
+  /** 省略 = 跟随配置；显式给了才写进任务参数 */
+  subtitleFontSize?: number;
   bgmEnabled: boolean;
   bgmVolume: number;
   bgmFile: string;

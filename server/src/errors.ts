@@ -327,7 +327,6 @@ export const STAGE_TEXT = {
   repairing: { zh: "按审稿意见返修", en: "Repairing per review" },
   fixing: { zh: "按约束修复", en: "Fixing per constraints" },
   designingCards: { zh: "AI 设计版式", en: "AI drafting cards" },
-  cardsOff: { zh: "版式已关闭，本次不出卡片", en: "Cards are off, none this time" },
   cardsFailed: { zh: "生成失败，本次不带卡片", en: "Generation failed, skipping cards" },
   appQuit: { zh: "应用退出时中断", en: "Interrupted when the app quit" },
 } as const satisfies Record<string, Bilingual>;

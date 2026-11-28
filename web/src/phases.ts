@@ -20,16 +20,8 @@ const ALL_STEPS: StepDef[] = [
 
 /**
  * 版式不再是独立一步：片头/章节/片尾的参数并进「素材确认」的配置区，
- * 和素材一起确认。这里保留 id 只为兼容旧快照与路由，步骤条上不再出现。
+ * 和素材一起确认。步骤条固定 5 步，不出现 cards。
  */
-export const LEGACY_CARD_PHASE: Phase = "cards";
-
-/** 有 cards 阶段 = 这个任务开了版式 */
-export function hasCards(task: TaskState | null): boolean {
-  return Boolean(task?.stages.some((stage) => stage.id === "cards"));
-}
-
-/** 步骤条固定 5 步，版式不再是独立一步 */
 export function stepsFor(): StepDef[] {
   return ALL_STEPS;
 }

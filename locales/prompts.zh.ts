@@ -3,6 +3,7 @@ export const prompts = {
   autoSaved: "已保存",
   builtin: "内置默认",
   chars: "{n} 字",
+  reset: "恢复默认",
   saving: "保存中…",
   title: "提示词",
 } satisfies Record<string, string>;

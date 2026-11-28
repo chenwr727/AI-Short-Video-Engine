@@ -68,10 +68,11 @@ const chapterDefaults: ChapterCardProps = {
   durationInFrames: 48,
 };
 
+/* defaultProps 留空壳：漏传的字段会被印到成片上 */
 const personDefaults: PersonCardProps = {
-  title: "黄仁勋",
-  role: "英伟达 CEO",
-  line: "回归速度快得实在有点离谱",
+  title: "",
+  role: "",
+  line: "",
   label: "人物",
   index: 1,
   accent: "#ff5a3c",
@@ -82,9 +83,9 @@ const personDefaults: PersonCardProps = {
 };
 
 const compareDefaults: CompareCardProps = {
-  title: "两个人的选择",
-  left: { name: "贝森特", stance: "立刻改口", note: "权力全靠川普" },
-  right: { name: "鲁比奥", stance: "选择沉默", note: "有国会根基，不必表态" },
+  title: "",
+  left: { name: "", stance: "" },
+  right: { name: "", stance: "" },
   label: "对比",
   accent: "#ff5a3c",
   rightAccent: "#3b82f6",
@@ -95,12 +96,8 @@ const compareDefaults: CompareCardProps = {
 };
 
 const timelineDefaults: TimelineCardProps = {
-  title: "老黄回归的时间线",
-  timeline: [
-    { time: "周一", text: "董事会内部开始游说" },
-    { time: "周三", text: "川普亲自出面说服" },
-    { time: "周五", text: "股价单日反弹 8%" },
-  ],
+  title: "",
+  timeline: [],
   label: "时间线",
   accent: "#ff5a3c",
   width: 1080,
@@ -110,16 +107,7 @@ const timelineDefaults: TimelineCardProps = {
 };
 
 const statDefaults: StatCardProps = {
-  stat: {
-    value: "32%",
-    caption: "家庭财富占比",
-    note: "股市一跌，中产的钱包直接缩水",
-    bars: [
-      { label: "股票与基金", value: 32, hint: "32%" },
-      { label: "房产", value: 28, hint: "28%" },
-      { label: "现金存款", value: 14, hint: "14%" },
-    ],
-  },
+  stat: { value: "", bars: [] },
   label: "数据",
   accent: "#ff5a3c",
   width: 1080,

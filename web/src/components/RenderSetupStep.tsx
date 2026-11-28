@@ -34,12 +34,13 @@ export function VoiceOptions({ speakers, form, engine, meta, disabled, onChange,
 
   return (
     <>
-      <div className="voice-list">
+      <div className="voice-fields">
         {speakers.length === 0 && <p className="hint">{t("render.noSpeakers")}</p>}
-        {speakers.map((speaker) => (
-          <div className="voice-row" key={speaker}>
-            <span className="speaker">{speaker}</span>
+        {speakers.map((speaker, index) => (
+          <div className="field" key={speaker}>
+            <label htmlFor={`voice-${index}`}>{speaker}</label>
             <Dropdown
+              id={`voice-${index}`}
               value={form.voices[speaker] ?? ""}
               options={(engine?.voices ?? []).map((voice) => ({ value: voice.id, label: voice.label }))}
               onChange={(next) => onVoiceChange(speaker, next)}

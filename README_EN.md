@@ -33,7 +33,7 @@ One 36kr article, one script style swap, a completely different video. Samples a
 
 ## Why This One
 
-The hard part of "one-click AI video" was never generation — it is discovering, after the render, that the tone is off or the footage does not fit, and having to run the whole thing again. So this pipeline puts human checkpoints at **the expensive moments**: **script** (edit the title and any line, confirm, then dub), **footage** (preview each clip, hit **Replace** to swap in another candidate), and **cards** (on by default: the AI picks templates and writes copy, tune each card before rendering; set `CARDS_ENABLED=0` to skip this step).
+The hard part of "one-click AI video" was never generation — it is discovering, after the render, that the tone is off or the footage does not fit, and having to run the whole thing again. So this pipeline puts human checkpoints at **the expensive moments**: **script** (edit the title and any line, confirm, then dub) and **footage and cards** (preview each clip, hit **Replace** to swap in another candidate, then set up intro / chapter / outro cards on the same page before rendering).
 
 Everything else stays out of your way:
 
@@ -70,20 +70,18 @@ flowchart LR
     D --> E{{Script review}}
     E --> F[Split and TTS]
     F --> G[Footage search]
-    G --> H{{Footage review}}
-    H --> HC{{Card review (optional)}}
-    HC --> I[Subtitles transitions BGM]
+    G --> H{{Footage and card review}}
+    H --> I[Subtitles transitions BGM]
     I --> J([Final mp4])
 ```
 
-The UI mirrors this in six steps (card review is hidden when `CARDS_ENABLED=0`); the step bar at the top lets you revisit completed steps at any time:
+The UI mirrors this in five steps; the step bar at the top lets you revisit completed steps at any time:
 
 1. **Script input** — paste a URL or article text, pick a style, click **Start**
 2. **Script generation** — the AI fetches and drafts, then pauses; title and every line are editable
 3. **Voice synthesis** — pick a voice per role, engine and speed (default 1.1×, `TTS_SPEED`)
-4. **Material review** — choose source and resolution, then match; preview each clip, **Replace** swaps a candidate. Confirming does **not** auto-render
-5. **Card review** — nothing runs until you press **Generate cards**; edit copy and duration, switch templates, delete cards, or regenerate everything
-6. **Final preview** — set subtitle size, BGM and volume, then **Render video**; tweak and **Regenerate** afterwards
+4. **Footage and cards** — choose source and resolution, then match; preview each clip, **Replace** swaps a candidate, and set intro / chapter / outro card durations and copy. Confirming does **not** auto-render
+5. **Final preview** — set subtitle size, BGM and volume, then **Render video**; tweak and **Regenerate** afterwards
 
 On desktop, **Show in folder** opens the file location (in a browser it downloads the file).
 

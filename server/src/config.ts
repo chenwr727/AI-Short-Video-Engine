@@ -64,19 +64,13 @@ export interface AppConfig {
   SFX_ENABLED: string;
   /** 音效音量，1 = 原音量 */
   SFX_VOLUME: string;
-  /** 1 = 用 Remotion 模板渲染片头，需要 remotion/ 子工程已安装依赖 */
-  INTRO_ENABLED: string;
-  /** Remotion 片尾秒数，0 = 不加片尾 */
+  /** 片尾秒数，0 = 不加片尾 */
   OUTRO_DURATION: string;
   OUTRO_TITLE: string;
   /** 片尾账号名，留空则不显示 */
   OUTRO_HANDLE: string;
-  /** 1 = 段落之间插入 Remotion 过场卡 */
-  CHAPTER_CARD: string;
-  /** 过场卡秒数，过短会被转场吃掉，建议 2 秒以上 */
+  /** 过场卡秒数，0 = 不出，过短会被转场吃掉，建议 2 秒以上 */
   CHAPTER_DURATION: string;
-  /** 1 = 素材之后多一步「生成版式」，由 AI 选模板并写卡片文案 */
-  CARDS_ENABLED: string;
   /** 卡片主色，AI 只在这个色板里挑 */
   CARD_ACCENT: string;
   SPEAKER_MAIN: string;
@@ -121,13 +115,10 @@ export const DEFAULTS: AppConfig = {
   QUOTE_FALLBACK: "1",
   SFX_ENABLED: "1",
   SFX_VOLUME: "0.2",
-  INTRO_ENABLED: "0",
   OUTRO_DURATION: "0",
   OUTRO_TITLE: "关注我，下期见",
   OUTRO_HANDLE: "",
-  CHAPTER_CARD: "0",
   CHAPTER_DURATION: "2",
-  CARDS_ENABLED: "1",
   CARD_ACCENT: "#ff5a3c",
   SPEAKER_MAIN: "小简",
   SPEAKER_GUEST: "老陈",
@@ -211,8 +202,12 @@ export function numberOrZero(value: string, fallback: number): number {
 /** 卡片可选主色，主色之外只允许这几个，避免出现荧光色 */
 const CARD_EXTRA_ACCENTS = ["#3b82f6", "#22c55e", "#eab308", "#a855f7", "#f97316"];
 
+/** #rrggbb；配置可能被手工改成 "red"、"#f53" 这类写法 */
+const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+
 export function cardAccentPalette(cfg: AppConfig = loadConfig()): string[] {
-  const base = (cfg.CARD_ACCENT ?? "").trim() || "#ff5a3c";
+  const raw = (cfg.CARD_ACCENT ?? "").trim();
+  const base = HEX_COLOR.test(raw) ? raw.toLowerCase() : "#ff5a3c";
   return [base, ...CARD_EXTRA_ACCENTS.filter((color) => color !== base)];
 }
 

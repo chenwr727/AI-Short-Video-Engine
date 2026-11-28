@@ -946,6 +946,12 @@ body.electron.mac .tb-inner {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.row .field > .dropdown-trigger,
+.row .field > .text-input {
+  height: 40px;
+  box-sizing: border-box;
+}
+
 /**
  * 片头/章节/片尾三个秒数挤在同一个 field 里：
  * 合并到素材页后这一列只有 1/4 宽度，三个输入框平分，不再各占一个 field。
@@ -1544,7 +1550,7 @@ body.electron.mac .tb-inner {
   display: block;
   width: auto;
   max-width: 100%;
-  max-height: min(420px, 60vh);
+  max-height: min(420px, 42vh);
   margin: 0 auto 14px;
   border-radius: var(--aisv-radius-md);
   background: var(--aisv-static-code-ink);
@@ -1669,7 +1675,7 @@ body.electron.mac .tb-inner {
  */
 .stepper-wrap {
   margin: 0 0 18px;
-  padding: 16px 20px 12px;
+  padding: 10px 18px 8px;
   background: var(--aisv-bg-layer-1);
   border-radius: var(--aisv-radius-lg);
   box-shadow: var(--aisv-elevation-panel);
@@ -1692,7 +1698,7 @@ body.electron.mac .tb-inner {
 /* 连接线走圆点背后：z-index 压在 .step-btn 之下，圆点自己盖住穿过来的那截 */
 .step-line {
   position: absolute;
-  top: 15px;
+  top: 12px;
   right: 50%;
   left: -50%;
   z-index: 0;
@@ -1710,7 +1716,7 @@ body.electron.mac .tb-inner {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   padding: 0 6px;
   border: none;
   background: transparent;
@@ -1726,8 +1732,8 @@ body.electron.mac .tb-inner {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   border: 1px solid var(--aisv-border-l3);
   /* 必须是实心底：它要盖住从背后穿过的连接线 */
@@ -1775,6 +1781,7 @@ body.electron.mac .tb-inner {
 }
 
 .step-desc {
+  display: none;
   font-size: 11.5px;
   color: var(--aisv-label-caption);
   white-space: nowrap;
@@ -1833,8 +1840,13 @@ body.electron.mac .tb-inner {
   transition: background var(--aisv-t-base) var(--aisv-ease);
 }
 
+.resume-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 @media (hover: hover) {
-  .resume-btn:hover {
+  .resume-btn:hover:not(:disabled) {
     background: var(--aisv-button-primary-hover);
   }
 }
@@ -1946,64 +1958,15 @@ body.electron.mac .tb-inner {
 
 /* ---------- 配音设置 ---------- */
 
-.voice-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-bottom: 18px;
-  padding: 14px 16px;
-  border-radius: var(--aisv-radius-md);
-  background: var(--aisv-bg-layer-2);
+.voice-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0 12px;
 }
 
-.voice-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.voice-row + .voice-row {
-  border-top: 0.5px solid var(--aisv-border-l2);
-  padding-top: 12px;
-}
-
-.voice-row .speaker {
-  flex: 0 0 110px;
-  overflow: hidden;
-  padding-top: 0;
-  font-size: var(--aisv-font-size);
-  font-weight: 600;
-  color: var(--aisv-label-primary);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.voice-row select {
-  flex: 1;
-  border: 1px solid var(--aisv-border-l4);
-  border-radius: var(--aisv-radius-md);
-  padding: 8px 34px 8px 12px;
-  font-size: var(--aisv-font-size);
-  font-family: inherit;
-  color: var(--aisv-label-primary);
-  background-color: var(--aisv-bg-layer-1);
-  appearance: none;
-  background-image:
-    linear-gradient(45deg, transparent 50%, var(--aisv-label-tertiary) 50%),
-    linear-gradient(135deg, var(--aisv-label-tertiary) 50%, transparent 50%);
-  background-position:
-    calc(100% - 18px) 52%,
-    calc(100% - 13px) 52%;
-  background-size:
-    5px 5px,
-    5px 5px;
-  background-repeat: no-repeat;
-  outline: none;
-  transition: border-color var(--aisv-t-base) var(--aisv-ease);
-}
-
-.voice-row select:focus {
-  border-color: var(--aisv-accent);
+.voice-fields > .hint {
+  grid-column: 1 / -1;
+  margin: 0 0 14px;
 }
 
 /* ---------- 素材确认 ---------- */
@@ -2029,6 +1992,8 @@ body.electron.mac .tb-inner {
    */
   align-items: stretch;
   margin-bottom: 14px;
+  /* 按结果区可视高度算画面高度，上限 300px */
+  --tile-media-h: clamp(160px, calc(100cqh - 200px), 300px);
 }
 
 /* 宽屏仍固定 3 列，和配置区的 4 列错开，读起来有层次 */
@@ -2170,6 +2135,13 @@ body.electron.mac .tb-inner {
   min-width: 0;
 }
 
+.timeline-tile .material-tags {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 .material-list {
   display: flex;
   flex-direction: column;
@@ -2265,8 +2237,23 @@ body.electron.mac .tb-inner {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
   font-size: var(--aisv-font-size);
   font-weight: 600;
+}
+
+.material-title-text {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.material-title > .pill {
+  flex: none;
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .material-tags {
@@ -2388,6 +2375,12 @@ body.electron.mac .tb-inner {
   overflow-y: auto;
   /* 不把滚动传给外层 */
   overscroll-behavior: contain;
+}
+
+/* 只给含时间线的滚动区建尺寸容器，cqh 才有参照 */
+.panel-fill .panel-scroll:has(.timeline-grid) {
+  container-type: size;
+  flex: 1 1 0;
 }
 
 /*
@@ -2734,16 +2727,6 @@ body.electron.mac .tb-inner {
     top: 13px;
   }
 
-  .voice-row {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 6px;
-  }
-
-  .voice-row .speaker {
-    flex: none;
-  }
-
   .material-card {
     grid-template-columns: 1fr;
   }
@@ -2917,7 +2900,7 @@ body.prompt-window #root {
 .pm-overlay .nav-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   min-height: 0;
   overflow-y: auto;
   /*
@@ -2928,43 +2911,13 @@ body.prompt-window #root {
   padding-bottom: 10px;
 }
 
-/* 导航按「人设文件」分组：分组名是标签，不是可点的行 */
-.pm-standalone .nav-group,
-.pm-overlay .nav-group {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.pm-standalone .nav-group + .nav-group,
-.pm-overlay .nav-group + .nav-group {
-  margin-top: 6px;
-}
-
-/*
- * 分组名：只是给这一组条目一个归属提示，不该抢戏。
- * 用 11px / 常规字重 / 更淡的灰度，读起来像个小标签，
- * 视线自然落到下面的可点条目上。
- */
-.pm-standalone .nav-group-name,
-.pm-overlay .nav-group-name {
-  padding: 4px 12px 2px;
-  font-size: 11px;
-  font-weight: 400;
-  line-height: 16px;
-  letter-spacing: 0.02em;
-  color: var(--aisv-label-caption);
-  user-select: none;
-}
-
-/* 导航格：36 高、r12、pad 7/16/7/12、gap 8、14/400 */
 .pm-standalone .nav-cell,
 .pm-overlay .nav-cell {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 36px;
-  padding: 7px 16px 7px 12px;
+  height: 40px;
+  padding: 9px 16px 9px 12px;
   border: none;
   border-radius: var(--aisv-radius-md);
   background: transparent;
@@ -3061,6 +3014,45 @@ body.prompt-window #root {
   margin: 4px 0 0;
 }
 
+.pm-fields {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+}
+
+.pm-field {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.pm-field-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 14px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.pm-field-label {
+  color: var(--aisv-label-secondary);
+}
+
+.pm-reset {
+  margin-left: auto;
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
+.pm-reset:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 /* 字数在文本框右下角，不占额外一行 */
 .pm-editor {
   position: relative;
@@ -3069,6 +3061,10 @@ body.prompt-window #root {
   flex-direction: column;
   min-height: 0;
   padding-top: 14px;
+}
+
+.pm-editor.busy {
+  opacity: 0.55;
 }
 
 .pm-count {

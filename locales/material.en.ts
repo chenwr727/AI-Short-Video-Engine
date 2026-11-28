@@ -65,6 +65,7 @@ export const material = {
   sourceAvailable: "Available: {list}",
   sourceHint: "Which provider to search",
   startMatch: "Start matching",
+  stopGenerating: "Stop",
   stopMatch: "Stop matching",
   stopped: "Stopped. The clips matched so far are incomplete — Continue fills in the rest.",
   title: "Footage",

@@ -80,7 +80,7 @@ export function ScriptStep(props: ScriptStepProps) {
       className="secondary"
       type="button"
       onClick={onRegenerate}
-      disabled={busy}
+      disabled={busy || running}
       title={t("script.regenerateHint")}
     >
       {t("common.regenerate")}

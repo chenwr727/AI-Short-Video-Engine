@@ -84,6 +84,11 @@ function applySpeakers(template: string, speakers: SpeakerNames): string {
   return template.split(SPEAKER_MAIN_TOKEN).join(speakers.main).split(SPEAKER_GUEST_TOKEN).join(speakers.guest);
 }
 
+/** {{KEY}} → vars.KEY，未提供的原样保留 */
+export function applyPromptVars(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{\{([A-Z0-9_]+)\}\}/g, (match, key: string) => vars[key] ?? match);
+}
+
 /** 读取 <风格>.json，填充角色名占位符 */
 export function loadPrompts(source: string, speakers?: SpeakerNames): PromptPair {
   const names = speakers ?? speakerNames();
@@ -116,6 +121,30 @@ export function loadVideoSelectPrompt(): string {
 
 export function loadVisionSelectPrompt(): string {
   return readPrompt("vision_select.json", "prompt_vision_select");
+}
+
+export interface CardPrompts {
+  accentSystem: string;
+  accentUser: string;
+  chaptersSystem: string;
+  chaptersUser: string;
+  rewriteTitleSystem: string;
+  rewriteTitleUser: string;
+  infoCardSystem: string;
+  infoCardUser: string;
+}
+
+export function loadCardPrompts(): CardPrompts {
+  return {
+    accentSystem: readPrompt("card_accent.json", "prompt_system"),
+    accentUser: readPrompt("card_accent.json", "prompt_user"),
+    chaptersSystem: readPrompt("card_chapters.json", "prompt_system"),
+    chaptersUser: readPrompt("card_chapters.json", "prompt_user"),
+    rewriteTitleSystem: readPrompt("card_rewrite.json", "prompt_system"),
+    rewriteTitleUser: readPrompt("card_rewrite.json", "prompt_user"),
+    infoCardSystem: readPrompt("card_info.json", "prompt_system"),
+    infoCardUser: readPrompt("card_info.json", "prompt_user"),
+  };
 }
 
 export interface PromptField {
@@ -257,6 +286,98 @@ const DOC_TEXTS: DocText[] = [
         key: "prompt_vision_select",
         label: { zh: "视觉选片", en: "Visual select" },
         hint: { zh: "看画面判断是否贴合台词", en: "Judge whether the frame fits the line" },
+      },
+    ],
+  },
+  {
+    file: "card_accent.json",
+    title: { zh: "卡片主色", en: "Card accent" },
+    description: {
+      zh: "看素材画面，从色板里挑一个主色；关掉视觉选片时不会调用。",
+      en: "Picks an accent from the palette using thumbnails; skipped when visual selection is off.",
+    },
+    fields: [
+      {
+        key: "prompt_system",
+        label: { zh: "系统提示", en: "System message" },
+        hint: { zh: "身份与全局输出约束", en: "Role and global output rules" },
+      },
+      {
+        key: "prompt_user",
+        label: { zh: "正文提示词", en: "User message" },
+        hint: {
+          zh: "{{PALETTE}} 会替换成色板",
+          en: "{{PALETTE}} is replaced with the palette",
+        },
+      },
+    ],
+  },
+  {
+    file: "card_chapters.json",
+    title: { zh: "卡片文案", en: "Card copy" },
+    description: {
+      zh: "一次生成片头、章节、片尾标题和版式，失败会回退内置模板。",
+      en: "Generates intro, chapter and outro copy in one call; falls back to built-in templates on failure.",
+    },
+    fields: [
+      {
+        key: "prompt_system",
+        label: { zh: "系统提示", en: "System message" },
+        hint: { zh: "身份与全局输出约束", en: "Role and global output rules" },
+      },
+      {
+        key: "prompt_user",
+        label: { zh: "正文提示词", en: "User message" },
+        hint: {
+          zh: "可注入 {{TITLE}}、{{PARAGRAPHS}}、{{CHAPTER_LIMIT}}、{{INTRO_TEMPLATES}}、{{CHAPTER_TEMPLATES}}、{{OUTRO_TEMPLATES}}、{{SHAPE}}",
+          en: "Variables: {{TITLE}}, {{PARAGRAPHS}}, {{CHAPTER_LIMIT}}, {{INTRO_TEMPLATES}}, {{CHAPTER_TEMPLATES}}, {{OUTRO_TEMPLATES}}, {{SHAPE}}",
+        },
+      },
+    ],
+  },
+  {
+    file: "card_rewrite.json",
+    title: { zh: "标题重写", en: "Title rewrite" },
+    description: {
+      zh: "用户点「换一个写法」时调用，只改卡片标题。",
+      en: "Used when the user asks for another card title; only the title changes.",
+    },
+    fields: [
+      {
+        key: "prompt_system",
+        label: { zh: "系统提示", en: "System message" },
+        hint: { zh: "身份与全局输出约束", en: "Role and global output rules" },
+      },
+      {
+        key: "prompt_user",
+        label: { zh: "正文提示词", en: "User message" },
+        hint: {
+          zh: "可注入 {{CONTEXT}}、{{CARD_TYPE}}、{{TITLE}}、{{USED_TITLES}}、{{LENGTH_HINT}}",
+          en: "Variables: {{CONTEXT}}, {{CARD_TYPE}}, {{TITLE}}, {{USED_TITLES}}, {{LENGTH_HINT}}",
+        },
+      },
+    ],
+  },
+  {
+    file: "card_info.json",
+    title: { zh: "信息卡", en: "Info card" },
+    description: {
+      zh: "按段落台词生成信息卡，卡面硬信息必须能指回原句。",
+      en: "Builds an info card from a paragraph; every fact on the card must be grounded in the transcript.",
+    },
+    fields: [
+      {
+        key: "prompt_system",
+        label: { zh: "系统提示", en: "System message" },
+        hint: { zh: "身份与全局输出约束", en: "Role and global output rules" },
+      },
+      {
+        key: "prompt_user",
+        label: { zh: "正文提示词", en: "User message" },
+        hint: {
+          zh: "可注入 {{CONTENT}}、{{BODY}}、{{STAT_MAX_BARS}}、{{FIXED_TEMPLATE}}、{{USED_TOPICS}}",
+          en: "Variables: {{CONTENT}}, {{BODY}}, {{STAT_MAX_BARS}}, {{FIXED_TEMPLATE}}, {{USED_TOPICS}}",
+        },
       },
     ],
   },

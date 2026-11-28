@@ -24,6 +24,7 @@ export const error = {
   settings: "打开首选项失败",
   taskCreate: "创建任务失败",
   taskGet: "获取任务失败",
+  timeout: "请求超时，后端可能仍在执行",
   ttsRegen: "重新生成配音失败",
 } satisfies Record<string, string>;
 

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { nextResumeStep } from "./manager.js";
+import { cardsMissingForRender, nextResumeStep } from "./manager.js";
 import type { TaskState } from "../types.js";
 
 /**
@@ -80,7 +80,7 @@ test("素材与卡片都好：进入合成", () => {
   assert.equal(nextResumeStep(state), "compose");
 });
 
-test("没开版式（没有 cards 阶段）：素材好了直接合成", () => {
+test("老快照没有 cards 阶段：素材好了直接合成", () => {
   const state = makeState({ stages: { material: "done", cards: "absent", compose: "pending" }, hasCards: false });
   assert.equal(nextResumeStep(state), "compose");
 });
@@ -88,20 +88,6 @@ test("没开版式（没有 cards 阶段）：素材好了直接合成", () => {
 test("素材阶段 done 但被标成 skipped（取消后收尾）：不再重跑", () => {
   const state = makeState({ stages: { material: "skipped", cards: "absent", compose: "pending" }, hasCards: false });
   assert.equal(nextResumeStep(state), "compose");
-});
-
-test("设置里关掉版式：遗留的 cards 阶段被标 skipped 后，直接进合成而不是反复重跑", () => {
-  /*
-   * cards 阶段是建任务时按当时配置定下的。用户在设置里关掉 CARDS_ENABLED 后，
-   * confirmMaterial 会把遗留阶段标成 skipped；若仍留 pending，
-   * nextResumeStep 会一直认为这步没做完，点「继续」就卡在版式上打转。
-   */
-  const closed = makeState({ stages: { material: "done", cards: "skipped", compose: "pending" } });
-  assert.equal(nextResumeStep(closed), "compose");
-
-  // 对照：没关开关时同样状态下会去补版式
-  const stillOpen = makeState({ stages: { material: "done", cards: "pending", compose: "pending" } });
-  assert.equal(nextResumeStep(stillOpen), "cards");
 });
 
 test("素材没跑完且还没配音：交回 other，不去碰后面任何一步", () => {
@@ -112,4 +98,13 @@ test("素材没跑完且还没配音：交回 other，不去碰后面任何一�
     hasMaterial: false,
   });
   assert.equal(nextResumeStep(state), "other");
+});
+
+test("版式失败或跳过后仍可合成，未跑完才挡住", () => {
+  assert.equal(cardsMissingForRender(makeState({ stages: { cards: "skipped" }, hasCards: false })), false);
+  assert.equal(cardsMissingForRender(makeState({ stages: { cards: "failed" }, hasCards: false })), false);
+  assert.equal(cardsMissingForRender(makeState({ stages: { cards: "pending" }, hasCards: false })), true);
+  assert.equal(cardsMissingForRender(makeState({ stages: { cards: "running" }, hasCards: false })), true);
+  assert.equal(cardsMissingForRender(makeState({ stages: { cards: "absent" }, hasCards: false })), false);
+  assert.equal(cardsMissingForRender(makeState({ stages: { cards: "pending" }, hasCards: true })), false);
 });

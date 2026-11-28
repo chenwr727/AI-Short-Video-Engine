@@ -152,7 +152,7 @@ async function generateTerms(ctx: TaskContext, transcript: Transcript, audio?: A
         "本次成片是【竖屏 9:16】。",
         "图库检索时 `vertical`（或 vertical video）是画幅筛选词，不是普通关键词 —— 把它放进检索词能显著提高竖屏命中率，",
         "所以每个检索词都应以 `vertical` 开头，后面再接具体画面主体。",
-        "例如：`vertical press conference`、`vertical stock chart close up`、`vertical businessman walking`。",
+        "例如：`vertical press conference`、`vertical stock chart`、`vertical businessman`。",
       ].join("\n")
     : [
         "本次成片是【横屏 16:9】。",

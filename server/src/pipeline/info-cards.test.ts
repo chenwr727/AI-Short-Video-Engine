@@ -582,3 +582,159 @@ test("字数硬切后加上省略号，结果仍不超过上限", () => {
   // 正好等于上限时不截断，也就不该补省略号
   assert.equal(cleanCardText(long, 20), long);
 });
+
+// ——— 溯源校验：卡面内容必须指得回台词 ———
+
+const GROUND_P6 = [
+  "那不怕核心机密被带走？",
+  "怕，但不许用竞业锁人。",
+  "那靠什么防？",
+  "靠保密协议和专利。",
+  "走法律途径，不锁人。",
+  "所以是换了个笼子，门开着。",
+  "对，能走，但东西不能拿。",
+].join(" ");
+
+test("对比卡两侧都引不到原句时整张丢掉", () => {
+  assert.equal(draftInfoToSpec(compareDraft, ACCENT, 5, 6, [], GROUND_P6), null);
+
+  const ok = draftInfoToSpec(
+    {
+      template: "CompareCard",
+      title: "锁人还是锁秘密",
+      left: { name: "竞业锁人", stance: "人走不了", quote: "不许用竞业锁人" },
+      right: { name: "保密协议与专利", stance: "能走但东西不能拿", quote: "靠保密协议和专利" },
+    },
+    ACCENT,
+    5,
+    6,
+    [],
+    GROUND_P6,
+  );
+  assert.ok(ok?.compare);
+});
+
+test("对比卡只有一侧有出处也不成立", () => {
+  const spec = draftInfoToSpec(
+    {
+      template: "CompareCard",
+      title: "两种反应",
+      left: { name: "雇主", stance: "纸作废", quote: "不许用竞业锁人" },
+      right: { name: "员工", stance: "能告", quote: "这句台词里根本没有" },
+    },
+    ACCENT,
+    5,
+    6,
+    [],
+    GROUND_P6,
+  );
+  assert.equal(spec, null);
+});
+
+test("过短的引用不构成出处", () => {
+  const spec = draftInfoToSpec(
+    {
+      template: "CompareCard",
+      title: "两派",
+      left: { name: "甲", stance: "甲", quote: "这" },
+      right: { name: "乙", stance: "乙", quote: "对" },
+    },
+    ACCENT,
+    5,
+    6,
+    [],
+    GROUND_P6,
+  );
+  assert.equal(spec, null);
+});
+
+test("时间线节点指不回原句的被剔除，剩不到两条整张丢弃", () => {
+  const ground = "五七年他八个手下集体跑路。出去创办了仙童。仙童后来分裂，跑出了Intel和AMD。";
+
+  const oneLeft = draftInfoToSpec(
+    {
+      template: "TimelineCard",
+      title: "从肖克利到Intel",
+      timeline: [
+        { time: "1957", text: "八人出走", quote: "五七年他八个手下集体跑路" },
+        { time: "编的", text: "编的节点", quote: "这句话台词里没有" },
+      ],
+    },
+    ACCENT,
+    5,
+    3,
+    [],
+    ground,
+  );
+  assert.equal(oneLeft, null, "只剩一条节点构不成先后，整张退回实拍");
+
+  const two = draftInfoToSpec(
+    {
+      template: "TimelineCard",
+      title: "从肖克利到Intel",
+      timeline: [
+        { time: "1957", text: "八人出走", quote: "五七年他八个手下集体跑路" },
+        { time: "之后", text: "创办仙童", quote: "出去创办了仙童" },
+      ],
+    },
+    ACCENT,
+    5,
+    3,
+    [],
+    ground,
+  );
+  assert.equal(two?.timeline?.length, 2);
+});
+
+test("人物卡没有能对上原句的判断，整张不出", () => {
+  const ground = "好家伙，裂变出半个芯片业。整条链子七十年没断过。";
+
+  assert.equal(
+    draftInfoToSpec(
+      { template: "PersonCard", title: "黄仁勋", role: "英伟达 CEO", line: "亲自出马" },
+      ACCENT,
+      5,
+      4,
+      [],
+      ground,
+    ),
+    null,
+  );
+
+  const ok = draftInfoToSpec(
+    { template: "PersonCard", title: "黄仁勋", role: "英伟达 CEO", line: "亲自出马", lineQuote: "裂变出半个芯片业" },
+    ACCENT,
+    5,
+    4,
+    [],
+    ground,
+  );
+  assert.ok(ok, "有能对上的出处就应当通过");
+});
+
+test("要点里指不回原句的那条被丢掉，剩一条就整组不上屏", () => {
+  const ground = "总统亲自下场，一个一个去说服董事会里的人。股市跌成那样，他自己手里的股票也在跟着亏钱。";
+  const spec = draftInfoToSpec(
+    {
+      template: "PersonCard",
+      title: "川普",
+      role: "美国总统",
+      line: "亲自出马",
+      lineQuote: "总统亲自下场",
+      beats: [
+        { text: "亲自出马", quote: "总统亲自下场" },
+        { text: "编的要点", quote: "这句话台词里没有" },
+      ],
+    },
+    ACCENT,
+    5,
+    1,
+    [],
+    ground,
+  );
+  assert.equal(spec?.beats, undefined);
+});
+
+test("不传 ground 时行为不变：历史和测试调用不受影响", () => {
+  assert.ok(draftInfoToSpec(compareDraft, ACCENT, 5, 2));
+});

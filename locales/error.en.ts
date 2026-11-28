@@ -26,5 +26,6 @@ export const error = {
   settings: "Failed to open preferences",
   taskCreate: "Failed to create task",
   taskGet: "Failed to load task",
+  timeout: "Request timed out — the backend may still be running",
   ttsRegen: "Failed to regenerate voiceover",
 } satisfies Record<ErrorKey, string>;

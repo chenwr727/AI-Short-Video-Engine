@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import { getPrompt, getPrompts, savePrompt } from "../api";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushPrompt, getPrompt, getPrompts, resetPrompt, savePrompt } from "../api";
 import { useLanguage, useT } from "../i18n";
-import type { PromptDoc, PromptSummary } from "../types";
+import type { PromptDoc, PromptField, PromptSummary, PromptValue } from "../types";
 
 interface PromptEditorProps {
   onClose: () => void;
@@ -9,11 +9,148 @@ interface PromptEditorProps {
   standalone?: boolean;
 }
 
+interface FieldStatus {
+  error: string;
+  saving: boolean;
+  dirty: boolean;
+  savedAt: number;
+  ready: boolean;
+  overridden: boolean;
+}
+
+interface FieldEditorProps {
+  doc: PromptDoc;
+  field: PromptField;
+  showLabel: boolean;
+  onSaved: (value: PromptValue) => void;
+  onStatus: (id: string, status: FieldStatus) => void;
+}
+
+const fieldId = (file: string, key: string) => `${file}\u0000${key}`;
+
+/** 一个字段一个编辑器：同一文件有 1~2 个字段时，各自独立加载、防抖保存 */
+function FieldEditor({ doc, field, showLabel, onSaved, onStatus }: FieldEditorProps) {
+  const t = useT();
+  const [draft, setDraft] = useState("");
+  const [saved, setSaved] = useState("");
+  const [loaded, setLoaded] = useState(false);
+  const [overridden, setOverridden] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [savedAt, setSavedAt] = useState(0);
+
+  const dirty = loaded && draft !== saved;
+  const latest = useRef({ file: doc.file, key: field.key, draft, dirty });
+  useEffect(() => {
+    latest.current = { file: doc.file, key: field.key, draft, dirty };
+  }, [doc.file, field.key, draft, dirty]);
+
+  useEffect(() => {
+    let alive = true;
+    setError("");
+    (async () => {
+      try {
+        const data = await getPrompt(doc.file, field.key);
+        if (!alive) return;
+        setDraft(data.value);
+        setSaved(data.value);
+        setOverridden(data.overridden);
+        setLoaded(true);
+      } catch (e) {
+        if (alive) setError(e instanceof Error ? e.message : String(e));
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [doc.file, field.key]);
+
+  useEffect(() => {
+    if (!dirty) return;
+    const timer = window.setTimeout(() => {
+      setSaving(true);
+      setError("");
+      void savePrompt(doc.file, field.key, draft)
+        .then((data) => {
+          setSaved(data.value);
+          setOverridden(data.overridden);
+          setSavedAt(Date.now());
+          onSaved(data);
+        })
+        .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+        .finally(() => setSaving(false));
+    }, 1000);
+    return () => window.clearTimeout(timer);
+  }, [draft, dirty, doc.file, field.key, onSaved]);
+
+  useEffect(() => {
+    onStatus(fieldId(doc.file, field.key), { error, saving, dirty, savedAt, ready: loaded, overridden });
+  }, [doc.file, field.key, error, saving, dirty, savedAt, loaded, overridden, onStatus]);
+
+  useEffect(() => {
+    const flush = () => {
+      const current = latest.current;
+      if (current.dirty) flushPrompt(current.file, current.key, current.draft);
+    };
+    window.addEventListener("pagehide", flush);
+    window.addEventListener("beforeunload", flush);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      window.removeEventListener("beforeunload", flush);
+      flush();
+    };
+  }, []);
+
+  async function restore() {
+    setSaving(true);
+    setError("");
+    try {
+      const data = await resetPrompt(doc.file, field.key);
+      setDraft(data.value);
+      setSaved(data.value);
+      setOverridden(data.overridden);
+      setSavedAt(Date.now());
+      onSaved(data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="pm-field">
+      <div className="pm-field-head">
+        {showLabel && <span className="pm-field-label">{field.label}</span>}
+        {showLabel &&
+          (overridden ? (
+            <span className="pm-badge">{t("common.customized")}</span>
+          ) : (
+            <span className="pm-badge muted">{t("prompts.builtin")}</span>
+          ))}
+        <button type="button" className="pm-reset" disabled={!overridden || saving} onClick={() => void restore()}>
+          {t("prompts.reset")}
+        </button>
+      </div>
+      {field.hint && <p className="hint pm-desc">{field.hint}</p>}
+      <div className={`pm-editor${loaded ? "" : " busy"}`}>
+        <textarea
+          className="pm-textarea"
+          value={draft}
+          spellCheck={false}
+          onChange={(event) => setDraft(event.target.value)}
+        />
+        <span className="pm-count">{t("prompts.chars", { n: draft.length })}</span>
+      </div>
+    </div>
+  );
+}
+
 /**
  * 提示词编辑：内置默认 + data/prompts 覆盖层，改完自动保存。
  *
- * 骨架与设置页一致：212px 导航 + 内容区的两行网格，
- * 标题占第一行左格，关闭钮占第一行右格。
+ * 左侧是一级文件列表；右侧显示这个文件的全部字段，
+ * 卡片类文件带 system / user 两个字段时就是两个文本框。
  */
 export function PromptEditor({ onClose, standalone = false }: PromptEditorProps) {
   const t = useT();
@@ -22,29 +159,11 @@ export function PromptEditor({ onClose, standalone = false }: PromptEditorProps)
   const [docs, setDocs] = useState<PromptDoc[]>([]);
   const [values, setValues] = useState<PromptSummary[]>([]);
   const [file, setFile] = useState("");
-  const [key, setKey] = useState("");
-  const [draft, setDraft] = useState("");
-  const [overridden, setOverridden] = useState(false);
-  // draft 对应的是哪个键；切换时 draft 还是旧内容，不能拿它算 dirty
-  const [loadedId, setLoadedId] = useState("");
+  const [statuses, setStatuses] = useState<Record<string, FieldStatus>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  /** 自动保存的状态：正在写 / 刚写完。只用于界面反馈，不阻止编辑 */
-  const [saving, setSaving] = useState(false);
-  const [savedAt, setSavedAt] = useState(0);
 
   const doc = useMemo(() => docs.find((item) => item.file === file), [docs, file]);
-  const field = useMemo(() => doc?.fields.find((item) => item.key === key), [doc, key]);
-
-  const idOf = (f: string, k: string) => `${f}\u0000${k}`;
-  const currentId = idOf(file, key);
-  // 详情还没回来时，draft / overridden 都属于上一个键，一律按「未就绪」处理
-  const ready = loadedId !== "" && loadedId === currentId;
-  const savedValue = useMemo(
-    () => values.find((v) => v.file === file && v.key === key)?.value ?? "",
-    [values, file, key],
-  );
-  const dirty = ready && draft !== savedValue;
 
   useEffect(() => {
     let alive = true;
@@ -54,10 +173,7 @@ export function PromptEditor({ onClose, standalone = false }: PromptEditorProps)
         if (!alive) return;
         setDocs(data.docs);
         setValues(data.values);
-        // 只有首次加载才定位到第一篇；切语言只是刷新文案，别把用户选的键冲掉
-        const first = data.docs[0];
-        setFile((prev) => prev || first?.file || "");
-        setKey((prev) => prev || first?.fields[0]?.key || "");
+        setFile((prev) => prev || data.docs[0]?.file || "");
       } catch (e) {
         if (alive) setError(e instanceof Error ? e.message : String(e));
       } finally {
@@ -69,52 +185,34 @@ export function PromptEditor({ onClose, standalone = false }: PromptEditorProps)
     };
   }, [language]);
 
-  // 换键时拉详情，拿到内置默认值
-  useEffect(() => {
-    if (!file || !key) return;
-    let alive = true;
-    const target = idOf(file, key);
-    setError("");
-    setSavedAt(0);
-    (async () => {
-      try {
-        const data = await getPrompt(file, key);
-        if (!alive) return;
-        setDraft(data.value);
-        setOverridden(data.overridden);
-        // 只有 draft 归位后才算「已就绪」，否则 dirty 会拿旧内容误判
-        setLoadedId(target);
-      } catch (e) {
-        if (alive) setError(e instanceof Error ? e.message : String(e));
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [file, key]);
-  /*
-   * 停止输入 1 秒后自动保存。
-   *
-   * 依赖 draft：每次按键都会重置定时器，所以只在「停下来」之后写一次。
-   * 卸载时清掉，避免切走之后旧值又被写回去。
-   */
-  useEffect(() => {
-    if (!dirty || !ready) return;
-    const timer = window.setTimeout(() => {
-      void writePrompt(file, key, draft);
-    }, 1000);
-    return () => window.clearTimeout(timer);
-  }, [dirty, ready, draft, file, key]);
+  const handleSaved = useCallback((value: PromptValue) => {
+    setValues((prev) =>
+      prev.map((item) =>
+        item.file === value.file && item.key === value.key
+          ? { ...item, value: value.value, overridden: value.overridden }
+          : item,
+      ),
+    );
+  }, []);
 
-  // 关窗口前把没写的落盘
-  useEffect(() => {
-    if (!dirty || !ready) return;
-    const flush = () => {
-      void writePrompt(file, key, draft);
-    };
-    window.addEventListener("beforeunload", flush);
-    return () => window.removeEventListener("beforeunload", flush);
-  }, [dirty, ready, draft, file, key]);
+  const handleStatus = useCallback((id: string, status: FieldStatus) => {
+    setStatuses((prev) => ({ ...prev, [id]: status }));
+  }, []);
+
+  const states =
+    doc?.fields.map((f) => statuses[fieldId(doc.file, f.key)]).filter((s): s is FieldStatus => Boolean(s)) ?? [];
+  const ready = Boolean(doc) && states.length === (doc?.fields.length ?? 0) && states.every((s) => s.ready);
+  const statusError = error || states.find((s) => s.error)?.error || "";
+  const statusText =
+    error || !ready || statusError
+      ? null
+      : states.some((s) => s.saving)
+        ? t("prompts.saving")
+        : states.some((s) => s.dirty)
+          ? t("common.unsaved")
+          : states.some((s) => s.savedAt)
+            ? t("prompts.autoSaved")
+            : null;
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -124,57 +222,10 @@ export function PromptEditor({ onClose, standalone = false }: PromptEditorProps)
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
-  function syncValues(next: { file: string; key: string; value: string; overridden: boolean }) {
-    setValues((prev) =>
-      prev.map((item) => (item.file === next.file && item.key === next.key ? { ...item, ...next } : item)),
-    );
-  }
-
-  /**
-   * 把当前草稿写回。
-   *
-   * 不弹任何提示：成功静默，失败在右下角气泡留一行红字。
-   * 写入后不覆盖 draft —— 用户可能已经在继续打字，回填会把新输入冲掉。
-   */
-  async function writePrompt(targetFile: string, targetKey: string, value: string) {
-    setSaving(true);
-    setError("");
-    try {
-      const data = await savePrompt(targetFile, targetKey, value);
-      setOverridden(data.overridden);
-      syncValues(data);
-      setSavedAt(Date.now());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  function switchTo(nextFile: string, nextKey: string) {
-    // 切走前把没写的内容落盘，不打断操作、也不弹确认
-    if (dirty) void writePrompt(file, key, draft);
-    setFile(nextFile);
-    setKey(nextKey);
-  }
-
-  const statusText = error
-    ? null
-    : !ready
-      ? null
-      : saving
-        ? t("prompts.saving")
-        : dirty
-          ? t("common.unsaved")
-          : savedAt
-            ? t("prompts.autoSaved")
-            : null;
-
   const content = (
     <div className="panel">
       <h1 className="nav-title">{t("prompts.title")}</h1>
 
-      {/* 标题行右侧：和设置页一样，唯一的关闭钮就在面板里 */}
       <div className="header">
         <span className="header-spacer" />
         <button type="button" className="icon-btn" onClick={onClose} aria-label={t("common.close")}>
@@ -186,69 +237,61 @@ export function PromptEditor({ onClose, standalone = false }: PromptEditorProps)
 
       <nav className="nav">
         <div className="nav-list">
-          {docs.map((item) => (
-            <div className="nav-group" key={item.file}>
-              {/* 分组名只用来说清「这些是同一个人设下的几段」，不可点 */}
-              <div className="nav-group-name">{item.title}</div>
-              {item.fields.map((f) => {
-                const summary = values.find((v) => v.file === item.file && v.key === f.key);
-                const active = item.file === file && f.key === key;
-                return (
-                  <button
-                    type="button"
-                    key={f.key}
-                    className={`nav-cell${active ? " active" : ""}`}
-                    onClick={() => switchTo(item.file, f.key)}
-                    title={f.hint || f.label}
-                  >
-                    <span className="nav-label">{f.label}</span>
-                    {summary?.overridden && <span className="nav-dot" aria-label={t("common.customized")} />}
-                  </button>
-                );
-              })}
-            </div>
-          ))}
+          {docs.map((item) => {
+            const active = item.file === file;
+            const customized = values.some((v) => v.file === item.file && v.overridden);
+            return (
+              <button
+                type="button"
+                key={item.file}
+                className={`nav-cell${active ? " active" : ""}`}
+                onClick={() => setFile(item.file)}
+                title={item.description}
+              >
+                <span className="nav-label">{item.title}</span>
+                {customized && <span className="nav-dot" aria-label={t("common.customized")} />}
+              </button>
+            );
+          })}
         </div>
       </nav>
 
       <div className={`options${loading || !ready ? " busy" : ""}`}>
         {loading && !doc ? (
-          <p className="hint">{error ? t("common.failed") : t("common.loading")}</p>
-        ) : (
+          <p className="hint">{statusError ? t("common.failed") : t("common.loading")}</p>
+        ) : doc ? (
           <>
             <div className="pm-title">
-              <span>
-                {doc?.title} · {field?.label}
-              </span>
-              {overridden ? (
-                <span className="pm-badge">{t("common.customized")}</span>
-              ) : (
-                <span className="pm-badge muted">{t("prompts.builtin")}</span>
-              )}
+              <span>{doc.title}</span>
+              {doc.fields.length === 1 &&
+                (states[0]?.overridden ? (
+                  <span className="pm-badge">{t("common.customized")}</span>
+                ) : (
+                  <span className="pm-badge muted">{t("prompts.builtin")}</span>
+                ))}
             </div>
-            {doc?.description && <p className="hint pm-desc">{doc.description}</p>}
-            {field?.hint && <p className="hint pm-desc">{field.hint}</p>}
-
-            {/* 字数贴在编辑框右下角，不再单独占一行 */}
-            <div className="pm-editor">
-              <textarea
-                className="pm-textarea"
-                value={draft}
-                spellCheck={false}
-                onChange={(event) => setDraft(event.target.value)}
-              />
-              <span className="pm-count">{t("prompts.chars", { n: draft.length })}</span>
+            {doc.description && <p className="hint pm-desc">{doc.description}</p>}
+            <div className="pm-fields">
+              {doc.fields.map((field) => (
+                <FieldEditor
+                  key={`${doc.file}\u0000${field.key}`}
+                  doc={doc}
+                  field={field}
+                  showLabel={doc.fields.length > 1}
+                  onSaved={handleSaved}
+                  onStatus={handleStatus}
+                />
+              ))}
             </div>
           </>
-        )}
+        ) : null}
       </div>
 
       {statusText && <span className="status">{statusText}</span>}
-      {error && <span className="status err">{error}</span>}
+      {statusError && <span className="status err">{statusError}</span>}
     </div>
   );
 
-  // 独立窗口：撑满窗口，不画遮罩
   if (standalone) {
     return (
       <div className="pm-standalone" role="dialog" aria-label={t("prompts.title")}>

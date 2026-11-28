@@ -206,12 +206,16 @@ function clipProps(options: ClipOptions, durationInFrames: number): Record<strin
     durationInFrames,
   };
 
-  // 信息卡字段只在有值时写入：卡片组件的默认值负责兜底，
-  // 空对象塞进去反而会让时间线/柱状图渲染出空壳
-  if (options.role !== undefined) props.role = options.role;
-  if (options.line !== undefined) props.line = options.line;
+  // CompareCard 组件读 left/right，不能只传 compare
+  if (options.compare !== undefined && options.compare !== null) {
+    const side = options.compare as { left?: unknown; right?: unknown };
+    props.left = side.left ?? { name: "", stance: "" };
+    props.right = side.right ?? { name: "", stance: "" };
+    props.compare = options.compare;
+  }
+  props.role = options.role ?? "";
+  props.line = options.line ?? "";
   if (options.rightAccent !== undefined) props.rightAccent = options.rightAccent;
-  if (options.compare !== undefined) props.compare = options.compare;
   if (options.timeline !== undefined) props.timeline = options.timeline;
   if (options.stat !== undefined) props.stat = options.stat;
   if (options.bgImage !== undefined) props.bgImage = options.bgImage;

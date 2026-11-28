@@ -59,6 +59,7 @@ export const material = {
   sourceAvailable: "可用：{list}",
   sourceHint: "决定从哪个站检索",
   startMatch: "开始匹配素材",
+  stopGenerating: "停止生成",
   stopMatch: "停止匹配",
   stopped: "已停止，之前匹配出来的素材不完整。点「继续」接着补齐没匹配的段落。",
   title: "素材确认",

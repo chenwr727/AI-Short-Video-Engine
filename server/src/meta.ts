@@ -1,13 +1,12 @@
-import { CARD_TEMPLATES } from "./card-templates.js";
-import { cardDefaults, MAX_CHAPTER_CARDS } from "./pipeline/cards.js";
+import { cardDefaults } from "./pipeline/cards.js";
 import {
-  autoSubtitleFontSize,
   bool,
-  cardAccentPalette,
   loadConfig,
   num,
   numberOrZero,
   speakerNames,
+  SUBTITLE_FONT_SIZE_RATIO,
+  SUBTITLE_WIDTH_RATIO,
   type AppConfig,
 } from "./config.js";
 import { pick, type Bilingual, type Lang } from "./i18n.js";
@@ -132,30 +131,22 @@ function localize(options: TextOption[], lang: Lang): Option[] {
 }
 
 export function metaPayload(lang: Lang = "zh", cfg: AppConfig = loadConfig()) {
+  const plan = cardDefaults(cfg);
+
   return {
     promptSources: localize(PROMPT_SOURCES, lang),
     speakers: speakerNames(cfg),
     ttsEngines: ttsEngines(cfg, lang),
     ttsSpeed: num(cfg.TTS_SPEED, 1.1),
     render: {
-      // 0 表示自动，换算成具体 px 返回；竖屏基准宽度固定 1080
-      subtitleFontSize: numberOrZero(cfg.SUBTITLE_FONT_SIZE, 0) || autoSubtitleFontSize(1080),
+      subtitleFontSize: numberOrZero(cfg.SUBTITLE_FONT_SIZE, 0),
+      subtitleAuto: { widthRatio: SUBTITLE_WIDTH_RATIO, fontSizeRatio: SUBTITLE_FONT_SIZE_RATIO },
       bgmEnabled: bool(cfg.BGM_ENABLED, true),
       bgmVolume: numberOrZero(cfg.BGM_VOLUME, 0.1),
     },
     materialSources: localize(MATERIAL_SOURCES, lang),
     resolutions: localize(RESOLUTIONS, lang),
-    /** 版式确认页的配色与模板选项 */
-    cardAccents: cardAccentPalette(cfg),
-    cardTemplates: CARD_TEMPLATES,
-    /** 版式确认页要显示的配置现值 */
-    cardDefaults: {
-      ...cardDefaults(cfg),
-      /** 章节卡上限：每段之间最多一张，另有 6 张的总量上限 */
-      maxChapters: MAX_CHAPTER_CARDS,
-      accent: cardAccentPalette(cfg)[0] ?? "#ff5a3c",
-      outroTitle: (cfg.OUTRO_TITLE ?? "").trim(),
-      outroHandle: (cfg.OUTRO_HANDLE ?? "").trim(),
-    },
+    /** 版式页要显示的配置现值（设置页里配的片头/章节/片尾时长） */
+    cardDefaults: { introSec: plan.introSec, chapterSec: plan.chapterSec, outroSec: plan.outroSec },
   };
 }

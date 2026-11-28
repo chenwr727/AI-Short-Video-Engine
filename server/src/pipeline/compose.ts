@@ -24,7 +24,7 @@ import {
   renderQuote,
   renderSubtitleLayer,
 } from "../services/remotion.js";
-import { ensureCardLayer, ensureCardVideo } from "./cards.js";
+import { ensureCardLayer, ensureCardVideo, normalizeCard } from "./cards.js";
 import { transcriptFingerprint } from "./tts.js";
 import { probeVideo } from "../services/probe.js";
 import { buildAss, charsPerLine, layoutCueText, type SubtitleCue } from "../services/subtitle.js";
@@ -1063,10 +1063,10 @@ export function composeFingerprint(
       bgmFade: [numberOrZero(cfg.AUDIO_FADE_IN, 0), numberOrZero(cfg.AUDIO_FADE_OUT, 0)],
       videoFade: [numberOrZero(cfg.VIDEO_FADE_IN, 0), numberOrZero(cfg.VIDEO_FADE_OUT, 0)],
       sfx: bool(cfg.SFX_ENABLED, true) ? numberOrZero(cfg.SFX_VOLUME, 0.2) : "off",
-      // 片头/片尾/章节：开关与各自时长，任一改动都要重合成
-      intro: [bool(cfg.INTRO_ENABLED, false), numberOrZero(cfg.TITLE_DURATION, 0)],
+      // 片头/片尾/章节：时长决定出不出，任一改动都要重合成
+      intro: numberOrZero(cfg.TITLE_DURATION, 0),
       outro: [(cfg.OUTRO_TITLE ?? "").trim(), (cfg.OUTRO_HANDLE ?? "").trim(), numberOrZero(cfg.OUTRO_DURATION, 0)],
-      chapter: [bool(cfg.CHAPTER_CARD, false), numberOrZero(cfg.CHAPTER_DURATION, 2)],
+      chapter: numberOrZero(cfg.CHAPTER_DURATION, 2),
     },
   };
   return crypto.createHash("sha1").update(JSON.stringify(payload)).digest("hex").slice(0, 16);
@@ -1107,6 +1107,12 @@ export async function runComposeStage(
 
   const cfg = loadConfig();
   const fps = ctx.options.fps > 0 ? ctx.options.fps : num(cfg.FPS, 24);
+  // 重算信息卡指纹，让渲染器修复后的旧缓存失效
+  for (const item of material.items) {
+    if (item.infoCard) {
+      item.infoCard = normalizeCard(item.infoCard, cfg, ctx.options.width, ctx.options.height, fps);
+    }
+  }
   // 观感种子：决定运镜方向与转场顺序，让连续几条视频不撞脸
   const seed = variationSeed(cfg, transcript);
   // 参数一变，旧成片就不再是「这次的成片」，必须重合成
@@ -1186,11 +1192,8 @@ export async function runComposeStage(
       }
     }
   } else {
-    // 没开版式阶段时沿用配置开关
-    if (bool(cfg.INTRO_ENABLED, false) && titleDuration <= 0) {
-      ctx.log(logText("introZeroDuration"), "warn");
-    }
-    if (bool(cfg.INTRO_ENABLED, false) && titleDuration > 0) {
+    // 没开版式阶段时片头时长直接决定是否渲染，失败保留字幕标题
+    if (titleDuration > 0) {
       const introFile = path.join(ctx.workspace, "intro.mp4");
       if (fs.existsSync(introFile) && fs.statSync(introFile).size > 0) {
         introClip = introFile;
@@ -1275,9 +1278,8 @@ export async function runComposeStage(
   const contentMs = plans.reduce((sum, p) => sum + p.duration * 1000, 0);
 
   // 段落过场卡：纯增量插入，后续片段整体右移，不需要改时间轴模型
-  const chapterEnabled = bool(cfg.CHAPTER_CARD, false);
   const chapterSec = Math.max(0, numberOrZero(cfg.CHAPTER_DURATION, 2));
-  const useChapters = !cards && chapterEnabled && chapterSec > 0 && plans.length > 1;
+  const useChapters = !cards && chapterSec > 0 && plans.length > 1;
   let chapterCount = 0;
   let chapterMs = 0;
   /** 上一段是不是卡片：卡片前后都用 fade，正片之间保持原来的轮换转场 */

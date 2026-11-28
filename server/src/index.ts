@@ -3,7 +3,7 @@ import path from "node:path";
 import Fastify, { type FastifyError } from "fastify";
 import cors from "@fastify/cors";
 import fastifyStatic from "@fastify/static";
-import { bool, isLlmConfigured, loadConfig } from "./config.js";
+import { isLlmConfigured, loadConfig } from "./config.js";
 import { errorMessage, TaskError } from "./errors.js";
 import { langOf } from "./i18n.js";
 import { dataDir, ensureDir, outDir } from "./paths.js";
@@ -45,8 +45,6 @@ export function healthPayload() {
         pixabay: Boolean(cfg.PIXABAY_API_KEY),
         pexels: Boolean(cfg.PEXELS_API_KEY),
       },
-      // 前端据此决定是否显示「版式确认」这一步
-      cards: { enabled: bool(cfg.CARDS_ENABLED, false) },
     },
     deps: probeDeps(),
   };

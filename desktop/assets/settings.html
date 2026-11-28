@@ -557,6 +557,25 @@
         flex: 1;
       }
 
+      input[type="color"] {
+        width: 72px;
+        height: 36px;
+        padding: 3px;
+        border: 1px solid var(--border-l4);
+        border-radius: var(--radius-md);
+        background: var(--bg-layer-1);
+        cursor: pointer;
+      }
+
+      input[type="color"]::-webkit-color-swatch-wrapper {
+        padding: 0;
+      }
+
+      input[type="color"]::-webkit-color-swatch {
+        border: none;
+        border-radius: calc(var(--radius-md) - 3px);
+      }
+
       input::placeholder {
         color: var(--label-caption);
       }
@@ -733,7 +752,7 @@
       }
 
       /*
-       * 状态提示：改动即生效，不需要底部操作条，所以做成悬浮气泡。
+       * 状态提示：做成悬浮气泡。
        * 定位在内容区右下角，不占布局，出现时不会把已对齐的内容挤动。
        */
       .status {
@@ -1236,7 +1255,7 @@
               kind: "number",
               unit: "px",
               min: 0,
-              max: 300,
+              max: 200,
               int: true,
             },
             {
@@ -1261,7 +1280,11 @@
               key: "SUBTITLE_RENDER",
               titleKey: "subtitle.render",
               descKey: "subtitle.render.desc",
-              kind: "text",
+              kind: "select",
+              options: [
+                { value: "ass", labelKey: "subtitle.render.ass" },
+                { value: "remotion", labelKey: "subtitle.render.remotion" },
+              ],
             },
             {
               key: "TRANSITION_DURATION",
@@ -1276,7 +1299,11 @@
               key: "TRANSITION_STYLE",
               titleKey: "subtitle.transitionStyle",
               descKey: "subtitle.transitionStyle.desc",
-              kind: "text",
+              kind: "select",
+              options: [
+                { value: "fade", labelKey: "subtitle.transitionStyle.fade" },
+                { value: "mixed", labelKey: "subtitle.transitionStyle.mixed" },
+              ],
             },
             {
               key: "VARIATION_SEED",
@@ -1294,24 +1321,13 @@
           descKey: "sec.cards.desc",
           groups: [
             {
-              titleKey: "cards.group.toggle",
-              rows: [
-                {
-                  key: "CARDS_ENABLED",
-                  titleKey: "cards.enabled",
-                  descKey: "cards.enabled.desc",
-                  kind: "switch",
-                },
-              ],
-            },
-            {
               titleKey: "cards.group.look",
               rows: [
                 {
                   key: "CARD_ACCENT",
                   titleKey: "cards.accent",
                   descKey: "cards.accent.desc",
-                  kind: "text",
+                  kind: "color",
                 },
               ],
             },
@@ -1319,25 +1335,13 @@
               titleKey: "cards.group.intro",
               rows: [
                 {
-                  key: "INTRO_ENABLED",
-                  titleKey: "cards.introEnabled",
-                  descKey: "cards.introEnabled.desc",
-                  kind: "switch",
-                },
-                {
-                  key: "CHAPTER_CARD",
-                  titleKey: "cards.chapter",
-                  descKey: "cards.chapter.desc",
-                  kind: "switch",
-                },
-                {
                   key: "CHAPTER_DURATION",
                   titleKey: "cards.chapterDuration",
                   descKey: "cards.chapterDuration.desc",
                   kind: "number",
                   unitKey: "label.unit.sec",
                   min: 0,
-                  max: 10,
+                  max: 15,
                 },
               ],
             },
@@ -1378,7 +1382,7 @@
               kind: "number",
               unitKey: "label.unit.times",
               min: 0,
-              max: 4,
+              max: 2,
             },
             {
               key: "AUDIO_FADE_IN",
@@ -1406,7 +1410,7 @@
               kind: "number",
               unitKey: "label.unit.times",
               min: 0,
-              max: 2,
+              max: 1,
             },
           ],
         },
@@ -1439,6 +1443,11 @@
         return field.unitKey ? t(field.unitKey) : (field.unit ?? "");
       }
 
+      function colorOr(raw) {
+        const text = String(raw ?? "").trim().toLowerCase();
+        return /^#[0-9a-f]{6}$/.test(text) ? text : "#ff5a3c";
+      }
+
       /** 一个输入控件 */
       function control(field, value) {
         if (field.kind === "switch") {
@@ -1460,14 +1469,21 @@
 
         if (field.kind === "select") {
           const select = document.createElement("select");
-          // 偏好项没有 data-key：它不是后端配置，提交时不该被收进 config
-          select.id = `field-${field.id}`;
           for (const option of field.options) {
             const el = document.createElement("option");
             el.value = option.value;
             el.textContent = t(option.labelKey);
             select.appendChild(el);
           }
+
+          if (!field.pref) {
+            select.dataset.key = field.key;
+            syncSelect(select, value);
+            return select;
+          }
+
+          // 偏好项没有 data-key：它不是后端配置，提交时不该被收进 config
+          select.id = `field-${field.id}`;
           const isTheme = field.pref === "theme";
           select.value = isTheme ? themePreference : langPreference;
           select.addEventListener("change", () => {
@@ -1486,6 +1502,14 @@
             if (window.aisv?.announceLanguage) window.aisv.announceLanguage(select.value);
           });
           return select;
+        }
+
+        if (field.kind === "color") {
+          const picker = document.createElement("input");
+          picker.type = "color";
+          picker.dataset.key = field.key;
+          picker.value = colorOr(value);
+          return picker;
         }
 
         const input = document.createElement("input");
@@ -1687,6 +1711,10 @@
         return Array.from(form.querySelectorAll("input[data-key]"));
       }
 
+      function selects() {
+        return Array.from(form.querySelectorAll("select[data-key]"));
+      }
+
       function switches() {
         return Array.from(form.querySelectorAll(".switch[data-key]"));
       }
@@ -1694,6 +1722,7 @@
       function collect() {
         const out = {};
         for (const input of inputs()) out[input.dataset.key] = input.value;
+        for (const select of selects()) out[select.dataset.key] = select.value;
         for (const sw of switches()) out[sw.dataset.key] = sw.getAttribute("aria-checked");
         return out;
       }
@@ -1701,8 +1730,12 @@
       function fill(values) {
         for (const input of inputs()) {
           const key = input.dataset.key;
-          input.value = values[key] ?? "";
+          input.value = input.type === "color" ? colorOr(values[key]) : (values[key] ?? "");
           clearError(input);
+        }
+        for (const select of selects()) {
+          syncSelect(select, values[select.dataset.key]);
+          clearError(select);
         }
         for (const sw of switches()) {
           sw.setAttribute("aria-checked", String(isOn(values[sw.dataset.key], false)));
@@ -1712,6 +1745,15 @@
 
       function fieldOf(key) {
         return FIELDS.find((f) => f.key === key);
+      }
+
+      function syncSelect(select, raw) {
+        select.value = raw ?? "";
+        if (select.value) return;
+        const field = fieldOf(select.dataset.key);
+        const wanted = String(raw ?? "").trim().toLowerCase();
+        const hit = field?.options?.find((option) => option.value === wanted);
+        select.value = hit?.value ?? field?.options?.[0]?.value ?? "";
       }
 
       function errorSlot(key) {
@@ -1735,6 +1777,9 @@
          * 长度检查只对文本生效 —— 否则 TTS_SPEED 这类 max: 2 的数字字段
          * 输入 1.1（三个字符）会被误判成「最多 2 个字符」。
          */
+        if (field.kind === "color") {
+          return /^#[0-9a-f]{6}$/i.test(raw) ? "" : t("err.colorHex");
+        }
         if (field.kind !== "number") {
           if (field.max && raw.length > field.max) return t("err.maxLength", { max: field.max });
           return "";
@@ -1817,12 +1862,8 @@
       }
 
       document.getElementById("close").addEventListener("click", close);
-      /**
-       * 把一个字段写进配置文件。
-       *
-       * 只提交这一个键，不动其他项 —— 全量写会把并发改的别的字段覆盖掉。
-       * 服务端每次用到配置都重新读文件，写完立即生效，不需要重启后端。
-       */
+
+      /** 只写这一个键，避免全量写覆盖并发改动 */
       async function commitField(input) {
         const key = input.dataset.key;
         if (!key) return;
@@ -1840,6 +1881,7 @@
         try {
           await window.aisv.saveConfig({ [key]: value });
           say(t("status.saved"), "ok");
+          window.aisv.announceConfigChanged?.();
         } catch (e) {
           say(t("status.saveFailed", { error: e?.message ?? e }), "err");
         }

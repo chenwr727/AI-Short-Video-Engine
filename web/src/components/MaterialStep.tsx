@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { applyInfoCard, cardStillUrl, clearInfoCard, materialPreviewUrl, rewriteCard, searchMaterial } from "../api";
 import { useT } from "../i18n";
 import { MATERIAL_STAGE_IDS } from "../phases";
@@ -29,6 +29,8 @@ interface MaterialStepProps {
   onFormChange: (patch: Partial<RenderFormState>) => void;
   /** 换信息卡这类操作直接返回新状态，用它刷新页面数据 */
   onStateChange: (state: TaskState) => void;
+  /** 页面内有写任务状态的请求在跑时上报 true，上层据此锁住步骤条与「新建一条」 */
+  onLockChange?: (locked: boolean) => void;
   /** 启用版式阶段时，确认按钮指向「成片预览」 */
   nextLabel?: string;
   /** 版式参数：与素材一起确认，确认时一并落库 */
@@ -107,14 +109,14 @@ function CardStill({ id, fingerprint }: { id: string; fingerprint?: string }) {
 function InfoCardTile({
   spec,
   paragraph,
-  busy,
+  locked,
   cardBusy,
   onToInfoCard,
   onDropInfoCard,
 }: {
   spec: CardSpec;
   paragraph: number;
-  busy: boolean;
+  locked: boolean;
   /** 正在忙的段号与动作：只有被点的那一个按钮显示进度，另一个保持原文案 */
   cardBusy: { paragraph: number; action: "apply" | "clear" } | null;
   onToInfoCard: (paragraph: number, template?: string) => Promise<void>;
@@ -128,7 +130,7 @@ function InfoCardTile({
       <CardStill id={spec.id} fingerprint={spec.fingerprint} />
       <div className="material-info">
         <div className="material-title">
-          {t("material.cardLabel")}
+          <span className="material-title-text">{t("material.cardLabel")}</span>
           <span className="pill info">{spec.compositionId}</span>
         </div>
         <div className="material-tags">{spec.title}</div>
@@ -139,7 +141,7 @@ function InfoCardTile({
           <button
             className="secondary"
             type="button"
-            disabled={busy || here !== null}
+            disabled={locked || here !== null}
             onClick={() => void onToInfoCard(paragraph)}
             title={t("material.rejudgeCard")}
           >
@@ -148,7 +150,7 @@ function InfoCardTile({
           <button
             className="secondary"
             type="button"
-            disabled={busy || here !== null}
+            disabled={locked || here !== null}
             onClick={() => void onDropInfoCard(paragraph)}
           >
             {here === "clear" ? t("common.processing") : t("material.clearCard")}
@@ -169,13 +171,13 @@ function InfoCardTile({
 function CardTile({
   spec,
   landscape,
-  busy,
+  locked,
   swapping,
   onSwap,
 }: {
   spec: CardSpec;
   landscape: boolean;
-  busy: boolean;
+  locked: boolean;
   /** 正在换文案的卡片 id，0 表示空闲 */
   swapping: string;
   onSwap: (id: string) => Promise<void>;
@@ -189,7 +191,7 @@ function CardTile({
       <CardStill id={spec.id} fingerprint={spec.fingerprint} />
       <div className="material-info">
         <div className="material-title">
-          {kindLabel}
+          <span className="material-title-text">{kindLabel}</span>
           <span className="pill info">{spec.compositionId}</span>
         </div>
         <div className="material-tags">{spec.title}</div>
@@ -201,7 +203,7 @@ function CardTile({
           <button
             className="secondary"
             type="button"
-            disabled={busy || working}
+            disabled={locked || working}
             onClick={() => void onSwap(spec.id)}
             title={t("material.changeCardHint")}
           >
@@ -218,7 +220,7 @@ interface MaterialTileProps {
   candidate?: MaterialInfo;
   manifest: MaterialManifest;
   awaiting: boolean;
-  busy: boolean;
+  locked: boolean;
   searching: number;
   cardBusy: { paragraph: number; action: "apply" | "clear" } | null;
   panel: { paragraph: number; list: MaterialInfo[] } | null;
@@ -237,7 +239,7 @@ interface MaterialTileProps {
  */
 function MaterialTile(props: MaterialTileProps) {
   const t = useT();
-  const { item, candidate, manifest, awaiting, busy, searching, cardBusy, panel } = props;
+  const { item, candidate, manifest, awaiting, locked, searching, cardBusy, panel } = props;
   const preview = candidate ? candidate.url : materialPreviewUrl(item.paragraph, item.url);
   const info = candidate ?? item;
   // 按素材自身画幅决定框型：竖屏素材用 9:16，横屏用 16:9，不裁画面
@@ -259,8 +261,8 @@ function MaterialTile(props: MaterialTileProps) {
         )}
         <div className="material-info">
           <div className="material-title">
-            {t("material.paragraph", { n: item.paragraph })}
-            {!item.infoCard && candidate && <span className="pill info">{t("material.pendingReplace")}</span>}
+            <span className="material-title-text">{t("material.paragraph", { n: item.paragraph })}</span>
+            {candidate && <span className="pill info">{t("material.pendingReplace")}</span>}
           </div>
           <div className="material-tags">{info.tags || `#${info.id}`}</div>
           <div className="material-meta">
@@ -276,7 +278,7 @@ function MaterialTile(props: MaterialTileProps) {
               <button
                 className="secondary"
                 type="button"
-                disabled={busy || searching === item.paragraph}
+                disabled={locked || searching === item.paragraph}
                 onClick={() => void props.onFindMore(item)}
                 title={item.infoCard ? t("material.changeClipTitle") : t("material.changeClip")}
               >
@@ -286,7 +288,7 @@ function MaterialTile(props: MaterialTileProps) {
                 <button
                   className="secondary"
                   type="button"
-                  disabled={busy || cardBusy?.paragraph === item.paragraph}
+                  disabled={locked || cardBusy?.paragraph === item.paragraph}
                   onClick={() => void props.onToInfoCard(item.paragraph)}
                   title={t("material.cardHint")}
                 >
@@ -299,7 +301,7 @@ function MaterialTile(props: MaterialTileProps) {
                 <button
                   className="secondary"
                   type="button"
-                  disabled={busy}
+                  disabled={locked}
                   onClick={() => void props.onUndo(item.paragraph)}
                 >
                   {t("material.undo")}
@@ -316,7 +318,7 @@ function MaterialTile(props: MaterialTileProps) {
                 className="candidate"
                 type="button"
                 key={entry.url}
-                disabled={busy}
+                disabled={locked}
                 onClick={() => props.onPick(item, entry)}
                 title={entry.tags || `#${entry.id}`}
               >
@@ -339,7 +341,7 @@ function MaterialTile(props: MaterialTileProps) {
         <InfoCardTile
           spec={item.infoCard}
           paragraph={item.paragraph}
-          busy={busy}
+          locked={locked}
           cardBusy={cardBusy}
           onToInfoCard={props.onToInfoCard}
           onDropInfoCard={props.onDropInfoCard}
@@ -367,6 +369,7 @@ export function MaterialStep(props: MaterialStepProps) {
     form,
     onFormChange,
     onStateChange,
+    onLockChange,
     nextLabel,
     cardPrefs,
     onCardPrefsChange,
@@ -414,18 +417,36 @@ export function MaterialStep(props: MaterialStepProps) {
   /** 正在换文案的版式卡 id，空串表示空闲 */
   const [swapping, setSwapping] = useState("");
 
-  /** 让 AI 换一张版式卡的标题（服务端会顺带作废旧成片） */
+  const locked = busy || searching !== 0 || cardBusy !== null || swapping !== "";
+
+  const actionsLocked = locked || pending;
+
+  // 卸载后只跳过本地提示更新
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  // 卸载时必须解锁导航
+  useLayoutEffect(() => {
+    onLockChange?.(locked);
+    return () => onLockChange?.(false);
+  }, [locked, onLockChange]);
+
   async function swapCard(id: string) {
     setSwapping(id);
     setNote(null);
     try {
       const next = await rewriteCard(id, "text");
       onStateChange(next);
-      setNote({ text: t("material.cardRewritten") });
+      if (mountedRef.current) setNote({ text: t("material.cardRewritten") });
     } catch (error) {
-      setNote({ text: error instanceof Error ? error.message : String(error), bad: true });
+      if (mountedRef.current) setNote({ text: error instanceof Error ? error.message : String(error), bad: true });
     } finally {
-      setSwapping("");
+      if (mountedRef.current) setSwapping("");
     }
   }
 
@@ -436,11 +457,11 @@ export function MaterialStep(props: MaterialStepProps) {
     try {
       const next = await applyInfoCard(paragraph, template);
       onStateChange(next);
-      setNote({ text: t("material.cardApplied", { n: paragraph }) });
+      if (mountedRef.current) setNote({ text: t("material.cardApplied", { n: paragraph }) });
     } catch (error) {
-      setNote({ text: error instanceof Error ? error.message : String(error), bad: true });
+      if (mountedRef.current) setNote({ text: error instanceof Error ? error.message : String(error), bad: true });
     } finally {
-      setCardBusy(null);
+      if (mountedRef.current) setCardBusy(null);
     }
   }
 
@@ -450,11 +471,11 @@ export function MaterialStep(props: MaterialStepProps) {
     try {
       const next = await clearInfoCard(paragraph);
       onStateChange(next);
-      setNote({ text: t("material.cardCleared", { n: paragraph }) });
+      if (mountedRef.current) setNote({ text: t("material.cardCleared", { n: paragraph }) });
     } catch (error) {
-      setNote({ text: error instanceof Error ? error.message : String(error), bad: true });
+      if (mountedRef.current) setNote({ text: error instanceof Error ? error.message : String(error), bad: true });
     } finally {
-      setCardBusy(null);
+      if (mountedRef.current) setCardBusy(null);
     }
   }
 
@@ -468,12 +489,13 @@ export function MaterialStep(props: MaterialStepProps) {
     setNote(null);
     try {
       const list = await searchMaterial(item.paragraph, item.searchTerms);
+      if (!mountedRef.current) return;
       setPanel({ paragraph: item.paragraph, list });
       if (list.length === 0) setNote({ text: t("material.noNewClip", { n: item.paragraph }) });
     } catch (e) {
-      setNote({ text: e instanceof Error ? e.message : String(e), bad: true });
+      if (mountedRef.current) setNote({ text: e instanceof Error ? e.message : String(e), bad: true });
     } finally {
-      setSearching(0);
+      if (mountedRef.current) setSearching(0);
     }
   }
 
@@ -520,6 +542,22 @@ export function MaterialStep(props: MaterialStepProps) {
     if (!Number.isFinite(parsed) || parsed < 0) return 0;
     return Math.min(15, Math.round(parsed * 10) / 10);
   }
+
+  const runtimePanel = (
+    <>
+      <StageList stages={task.stages.filter((stage) => MATERIAL_STAGE_IDS.includes(stage.id))} />
+
+      <LogPanel
+        logs={task.logs}
+        stages={MATERIAL_STAGE_IDS}
+        since={task.runStartedAt}
+        collapsible
+        expanded={layout.logOpen}
+        tall={layout.logOpen}
+      />
+    </>
+  );
+  const runtimeFirst = !manifest || layout.logOpen;
 
   return (
     <Panel
@@ -650,16 +688,7 @@ export function MaterialStep(props: MaterialStepProps) {
       </ConfigSection>
 
       <div className="panel-scroll">
-        <StageList stages={task.stages.filter((stage) => MATERIAL_STAGE_IDS.includes(stage.id))} />
-
-        <LogPanel
-          logs={task.logs}
-          stages={MATERIAL_STAGE_IDS}
-          since={task.runStartedAt}
-          collapsible
-          expanded={layout.logOpen}
-          tall={layout.logOpen}
-        />
+        {runtimeFirst && runtimePanel}
 
         {layout.showResult && manifest ? (
           <>
@@ -677,7 +706,7 @@ export function MaterialStep(props: MaterialStepProps) {
                     key={spec.id}
                     spec={spec}
                     landscape={cardLandscape}
-                    busy={busy}
+                    locked={actionsLocked}
                     swapping={swapping}
                     onSwap={swapCard}
                   />
@@ -707,7 +736,7 @@ export function MaterialStep(props: MaterialStepProps) {
                       <CardTile
                         spec={chapter}
                         landscape={cardLandscape}
-                        busy={busy}
+                        locked={actionsLocked}
                         swapping={swapping}
                         onSwap={swapCard}
                       />
@@ -717,7 +746,7 @@ export function MaterialStep(props: MaterialStepProps) {
                       candidate={picked[item.paragraph]}
                       manifest={manifest}
                       awaiting={awaiting}
-                      busy={busy}
+                      locked={actionsLocked}
                       searching={searching}
                       cardBusy={cardBusy}
                       panel={panel}
@@ -737,7 +766,7 @@ export function MaterialStep(props: MaterialStepProps) {
                     key={spec.id}
                     spec={spec}
                     landscape={cardLandscape}
-                    busy={busy}
+                    locked={actionsLocked}
                     swapping={swapping}
                     onSwap={swapCard}
                   />
@@ -747,6 +776,8 @@ export function MaterialStep(props: MaterialStepProps) {
         ) : stepStage === "setup" ? (
           <p className="hint">{t("material.notMatched")}</p>
         ) : null}
+
+        {!runtimeFirst && runtimePanel}
 
         {note && <p className={`hint${note.bad ? " hint-warn" : ""}`}>{note.text}</p>}
         {failed && (
@@ -758,26 +789,32 @@ export function MaterialStep(props: MaterialStepProps) {
       </div>
 
       <div className="panel-actions">
-        <button className="secondary btn-back" type="button" onClick={onBack} disabled={busy}>
+        <button className="secondary btn-back" type="button" onClick={onBack} disabled={locked}>
           {t("common.back")}
         </button>
         {matching && (
-          <button className="secondary" type="button" onClick={onCancel} disabled={busy}>
+          <button className="secondary" type="button" onClick={onCancel} disabled={locked}>
             {t("material.stopMatch")}
           </button>
         )}
+        {/* 任务在跑但不是素材匹配（合成 / 配音）时，也从这里给一个停止出口 */}
+        {pending && !matching && (
+          <button className="secondary" type="button" onClick={onCancel} disabled={busy}>
+            {t("material.stopGenerating")}
+          </button>
+        )}
         {(manifest || matching) && !matching && (
-          <button className="secondary" type="button" disabled={busy} onClick={() => onMatch(true)}>
+          <button className="secondary" type="button" disabled={actionsLocked} onClick={() => onMatch(true)}>
             {t("common.regenerate")}
           </button>
         )}
         {awaiting && !manifest && (
-          <button className="primary" type="button" disabled={busy} onClick={() => onMatch()}>
+          <button className="primary" type="button" disabled={locked} onClick={() => onMatch()}>
             {t("material.startMatch")}
           </button>
         )}
         {awaiting && manifest && (
-          <button className="primary" type="button" disabled={busy} onClick={() => onConfirm(replacements)}>
+          <button className="primary" type="button" disabled={locked} onClick={() => onConfirm(replacements)}>
             {(() => {
               const next = nextLabel ?? t("material.nextHint");
               return replacements.length > 0 ? t("material.nextSwapped", { next, n: replacements.length }) : next;
@@ -785,24 +822,24 @@ export function MaterialStep(props: MaterialStepProps) {
           </button>
         )}
         {task.status === "completed" && (
-          <button className="primary" type="button" disabled={busy} onClick={onNext}>
+          <button className="primary" type="button" disabled={locked} onClick={onNext}>
             {t("material.backToRender")}
           </button>
         )}
 
         {/* 停止后按原来源补齐 */}
         {cancelled && (
-          <button className="primary" type="button" disabled={busy} onClick={onRetry}>
+          <button className="primary" type="button" disabled={locked} onClick={onRetry}>
             {t("common.continue")}
           </button>
         )}
         {canMatchAgain && !cancelled && (
-          <button className="primary" type="button" disabled={busy} onClick={() => onMatch()}>
+          <button className="primary" type="button" disabled={locked} onClick={() => onMatch()}>
             {t("material.rematch")}
           </button>
         )}
         {failed && !manifest && task.status === "failed" && (
-          <button className={canMatchAgain ? "secondary" : "primary"} type="button" disabled={busy} onClick={onRetry}>
+          <button className={canMatchAgain ? "secondary" : "primary"} type="button" disabled={locked} onClick={onRetry}>
             {t("common.retry")}
           </button>
         )}

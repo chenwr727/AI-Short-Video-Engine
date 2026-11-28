@@ -1,15 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { FastifyInstance, FastifyReply } from "fastify";
-import {
-  autoSubtitleFontSize,
-  cardAccentPalette,
-  loadConfig,
-  normalizeSpeaker,
-  num,
-  numberOrZero,
-  speakerNames,
-} from "../config.js";
+import { cardAccentPalette, loadConfig, normalizeSpeaker, num, speakerNames } from "../config.js";
 import { MATERIAL_SOURCES, PROMPT_SOURCES, RESOLUTIONS, ttsEngines } from "../meta.js";
 import { langOf, type Lang } from "../i18n.js";
 import { type ErrorKey, errorMessage, TaskError, userError, userText } from "../errors.js";
@@ -105,8 +97,7 @@ function parseOptions(body: GenerateBody): GenerateOptions {
     height,
     fps: num(cfg.FPS, 24),
     ttsSpeed: Number(cfg.TTS_SPEED) || 1.1,
-    // 存成具体 px，便于界面直接显示
-    subtitleFontSize: numberOrZero(cfg.SUBTITLE_FONT_SIZE, 0) || autoSubtitleFontSize(width),
+    // 不烘进任务参数，合成期按当前配置/画宽现取
   };
 }
 

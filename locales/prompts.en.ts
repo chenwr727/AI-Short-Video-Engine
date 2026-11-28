@@ -5,6 +5,7 @@ export const prompts = {
   autoSaved: "Saved",
   builtin: "Built-in",
   chars: "{n} chars",
+  reset: "Restore default",
   saving: "Saving…",
   title: "Prompts",
 } satisfies Record<PromptsKey, string>;

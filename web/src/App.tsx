@@ -10,6 +10,7 @@ import {
   regenerateScript,
   regenerateTts,
   renderVideo,
+  REQUEST_TIMEOUT_EVENT,
   retryTask,
   startGenerate,
   subscribeTask,
@@ -158,6 +159,8 @@ export default function App() {
   });
   // 手动换过的素材，切换步骤不丢
   const [materialPicks, setMaterialPicks] = useState<Record<number, MaterialInfo>>({});
+  /** 当前页有写任务状态的请求在跑（素材页换卡等），期间锁住步骤条与「新建一条」 */
+  const [pageLocked, setPageLocked] = useState(false);
   /** 版式参数：合并后在素材页配置，确认素材时一并落库 */
   const [cardPrefs, setCardPrefs] = useState<CardPrefs>({});
   // 走到过的最远一步，无任务进度时步骤条靠它
@@ -226,12 +229,39 @@ export default function App() {
     [],
   );
 
+  // 请求超时不代表后端停了，主动拉一次服务端状态
+  useEffect(() => {
+    const sync = () => {
+      if (ignoreTaskRef.current) return;
+      void getTask()
+        .then(setTask)
+        .catch(() => undefined);
+      void getHealth()
+        .then(setHealth)
+        .catch(() => undefined);
+    };
+    window.addEventListener(REQUEST_TIMEOUT_EVENT, sync);
+    return () => window.removeEventListener(REQUEST_TIMEOUT_EVENT, sync);
+  }, []);
+
   // 桌面端页头兼作标题栏
   useEffect(() => {
     const api = bridge();
     if (!api) return;
     document.body.classList.add("electron");
     if (api.platform === "darwin") document.body.classList.add("mac");
+  }, []);
+
+  useEffect(() => {
+    const off = bridge()?.onConfigChanged?.(() => {
+      void getMeta()
+        .then(setMeta)
+        .catch(() => undefined);
+      void getHealth()
+        .then(setHealth)
+        .catch(() => undefined);
+    });
+    return off;
   }, []);
 
   // 偏好是「跟随系统」时，系统深浅一变界面跟着变
@@ -259,19 +289,32 @@ export default function App() {
     writeDraft(form);
   }, [form]);
 
+  // 任务里的引擎若已不可用，对齐到当前可选的第一项
+  useEffect(() => {
+    if (!meta) return;
+    const ids = meta.ttsEngines.map((engine) => engine.id);
+    setRenderForm((prev) =>
+      prev.ttsEngine && ids.includes(prev.ttsEngine) ? prev : { ...prev, ttsEngine: ids[0] ?? "", voices: {} },
+    );
+  }, [meta]);
+
   useEffect(() => {
     setEdit(null);
     setMaterialPicks({});
+    setCardPrefs({});
   }, [task?.id]);
 
   // 回填任务已有的来源与分辨率，仅填空值
   useEffect(() => {
     if (!task) return;
     const { width, height, materialSource, ttsEngine, ttsSpeed, autoInfoCards } = task.options;
+    // 未配音的任务不沿用建任务时的语速快照
+    const ttsUsed =
+      Boolean(task.audio) || task.stages.some((stage) => stage.id === "tts" && stage.status !== "pending");
     setRenderForm((prev) => ({
       ...prev,
       ttsEngine: prev.ttsEngine || ttsEngine,
-      ttsSpeed: prev.ttsSpeed || ttsSpeed,
+      ttsSpeed: ttsUsed ? prev.ttsSpeed || ttsSpeed : prev.ttsSpeed,
       materialSource: prev.materialSource || materialSource,
       resolution: prev.resolution || `${width}x${height}`,
       // 旧任务没有这个字段，缺省按开启处理
@@ -626,8 +669,22 @@ export default function App() {
 
   /** 清空当前任务回到第一步，后端任务一并取消 */
   async function onRestart() {
-    if (restartingRef.current) return;
+    if (restartingRef.current || pageLocked) return;
     restartingRef.current = true;
+
+    if (task?.status === "running") {
+      const goOn = await confirm({
+        title: "app.restartRunningTitle",
+        body: "app.restartRunningBody",
+        confirmLabel: "menu.newTask",
+        danger: true,
+      });
+      if (!goOn) {
+        restartingRef.current = false;
+        return;
+      }
+    }
+
     setError("");
     // 忽略取消操作推回的旧快照
     ignoreTaskRef.current = true;
@@ -762,7 +819,7 @@ export default function App() {
           </div>
         </header>
 
-        <StepBar current={phase} reached={reached} doneThrough={done} onSelect={onSelect} />
+        <StepBar current={phase} reached={reached} doneThrough={done} onSelect={onSelect} navLocked={pageLocked} />
 
         {resumed && (
           <div className="resume-bar">
@@ -775,7 +832,7 @@ export default function App() {
                 step: t(stepsFor()[indexOf(phase)]?.label ?? "steps.content"),
               })}
             </span>
-            <button type="button" className="resume-btn" onClick={onRestart}>
+            <button type="button" className="resume-btn" onClick={onRestart} disabled={pageLocked}>
               {t("menu.newTask")}
             </button>
             <button
@@ -885,6 +942,7 @@ export default function App() {
             form={renderForm}
             onFormChange={onRenderFormChange}
             onStateChange={setTask}
+            onLockChange={setPageLocked}
             cardPrefs={cardPrefs}
             onCardPrefsChange={(patch) => setCardPrefs((prev) => ({ ...prev, ...patch }))}
             cards={task.cards}

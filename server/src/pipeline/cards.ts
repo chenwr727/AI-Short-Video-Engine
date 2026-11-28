@@ -5,6 +5,7 @@ import { bool, cardAccentPalette, loadConfig, numberOrZero, type AppConfig } fro
 import { CARD_TEMPLATES, defaultTemplate, isTemplateFor } from "../card-templates.js";
 import { ensureDir } from "../paths.js";
 import { chat, extractJsonObject } from "../services/llm.js";
+import { applyPromptVars, loadCardPrompts, type CardPrompts } from "../services/prompts.js";
 import { lastRenderErrorMessage, renderCard, renderCardLayer, renderCardStill } from "../services/remotion.js";
 import { runFfmpeg } from "../services/ffmpeg.js";
 import { transcriptFingerprint } from "./tts.js";
@@ -33,16 +34,10 @@ const DEFAULT_LABEL: Record<CardKind, string> = {
 const MAX_TITLE = 14;
 const MAX_CHAPTER = 12;
 
-export function cardsEnabled(cfg: AppConfig = loadConfig()): boolean {
-  return bool(cfg.CARDS_ENABLED, false);
-}
-
 interface CardPlan {
   introSec: number;
   chapterSec: number;
   outroSec: number;
-  /** 只开了版式步骤、三个卡片开关全关：按默认出片头与章节卡 */
-  auto: boolean;
 }
 
 const DEFAULT_CHAPTER_SEC = 2;
@@ -50,24 +45,12 @@ const DEFAULT_CHAPTER_SEC = 2;
 /** 章节卡总量上限：再多的段也只插这么多张，避免成片全是卡片 */
 export const MAX_CHAPTER_CARDS = 6;
 
-/** 各类卡片的时长决策，与段落数无关；版式页的展示与出片共用这一套 */
+/** 三类卡片由各自时长决定：0 = 不出 */
 export function cardDefaults(cfg: AppConfig): CardPlan {
-  const introOn = bool(cfg.INTRO_ENABLED, false);
-  const chapterOn = bool(cfg.CHAPTER_CARD, false);
-  const titleSec = Math.max(0, numberOrZero(cfg.TITLE_DURATION, 0));
-  const chapterSec = Math.max(0, numberOrZero(cfg.CHAPTER_DURATION, DEFAULT_CHAPTER_SEC));
-  const outroSec = Math.max(0, numberOrZero(cfg.OUTRO_DURATION, 0));
-
-  // 三个开关全关：步骤开着总得有点产出，按片头/过场卡时长出一份默认清单
-  if (!introOn && !chapterOn && outroSec === 0) {
-    return { introSec: titleSec, chapterSec, outroSec: 0, auto: true };
-  }
-
   return {
-    introSec: introOn ? titleSec : 0,
-    chapterSec: chapterOn ? chapterSec : 0,
-    outroSec,
-    auto: false,
+    introSec: Math.max(0, numberOrZero(cfg.TITLE_DURATION, 0)),
+    chapterSec: Math.max(0, numberOrZero(cfg.CHAPTER_DURATION, DEFAULT_CHAPTER_SEC)),
+    outroSec: Math.max(0, numberOrZero(cfg.OUTRO_DURATION, 0)),
   };
 }
 
@@ -95,7 +78,6 @@ export function cardPlan(
     // 章节卡插在段落之间，只有 1 段时没有位置
     chapterSec: chapterLimit > 0 ? pick(overrides.chapterDurationSec, base.chapterSec) : 0,
     outroSec: pick(overrides.outroDurationSec, base.outroSec),
-    auto: base.auto,
   };
 
   return plan;
@@ -198,6 +180,12 @@ function normalizeLine(text: string): string {
   return text.replace(/[\s，,。.！!？?；;：:、“”‘’"'（）()《》〈〉【】…—\-·~]/g, "");
 }
 
+/** 引用去标点后必须是台词子串，至少 3 字 */
+function citedBy(quote: string | undefined, ground: string): boolean {
+  const needle = normalizeLine(quote ?? "");
+  return needle.length >= 3 && normalizeLine(ground).includes(needle);
+}
+
 /** 合成阶段拿到的分句时间，只用到文案与起点 */
 export interface BeatSentence {
   text: string;
@@ -238,9 +226,13 @@ export function resolveBeats(
   return out.sort((a, b) => a.at - b.at);
 }
 
+// 渲染行为变更时 +1，让旧缓存失效
+const CARD_RENDER_VERSION = 2;
+
 /** 只算影响画面的字段：参数不变就命中缓存 */
 export function cardFingerprint(spec: CardSpec, width: number, height: number, fps: number): string {
   const payload = [
+    `r${CARD_RENDER_VERSION}`,
     spec.compositionId,
     spec.title,
     spec.label,
@@ -324,7 +316,7 @@ const MAX_BEAT_TEXT = 12;
 const MAX_QUOTE = 24;
 
 /** 模型给的要点：text 是画面上那一行，quote 用来定位它在第几句被讲到 */
-function parseBeats(draft: DraftInfoCard): CardBeat[] | undefined {
+function parseBeats(draft: DraftInfoCard, ground?: string): CardBeat[] | undefined {
   const list = (draft.beats ?? [])
     .slice(0, MAX_BEATS)
     .map((beat) => ({
@@ -332,7 +324,8 @@ function parseBeats(draft: DraftInfoCard): CardBeat[] | undefined {
       quote: (beat?.quote ?? "").trim().slice(0, MAX_QUOTE),
     }))
     // 片段太短会匹配到别的句子，宁缺勿错
-    .filter((beat) => beat.text && normalizeLine(beat.quote).length >= 3);
+    .filter((beat) => beat.text && normalizeLine(beat.quote).length >= 3)
+    .filter((beat) => !ground || citedBy(beat.quote, ground));
   return list.length >= 2 ? list : undefined;
 }
 
@@ -387,6 +380,8 @@ export function draftInfoToSpec(
   paragraph: number,
   /** 色板：对比卡右栏要从里面取一个冷色，跟左栏形成对照 */
   palette: string[] = [],
+  /** 传了才做溯源校验 */
+  ground?: string,
 ): CardSpec | null {
   const template = typeof draft.template === "string" ? draft.template : "";
   if (!isTemplateFor("info", template)) return null;
@@ -417,6 +412,7 @@ export function draftInfoToSpec(
     // 卡片按栏宽折行，这里只防极端超长。
     const line = cleanCardText(draft.line, MAX_STANCE);
     if (!role && !line) return null;
+    if (ground && !citedBy(draft.lineQuote, ground)) return null;
     // 头像字：只接受单个汉字，其余一律留空（音译名本来就不该有字）
     const avatar = avatarChar(draft.avatar);
     // 有要点就逐条上屏代替整句判断；没有就退回静态的一句
@@ -426,7 +422,7 @@ export function draftInfoToSpec(
       avatar: avatar || undefined,
       role: role || undefined,
       line: line || undefined,
-      beats: parseBeats(draft),
+      beats: parseBeats(draft, ground),
     };
   }
 
@@ -437,6 +433,8 @@ export function draftInfoToSpec(
     const rightStance = cleanCardText(draft.right?.stance, MAX_STANCE);
     // 对比卡必须两边都成对，缺一边就不是对比
     if (!leftName || !leftStance || !rightName || !rightStance) return null;
+    // 两栏都要有台词出处
+    if (ground && !(citedBy(draft.left?.quote, ground) && citedBy(draft.right?.quote, ground))) return null;
 
     /*
      * 标题不能复述左右栏的人名。
@@ -472,6 +470,7 @@ export function draftInfoToSpec(
   if (baseTemplate === "TimelineCard") {
     const nodes = (draft.timeline ?? [])
       .slice(0, MAX_TIMELINE_NODES)
+      .filter((node) => !ground || citedBy(node?.quote, ground))
       .map((node) => ({
         time: cleanCardText(node?.time, 8),
         text: cleanCardText(node?.text, MAX_TIMELINE_TEXT),
@@ -485,6 +484,7 @@ export function draftInfoToSpec(
   if (baseTemplate === "StatCard") {
     const value = cleanCardText(draft.stat?.value, 10);
     if (!value) return null;
+    if (ground && !citedBy(draft.stat?.quote, ground)) return null;
 
     const cleaned = (draft.stat?.bars ?? [])
       .map((bar) => {
@@ -525,7 +525,7 @@ export function draftInfoToSpec(
         note: cleanCardText(draft.stat?.note, MAX_TITLE) || undefined,
         bars: kept.length > 0 ? kept : undefined,
       },
-      beats: parseBeats(draft),
+      beats: parseBeats(draft, ground),
     };
   }
 
@@ -550,15 +550,20 @@ export interface DraftInfoCard {
   avatar?: string;
   role?: string;
   line?: string;
+  /** line 的台词出处 */
+  lineQuote?: string;
   left?: { name?: string; stance?: string; note?: string; quote?: string };
   right?: { name?: string; stance?: string; note?: string; quote?: string };
-  timeline?: { time?: string; text?: string }[];
+  /** 台词出处 */
+  timeline?: { time?: string; text?: string; quote?: string }[];
   /** 逐条上屏的要点：text 上屏，quote 定位它在第几句被讲到 */
   beats?: { text?: string; quote?: string }[];
   stat?: {
     value?: string;
     caption?: string;
     note?: string;
+    /** 台词出处 */
+    quote?: string;
     bars?: { label?: string; value?: number; hint?: string }[];
   };
 }
@@ -579,25 +584,11 @@ function dialogueText(dialogue: { contents?: string[]; content?: string }): stri
   return typeof dialogue.content === "string" ? dialogue.content : "";
 }
 
-function buildPrompt(transcript: Transcript, chapterLimit: number): string {
+function buildPrompt(transcript: Transcript, chapterLimit: number, template: string): string {
   const lines = transcript.paragraphs.map((paragraph, index) => {
     const first = dialogueText(paragraph.dialogues[0] ?? {});
     return `第 ${index + 1} 段 · 主题：${paragraph.description || "无"} · 首句：${first}`;
   });
-
-  const base = [
-    `视频标题：${transcript.title}`,
-    "分段信息：",
-    ...lines,
-    "",
-    "请为这条竖屏短视频设计卡片文案和版式：",
-    "1. 片头标题：不超过 10 字，要像封面钩子，不要照抄视频标题，不要带标点。",
-    `2. 片头模板从这里选：${templateList("intro")}`,
-    `3. 章节卡：从第 2 段开始，挑出最多 ${chapterLimit} 段各写一个 4-10 字的主题短语，要像章节名，不要照抄台词。`,
-    `4. 章节模板从这里选：${templateList("chapter")}`,
-    "5. 片尾标题：不超过 10 字，一句号召。",
-    `6. 片尾模板从这里选：${templateList("outro")}`,
-  ];
 
   const shape: Record<string, unknown> = {
     style: "一句话风格说明",
@@ -606,8 +597,15 @@ function buildPrompt(transcript: Transcript, chapterLimit: number): string {
     outro: { title: "...", template: "OutroCard" },
   };
 
-  base.push("只输出 JSON，不要解释：", JSON.stringify(shape));
-  return base.join("\n");
+  return applyPromptVars(template, {
+    TITLE: transcript.title,
+    PARAGRAPHS: lines.join("\n"),
+    CHAPTER_LIMIT: String(chapterLimit),
+    INTRO_TEMPLATES: templateList("intro"),
+    CHAPTER_TEMPLATES: templateList("chapter"),
+    OUTRO_TEMPLATES: templateList("outro"),
+    SHAPE: JSON.stringify(shape),
+  });
 }
 
 async function pickAccentByVision(
@@ -615,6 +613,7 @@ async function pickAccentByVision(
   material: MaterialManifest | null,
   palette: string[],
   cfg: AppConfig,
+  prompts: CardPrompts,
 ): Promise<string | null> {
   if (!bool(cfg.VISION_SELECT, true)) return null;
 
@@ -625,15 +624,13 @@ async function pickAccentByVision(
   if (images.length === 0) return null;
 
   try {
-    const text = await chat(
-      "你是短视频视觉设计师，只输出 JSON。",
-      [
-        "下面是这条视频要用的素材画面。请从这些主色里挑一个和画面最搭的：",
-        palette.join(" "),
-        '只输出 {"accent":"#xxxxxx","reason":"不超过 12 字"}',
-      ].join("\n"),
-      { images, json: true, temperature: 0.4, retries: 0, signal: ctx.signal },
-    );
+    const text = await chat(prompts.accentSystem, applyPromptVars(prompts.accentUser, { PALETTE: palette.join(" ") }), {
+      images,
+      json: true,
+      temperature: 0.4,
+      retries: 0,
+      signal: ctx.signal,
+    });
     const json = extractJsonObject(text);
     const raw = json ? (JSON.parse(json) as { accent?: string; reason?: string }) : null;
     const wanted = typeof raw?.accent === "string" ? raw.accent.trim().toLowerCase() : "";
@@ -822,21 +819,18 @@ export async function runCardsStage(
   }
 
   ctx.markStage("cards", "running", stageText("designingCards"));
-  if (plan.auto) {
-    ctx.log(logText("cardTypesHint"));
-  }
   ctx.log(logText("aiDrafting"));
+
+  const prompts = loadCardPrompts();
 
   // 手动点过配色就用它，否则交给视觉模型，再不行用色板第一个
   const manual = manualAccent(prefs, palette);
   if (manual) ctx.log(logText("accentManual", { accent: manual }));
-  const accent = manual ?? (await pickAccentByVision(ctx, material, palette, cfg)) ?? palette[0] ?? "#ff5a3c";
-
-  const system = "你是短视频内容编辑，擅长把长文提炼成封面钩子和章节标题。只输出 JSON，不要 markdown，不要解释。";
+  const accent = manual ?? (await pickAccentByVision(ctx, material, palette, cfg, prompts)) ?? palette[0] ?? "#ff5a3c";
 
   let draft: DraftChapters | null = null;
   try {
-    const text = await chat(system, buildPrompt(transcript, chapterLimit), {
+    const text = await chat(prompts.chaptersSystem, buildPrompt(transcript, chapterLimit, prompts.chaptersUser), {
       json: true,
       temperature: 0.8,
       signal: ctx.signal,
@@ -961,21 +955,20 @@ export async function rewriteCardTitle(
     ? `这一段主题：${paragraph.description || "无"}\n这一段首句：${paragraph.dialogues[0]?.contents[0] ?? ""}`
     : `视频标题：${transcript.title}`;
 
-  const system = "你是短视频文案，只输出 JSON，不要解释。";
-  const user = [
-    context,
-    `现在这张${spec.kind === "chapter" ? "章节卡" : spec.kind === "intro" ? "片头" : "片尾"}标题是：${spec.title}`,
-    used.length > 0 ? `已经用过的标题（必须避开）：${used.join(" / ")}` : "",
-    `换一个完全不同的写法，${
-      spec.kind === "chapter" ? "4-10 字的章节名" : "不超过 10 字的钩子"
-    }，不要照抄台词，不要标点。`,
-    '只输出 {"title":"..."}',
-  ]
+  const prompts = loadCardPrompts();
+  const user = applyPromptVars(prompts.rewriteTitleUser, {
+    CONTEXT: context,
+    CARD_TYPE: spec.kind === "chapter" ? "章节卡" : spec.kind === "intro" ? "片头" : "片尾",
+    TITLE: spec.title,
+    USED_TITLES: used.length > 0 ? `已经用过的标题（必须避开）：${used.join(" / ")}` : "",
+    LENGTH_HINT: spec.kind === "chapter" ? "4-10 字的章节名" : "不超过 10 字的钩子",
+  })
+    .split("\n")
     .filter(Boolean)
     .join("\n");
 
   try {
-    const text = await chat(system, user, {
+    const text = await chat(prompts.rewriteTitleSystem, user, {
       json: true,
       temperature: 1,
       signal: ctx.signal,
@@ -1269,42 +1262,19 @@ async function askInfoCard(
   /** 别的段落已经用过的主题，提示模型避开 */
   usedTopics?: string[],
 ): Promise<CardSpec | null> {
-  const prompt = [
-    `这一段的内容：${description || body}`,
-    `台词：${body}`,
-    "",
-    "把它做成一页短视频信息卡。从下面选一种最合适的（只能选一种）：",
-    "   PersonCard        讲一个人物的立场或行动 → title 必须是具体人名，role 是身份，line 是一句判断，不要再给卡片加标题",
-    "   PersonCardHero    同 PersonCard，但全屏大字。适合开篇人物、或整段都在讲这一个人",
-    "   PersonCardCompact 同 PersonCard，但只占右下角。适合人物只是配角、画面重点是素材本身",
-    "   CompareCard       两个人物或观点对立 → left / right 各含 name 与 stance（不超过 20 字），可选 note；title 是概括这场对立的短语，不要重复左右两人的人名",
-    "   CompareCardStacked 同 CompareCard，但上下叠放。立场说法较长、左右分栏放不下时用它",
-    "   TimelineCard      事件的先后顺序 → timeline 需要 2-4 个节点，各含 time 与 text",
-    `   StatCard          有具体数字或占比 → stat 含 value 与 note，可选 caption 与 bars（bars 最多 ${STAT_MAX_BARS} 根，各含 label 与 value，并给 hint 写明单位如「32%」「7 盎司」；实际项数超过 ${STAT_MAX_BARS} 时，把最小的几项合并成一根「其他」，不要直接丢掉）`,
-    "   StatCardSplit     同 StatCard，但数字与柱状左右并排。柱子较多时用它",
-    fixedTemplate ? `本次固定用 ${fixedTemplate}。` : "",
-    usedTopics && usedTopics.length > 0
-      ? `注意：别的段落已经用过这些主题：${usedTopics.join("、")}。不要再做介绍同一个人/同一对立面的卡，换这一段里别的角度；实在没有别的角度就输出空对象 {}。`
-      : "",
-    "",
-    "另外给 avatar：人名旁边那个方块头像里放的字，**只放 1 个汉字**。规则很重要：",
-    "   - 中文姓名（如「黄仁勋」「张一鸣」）→ 给姓氏，如「黄」「张」",
-    "   - 音译名（如「川普」「马斯克」「贝森特」「鲁比奥」）→ **必须留空**，它们没有姓氏，放首字等于写错人",
-    "   - 拿不准就留空，留空会显示成抽象人形标记，不会出错",
-    "",
-    "另外给 beats：这页卡上要「跟着旁白一条条出现」的要点，2-3 条。",
-    "   text  上屏的那一行，不超过 12 字，要具体（人名、动作、数字），不要复述整句字幕",
-    "   quote 从台词里原样摘 4-20 个字，用来定位这条要点是在第几句被讲到的（必须能在台词里一字不差找到）",
-    "CompareCard 的两栏各给一个 quote（同样规则），表示旁白讲到这一栏的位置；没有就留空。",
-    "如果这段内容不适合做信息卡（只是过渡、或没有明确信息点），输出空对象 {}。",
-    "只输出 JSON：",
-    '{"template":"PersonCard","title":"川普","avatar":"","role":"美国总统","line":"亲自出马逐个说服董事",',
-    ' "beats":[{"text":"亲自出马","quote":"总统亲自下场"},{"text":"股价也在亏","quote":"手里的股票也在跟着亏钱"}]}',
-  ]
-    .filter(Boolean)
-    .join("\n");
+  const prompts = loadCardPrompts();
+  const prompt = applyPromptVars(prompts.infoCardUser, {
+    CONTENT: description || body,
+    BODY: body,
+    STAT_MAX_BARS: String(STAT_MAX_BARS),
+    FIXED_TEMPLATE: fixedTemplate ? `本次固定用 ${fixedTemplate}。` : "",
+    USED_TOPICS:
+      usedTopics && usedTopics.length > 0
+        ? `注意：别的段落已经用过这些主题：${usedTopics.join("、")}。不要再做介绍同一个人/同一对立面的卡，换这一段里别的角度；实在没有别的角度就输出空对象 {}。`
+        : "",
+  });
 
-  const text = await chat("你是短视频视觉编辑，只输出 JSON。", prompt, {
+  const text = await chat(prompts.infoCardSystem, prompt, {
     json: true,
     temperature: 0.6,
     signal: ctx.signal,
@@ -1316,7 +1286,17 @@ async function askInfoCard(
   if (!parsed || typeof parsed !== "object" || !parsed.template) return null;
   if (fixedTemplate) parsed.template = fixedTemplate;
 
-  return draftInfoToSpec(parsed, accent, durationSec, paragraph, palette);
+  const spec = draftInfoToSpec(parsed, accent, durationSec, paragraph, palette, body);
+
+  if (!spec && isTemplateFor("info", parsed.template)) {
+    ctx.log(logText("infoCardUngrounded", { n: paragraph, what: parsed.template }), "warn");
+  }
+
+  if (spec?.timeline && parsed.timeline && parsed.timeline.length > spec.timeline.length) {
+    ctx.log(logText("infoCardTrimmed", { n: paragraph, k: parsed.timeline.length - spec.timeline.length }), "warn");
+  }
+
+  return spec;
 }
 
 /**

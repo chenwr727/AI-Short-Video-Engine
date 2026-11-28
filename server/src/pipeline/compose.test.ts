@@ -315,7 +315,6 @@ test("片尾时长改动必须让成片指纹变（否则改了没反应）", ()
   assert.notEqual(fp({ OUTRO_DURATION: "3" }), plain, "改片尾时长后指纹应变化");
   assert.notEqual(fp({ OUTRO_TITLE: "下期见" }), plain, "改片尾文案后指纹应变化");
   assert.notEqual(fp({ TITLE_DURATION: "2.5" }), plain, "改片头时长后指纹应变化");
-  assert.notEqual(fp({ CHAPTER_CARD: "1" }), plain, "打开章节卡后指纹应变化");
   assert.notEqual(fp({ CHAPTER_DURATION: "4" }), plain, "改章节卡时长后指纹应变化");
 
   // 片头与片尾各自独立：改一个不该被另一个的值顶替

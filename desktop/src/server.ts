@@ -4,7 +4,7 @@ import net from "node:net";
 import path from "node:path";
 import { app } from "electron";
 import { binDir, repoRoot, runtimeDataDir, serverDir, webDistDir } from "./paths";
-import { configFile, loadConfig, type AppConfig } from "./config";
+import { configFile } from "./config";
 
 export interface Backend {
   port: number;
@@ -38,7 +38,7 @@ function tsxCliPath(): string {
   throw new Error(`未找到 tsx。请先在仓库根目录执行 pnpm install。\n已尝试：\n${candidates.join("\n")}`);
 }
 
-function buildEnv(port: number, cfg: AppConfig): NodeJS.ProcessEnv {
+function buildEnv(port: number): NodeJS.ProcessEnv {
   const dataDir = runtimeDataDir();
   const env: NodeJS.ProcessEnv = {
     ...process.env,
@@ -53,10 +53,7 @@ function buildEnv(port: number, cfg: AppConfig): NodeJS.ProcessEnv {
     ELECTRON_RUN_AS_NODE: "1",
   };
 
-  for (const [key, value] of Object.entries(cfg)) {
-    if (typeof value === "string" && value.trim()) env[key] = value.trim();
-  }
-
+  // 配置只从 config.json 现读，不冻进环境变量
   const dist = webDistDir();
   if (fs.existsSync(path.join(dist, "index.html"))) env.AISV_WEB_DIR = dist;
 
@@ -92,11 +89,10 @@ export async function startBackend(port: number, onLog: (line: string) => void):
   const entry = path.join(dir, "src", "index.ts");
   if (!fs.existsSync(entry)) throw new Error(`未找到后端入口：${entry}`);
 
-  const cfg = loadConfig();
   const baseUrl = `http://127.0.0.1:${port}`;
   const proc = spawn(process.execPath, [tsxCliPath(), entry], {
     cwd: dir,
-    env: buildEnv(port, cfg),
+    env: buildEnv(port),
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
   });

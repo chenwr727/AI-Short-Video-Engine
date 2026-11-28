@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { DEFAULTS, type AppConfig } from "../config.js";
 import type { Transcript } from "../types.js";
-import { buildCards, cardDefaults, cardPlan, cardsEnabled, MAX_CHAPTER_CARDS } from "./cards.js";
+import { buildCards, cardDefaults, cardPlan, MAX_CHAPTER_CARDS } from "./cards.js";
 
 const cfg = (patch: Record<string, string>): AppConfig => patch as unknown as AppConfig;
 
@@ -60,25 +60,23 @@ test("wanted 为空时不补任何卡", () => {
   assert.equal(buildCards(cfg({}), transcriptOf(5), [], {}, "#ff5a3c", 1080, 1920, 24).length, 0);
 });
 
-test("三个按钮全关时按配置里的时长出片头与章节卡", () => {
+test("按配置里的时长出片头与章节卡", () => {
   const plan = cardPlan(cfg({ TITLE_DURATION: "1.6", CHAPTER_DURATION: "2" }), 6);
-  assert.deepEqual(plan, { introSec: 1.6, chapterSec: 2, outroSec: 0, auto: true });
+  assert.deepEqual(plan, { introSec: 1.6, chapterSec: 2, outroSec: 0 });
 });
 
 /**
  * 回归：以前默认模式下 TITLE_DURATION 的 0 会被默认 1.6 顶掉，
  * 用户填 0 却照样出片头，提示文案与实际行为正好相反。
  */
-test("默认模式下片头时长填 0 就是不显示片头", () => {
+test("片头时长填 0 就是不出片头", () => {
   const plan = cardPlan(cfg({ TITLE_DURATION: "0", CHAPTER_DURATION: "2" }), 6);
   assert.equal(plan.introSec, 0);
-  assert.equal(plan.auto, true);
 });
 
-test("默认模式下片头时长没配时按 0 处理，不偷偷补默认值", () => {
+test("片头时长没配时按 0 处理，不偷偷补默认值", () => {
   const plan = cardPlan(cfg({}), 6);
   assert.equal(plan.introSec, 0);
-  assert.equal(plan.auto, true);
 });
 
 /**
@@ -100,7 +98,7 @@ test("默认模式下过场卡时长填 0 就不出章节卡", () => {
  * 0 表示这次关掉，不能因为配置里开着就又被填回来。
  */
 test("任务级覆盖优先于配置，且 0 能关掉配置里开着的卡", () => {
-  const base = cfg({ INTRO_ENABLED: "1", TITLE_DURATION: "2", CHAPTER_CARD: "1", OUTRO_DURATION: "3" });
+  const base = cfg({ TITLE_DURATION: "2", CHAPTER_DURATION: "2.5", OUTRO_DURATION: "3" });
 
   const off = cardPlan(base, 6, { introDurationSec: 0, outroDurationSec: 0 });
   assert.equal(off.introSec, 0);
@@ -120,29 +118,29 @@ test("覆盖为 0 时不会凭空造出配置里没开的卡", () => {
 });
 
 test("只用片头时长覆盖时，另两类仍跟随配置", () => {
-  const plan = cardPlan(cfg({ CHAPTER_CARD: "1", CHAPTER_DURATION: "2.5" }), 6, { introDurationSec: 1.2 });
+  const plan = cardPlan(cfg({ CHAPTER_DURATION: "2.5" }), 6, { introDurationSec: 1.2 });
   assert.equal(plan.introSec, 1.2);
   assert.equal(plan.chapterSec, 2.5);
 });
 
-test("只开片头时另外两类为 0", () => {
-  const plan = cardPlan(cfg({ INTRO_ENABLED: "1", TITLE_DURATION: "2" }), 6);
-  assert.deepEqual(plan, { introSec: 2, chapterSec: 0, outroSec: 0, auto: false });
+test("只配片头时长时另两类为 0", () => {
+  const plan = cardPlan(cfg({ TITLE_DURATION: "2", CHAPTER_DURATION: "0" }), 6);
+  assert.deepEqual(plan, { introSec: 2, chapterSec: 0, outroSec: 0 });
 });
 
-test("只开章节卡但段落不足时不出章节，也不误判成默认", () => {
-  const plan = cardPlan(cfg({ CHAPTER_CARD: "1", CHAPTER_DURATION: "2" }), 1);
-  assert.deepEqual(plan, { introSec: 0, chapterSec: 0, outroSec: 0, auto: false });
+test("只配章节时长但段落不足时不出章节", () => {
+  const plan = cardPlan(cfg({ CHAPTER_DURATION: "2" }), 1);
+  assert.deepEqual(plan, { introSec: 0, chapterSec: 0, outroSec: 0 });
 });
 
-test("只开片尾时照常生成，且不触发默认", () => {
-  const plan = cardPlan(cfg({ OUTRO_DURATION: "3" }), 6);
-  assert.deepEqual(plan, { introSec: 0, chapterSec: 0, outroSec: 3, auto: false });
+test("只配片尾时长时照常生成", () => {
+  const plan = cardPlan(cfg({ CHAPTER_DURATION: "0", OUTRO_DURATION: "3" }), 6);
+  assert.deepEqual(plan, { introSec: 0, chapterSec: 0, outroSec: 3 });
 });
 
-test("片头 + 章节卡 + 片尾全开时按配置走", () => {
-  const plan = cardPlan(cfg({ INTRO_ENABLED: "1", TITLE_DURATION: "2", CHAPTER_CARD: "1", OUTRO_DURATION: "3" }), 4);
-  assert.deepEqual(plan, { introSec: 2, chapterSec: 2, outroSec: 3, auto: false });
+test("片头 + 章节卡 + 片尾都配了时长时按配置走", () => {
+  const plan = cardPlan(cfg({ TITLE_DURATION: "2", CHAPTER_DURATION: "2", OUTRO_DURATION: "3" }), 4);
+  assert.deepEqual(plan, { introSec: 2, chapterSec: 2, outroSec: 3 });
 });
 
 test("手动选了章节时长就以它为准", () => {
@@ -153,10 +151,10 @@ test("手动选了章节时长就以它为准", () => {
 
 /**
  * 版式页能直接改时长后，显式给非 0 就是「这次我要这类卡」：
- * 配置里没开章节卡，用户把章节卡从 0 填成 3，卡就应该出现。
+ * 配置里没配章节卡，用户把章节卡从 0 填成 3，卡就应该出现。
  */
-test("显式给出的章节时长会把配置里没开的章节卡打开", () => {
-  const plan = cardPlan(cfg({ INTRO_ENABLED: "1", TITLE_DURATION: "2" }), 6, { chapterDurationSec: 3 });
+test("显式给出的章节时长会把配置里没配的章节卡打开", () => {
+  const plan = cardPlan(cfg({ TITLE_DURATION: "2", CHAPTER_DURATION: "0" }), 6, { chapterDurationSec: 3 });
   assert.equal(plan.chapterSec, 3);
   assert.equal(plan.introSec, 2);
 });
@@ -174,7 +172,7 @@ test("版式页用的 cardDefaults 与实际出片一致", () => {
   const cases: Record<string, string>[] = [
     {},
     { TITLE_DURATION: "2", CHAPTER_DURATION: "3" },
-    { INTRO_ENABLED: "1", TITLE_DURATION: "1.6", CHAPTER_CARD: "1", CHAPTER_DURATION: "2.5", OUTRO_DURATION: "3" },
+    { TITLE_DURATION: "1.6", CHAPTER_DURATION: "2.5", OUTRO_DURATION: "3" },
     { OUTRO_DURATION: "4" },
   ];
 
@@ -185,12 +183,11 @@ test("版式页用的 cardDefaults 与实际出片一致", () => {
     assert.equal(plan.introSec, defaults.introSec, `片头不一致：${JSON.stringify(patch)}`);
     assert.equal(plan.chapterSec, defaults.chapterSec, `章节不一致：${JSON.stringify(patch)}`);
     assert.equal(plan.outroSec, defaults.outroSec, `片尾不一致：${JSON.stringify(patch)}`);
-    assert.equal(plan.auto, defaults.auto, `默认标记不一致：${JSON.stringify(patch)}`);
   }
 });
 
 test("段落太少时只砍章节卡，片头片尾照旧", () => {
-  const patch = { INTRO_ENABLED: "1", TITLE_DURATION: "1.6", CHAPTER_CARD: "1", OUTRO_DURATION: "3" };
+  const patch = { TITLE_DURATION: "1.6", OUTRO_DURATION: "3" };
   const plan = cardPlan(cfg(patch), 1);
   assert.equal(plan.chapterSec, 0);
   assert.equal(plan.introSec, 1.6);
@@ -198,11 +195,9 @@ test("段落太少时只砍章节卡，片头片尾照旧", () => {
 });
 
 /**
- * 默认配置（CARDS_ENABLED=1，三个卡片开关全关）就应产出片头 + 章节卡，
- * 只在设置页改时长即可调，不需要用户额外开开关。
+ * 默认配置就应产出片头 + 章节卡，只在设置页改时长即可调。
  */
 test("默认配置下开箱就有片头与章节卡", () => {
   const plan = cardPlan(DEFAULTS, 6);
-  assert.deepEqual(plan, { introSec: 1.6, chapterSec: 2, outroSec: 0, auto: true });
-  assert.equal(cardsEnabled(DEFAULTS), true);
+  assert.deepEqual(plan, { introSec: 1.6, chapterSec: 2, outroSec: 0 });
 });

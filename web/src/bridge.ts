@@ -20,6 +20,8 @@ export interface AisvBridge {
   onLanguageChanged?: (handler: (language: "zh" | "en" | "system") => void) => () => void;
   announceLanguage?: (language: "zh" | "en" | "system") => void;
   getLanguage?: () => Promise<"zh" | "en" | "system">;
+  onConfigChanged?: (handler: () => void) => () => void;
+  announceConfigChanged?: () => void;
 }
 
 export type MenuAction = "settings" | "prompts" | "output-dir" | "data-dir" | "quit" | "about" | "docs" | "feedback";

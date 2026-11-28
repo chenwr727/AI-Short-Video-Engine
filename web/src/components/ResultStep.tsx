@@ -32,10 +32,14 @@ export function ResultStep(props: ResultStepProps) {
   const stepStage: StepStage = rendering ? "running" : hasVideo ? "ready" : "setup";
   const layout = stepLayout(stepStage, hasVideo);
 
-  // 自动字号，须与后端比例一致
+  // 任务没设字号就跟配置；配置为 0 则按画宽自动
   const width = task?.options.width ?? 1080;
-  const autoFontSize = Math.round(Math.round(width * 0.8) / 12);
-  const defaultFontSize = autoFontSize > 0 ? autoFontSize : 72;
+  const autoScale = defaults?.subtitleAuto;
+  const autoFontSize = Math.round(
+    Math.round(width * (autoScale?.widthRatio ?? 0.8)) / (autoScale?.fontSizeRatio ?? 12),
+  );
+  const configuredFontSize = defaults?.subtitleFontSize ?? 0;
+  const defaultFontSize = configuredFontSize > 0 ? configuredFontSize : autoFontSize > 0 ? autoFontSize : 72;
   const shownFontSize = (value?: number) => (value && value > 0 ? value : defaultFontSize);
 
   const [fontSize, setFontSize] = useState(String(shownFontSize(options?.subtitleFontSize)));
@@ -62,6 +66,8 @@ export function ResultStep(props: ResultStepProps) {
     defaults?.subtitleFontSize,
     defaults?.bgmEnabled,
     defaults?.bgmVolume,
+    autoScale?.widthRatio,
+    autoScale?.fontSizeRatio,
     width,
   ]);
 
@@ -91,7 +97,8 @@ export function ResultStep(props: ResultStepProps) {
 
   function render() {
     onRender({
-      subtitleFontSize: effectiveFontSize,
+      // 没改过默认值就不下发，留给合成期按当前配置取
+      subtitleFontSize: effectiveFontSize === defaultFontSize ? undefined : effectiveFontSize,
       bgmEnabled,
       bgmVolume: Math.min(2, Math.max(0, Number(bgmVolume) || 0)),
       bgmFile: bgmEnabled ? music.trim() : "",
